@@ -61,7 +61,10 @@ describe("openRouterSelectOptions", () => {
   });
 
   it("includes every recommended slug in the pin list", () => {
-    expect(OPENROUTER_RECOMMENDED_MODELS).toHaveLength(9);
+    expect(OPENROUTER_RECOMMENDED_MODELS).toHaveLength(10);
+    for (const preset of OPENROUTER_PRESETS) {
+      expect(OPENROUTER_RECOMMENDED_MODELS).toContain(preset.model);
+    }
     // The default background model leads the list.
     expect(OPENROUTER_RECOMMENDED_MODELS[0]).toBe(OPENROUTER_PRESETS[0].model);
     expect(OPENROUTER_PRESETS[0].model).toBe("deepseek/deepseek-v4.1-flash");

@@ -30,11 +30,13 @@ from ..app_settings import normalize_base_url
 logger = logging.getLogger(__name__)
 
 #: Budget is the default background model. On seven test videos it named
-#: chapters better than Gemini 2.5 Flash for under half the cost, and wrote
-#: clean summaries, tags and categories with its thinking off (``think=False``).
+#: chapters better than Gemini 2.5 Flash (Best before) for under half the cost,
+#: and wrote clean summaries, tags and categories with its thinking off
+#: (``think=False``). Best landed on more of the creators' own chapter starts
+#: for about a third more; dearer models (up to 18 times Budget) did no better.
 OPENROUTER_PRESETS: dict[str, str] = {
     "budget": "deepseek/deepseek-v4.1-flash",
-    "best": "google/gemini-2.5-flash",
+    "best": "openai/gpt-5.6-luna",
 }
 OPENROUTER_DEFAULT_MODEL = OPENROUTER_PRESETS["budget"]
 #: The Budget preset before it became DeepSeek. Installs set up then still

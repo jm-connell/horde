@@ -360,7 +360,7 @@ export const OPENROUTER_PRESETS = [
   {
     id: "best",
     label: "Best",
-    model: "google/gemini-2.5-flash",
+    model: "openai/gpt-5.6-luna",
     recommended: false,
   },
 ] as const;
@@ -389,6 +389,7 @@ export function assistantDefaultModel(
 /** Pinned at the top of the OpenRouter chat-model dropdown. */
 export const OPENROUTER_RECOMMENDED_MODELS = [
   "deepseek/deepseek-v4.1-flash",
+  "openai/gpt-5.6-luna",
   "google/gemini-2.5-flash",
   "google/gemini-2.5-flash-lite",
   "google/gemini-3.1-flash-lite",
