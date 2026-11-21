@@ -165,12 +165,19 @@ export function usePlayerSource({
       setDashReloadToken((n) => n + 1);
       return;
     }
+    if (compatMode && streamType === "dash") {
+      // The fallback failed too: go back to the adaptive stream, which a
+      // fresh load usually gets going again.
+      setCompatMode(false);
+      setDashReloadToken((n) => n + 1);
+      return;
+    }
     const el = videoRef.current;
     if (el) {
       el.load();
       el.play().catch(() => undefined);
     }
-  }, [effectiveStreamType, shakaPlayerRef, videoRef]);
+  }, [effectiveStreamType, compatMode, streamType, shakaPlayerRef, videoRef]);
 
   /** A new source starts loading: clear errors, compat mode and the Shaka state. */
   const resetSource = useCallback(() => {

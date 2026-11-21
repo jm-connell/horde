@@ -25,8 +25,49 @@ All notable changes to Horde are documented here. The format follows
   video that is one continuous part gets no chapters at all. Press
   **Regenerate** on a video to replace chapters made before.
 
+- **A streamed video's Summary starts collapsed.** While a stream has no
+  summary the section is closed instead of showing a **Generate summary**
+  button; opening it writes the summary.
+- **Clicking a timestamp plays the video.** A timestamp in a comment, the
+  description, the chapter list or an Ask answer now starts a paused video at
+  that moment instead of leaving it paused.
+- **The stream download button is a regular outlined button**, not an
+  accent-filled one.
+- **Docs lead with Ask and no-code customization.** The home page, README
+  and feature list introduce Ask earlier and say plainly that Horde can be
+  restyled without coding: through Settings, and by asking Ask to write the
+  custom CSS.
+
 ### Fixed
 
+- **Summaries of streamed videos failing with "Could not load this video's
+  captions".** YouTube rate-limits its caption endpoint, and Horde asked it
+  twice for every stream (once for the player's captions, once for AI). The
+  track is now fetched once and shared, a rate limit makes background caption
+  work (library retries, Ask indexing) hold off for two minutes, and the
+  Summary section and **Generate chapters** keep waiting and try again for up
+  to a minute before showing an error.
+- **A streamed video stopping with "Shaka error 1001" (or 1003), then
+  "Compatibility-mode preview failed".** When a stream's media requests
+  failed part-way through, the player showed the error and then switched to
+  the progressive fallback, which YouTube no longer offers, so the video was
+  dead until the page was refreshed. The player now does what the refresh
+  did: it loads the stream again at the same position (twice if needed, with
+  the buffering indicator showing), and only then reports "The stream stopped
+  loading". **Try again** after a failed fallback goes back to the adaptive
+  stream.
+- **Other YouTube requests answering 429 while a stream recovered.** When
+  YouTube rejected a stream's media addresses, every waiting media request
+  held one of the server's YouTube slots (for up to two minutes), so the
+  player's other requests got "Too many link checks in progress". Only the
+  request that fetches the fresh addresses takes a slot now, the others wait
+  20 seconds at most, and each rejection is logged with the YouTube client,
+  the address's age and how the refresh went
+  ([Troubleshooting](docs/ops/troubleshooting.md)).
+- **A streamed video that would not resume after AirPods reconnected.** When
+  the audio route change paused the video and Play then only showed it
+  buffering, Horde waited 20 seconds before reloading the stream; a resume
+  that brings no media is now reloaded after 6.
 - **AI chapters titled with random caption words.** When the model's reply
   could not be read (on long videos it usually was cut off), Horde quietly
   made evenly spaced markers named after three frequent caption words

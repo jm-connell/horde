@@ -51,10 +51,12 @@ export default function VideoAiPanel({
   const [summaryHeight, setSummaryHeight, commitSummaryHeight] =
     usePanelSize("aiSummary");
 
-  const expanded = settings.aiExpanded;
+  // Opened by hand while there is no summary (`generateOnExpand` targets).
+  const [openedEmpty, setOpenedEmpty] = useState(false);
   const showChat = canChat && help.available;
 
   useEffect(() => {
+    setOpenedEmpty(false);
     setSummaryError(null);
     summarizeAbortRef.current?.abort();
     summarizeAbortRef.current = null;
@@ -72,6 +74,8 @@ export default function VideoAiPanel({
   // A saved summary shows even when it cannot be generated again (summaries
   // switched off, captions gone); generating needs `canSummarize`.
   const showSummary = canSummarize || hasAiSummary;
+  const startsCollapsed = !!target.generateOnExpand && !hasAiSummary;
+  const expanded = startsCollapsed ? openedEmpty : settings.aiExpanded;
   const waitingOnSummary =
     summarizing || (target.processingSummary && !hasAiSummary);
   const { summarize } = target;
@@ -152,7 +156,16 @@ export default function VideoAiPanel({
         {showSummary ? (
           <button
             type="button"
-            onClick={() => updateSettings({ aiExpanded: !expanded })}
+            onClick={() => {
+              if (!startsCollapsed) {
+                updateSettings({ aiExpanded: !expanded });
+              } else if (expanded) {
+                setOpenedEmpty(false);
+              } else {
+                setOpenedEmpty(true);
+                if (!summarizing) void runSummarize(false);
+              }
+            }}
             className="ui-panel-toggle ui-interactive flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
           >
             <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">

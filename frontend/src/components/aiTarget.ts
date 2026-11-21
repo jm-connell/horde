@@ -11,6 +11,11 @@ export interface AiTarget {
   summary: string | null;
   /** The server is generating the summary (library videos only). */
   processingSummary: boolean;
+  /**
+   * Nothing generates this video's summary on its own (a stream): the section
+   * starts collapsed while there is none, and opening it generates one.
+   */
+  generateOnExpand?: boolean;
   /** Small muted line under the summary (e.g. when saved results expire). */
   note?: string | null;
   /** Generate (or regenerate) the summary and publish the result to the page. */

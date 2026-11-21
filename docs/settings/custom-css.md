@@ -2,6 +2,8 @@
 
 Horde can inject **arbitrary CSS** over the running UI, similar to Jellyfin’s custom CSS box. The editor is hidden until you turn on **Enable custom CSS** under **Settings → Appearance → Custom CSS** (`?tab=appearance`). Edits apply immediately, persist in the server [`ui` blob](index.md#three-layer-persistence) as `customCss` / `custom_css` plus `customCssEnabled` / `custom_css_enabled`, and are included when you **Save theme**.
 
+You do not have to write the CSS yourself: [Ask writes it from a description](#let-the-assistant-write-it).
+
 ## Why not an HTML element wiki?
 
 A page that lists every DOM node, Tailwind class, and React wrapper would **rot** on the next layout tweak. Class names like `bg-ink-900` exist because Tailwind generated them for this build; they are not a public API.

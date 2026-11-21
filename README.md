@@ -11,8 +11,12 @@ Horde is a self-hosted media archive, downloader and player. It builds on
 yt-dlp, SponsorBlock, FFmpeg and other great projects ([Built with](#built-with))
 to give you a full-featured, private video platform on your own hardware.
 Horde started as an archive, and now also supports streaming from YouTube
-without downloading, live streams included. Nearly everything is adjustable in
-Settings.
+without downloading, live streams included.
+
+You can customize Horde heavily without knowing how to code: nearly everything
+is adjustable in Settings, and for anything else you describe the look you
+want to **Ask**, the built-in assistant, and it writes the custom CSS for you
+and previews it before you keep it.
 
 ![Library home with Continue watching and the video grid](docs/assets/screenshots/library.webp)
 
@@ -58,6 +62,19 @@ Interactive API reference: `/docs`.
 
 ## Features
 
+- **Ask**: one chat at the bottom of every page that answers about Horde
+  itself (how-to, finding and changing settings, your own library, custom
+  CSS), about the video you are watching, or about what YouTube channels said
+  in their videos. Channels are indexed from their captions, with no
+  download; the search bar finds every moment that mentions your words, and
+  a question such as "What does The Car Care Nut say about the 2004 4Runner?"
+  gets an answer that cites each point with a link to the moment it was said
+  and compares channels that disagree. Searching works without AI; asking
+  needs a chat model.
+- **Make it yours, no coding needed**: thirteen themes, your own colours,
+  fonts and background effects, and a setting for nearly everything. Ask
+  writes custom CSS from a description ("rounder video cards", "hide the
+  channel sidebar") for whatever the settings do not cover.
 - **Downloads**: paste any yt-dlp-supported URL, pick a quality preset, and
   follow a queue with live progress, pause and resume. Imports whole YouTube
   playlists.
@@ -98,15 +115,6 @@ Interactive API reference: `/docs`.
 - **AI** (optional): summaries, chapters, tags, semantic search, related
   videos and sharper recommendations, with any OpenAI-compatible provider
   (OpenRouter, OpenAI, Gemini, Groq, Ollama, LM Studio, …).
-- **Ask**: one chat at the bottom of every page that answers about Horde
-  itself (how-to, finding and changing settings, your own library, custom
-  CSS), about the video you are watching, or about what YouTube channels said
-  in their videos. Channels are indexed from their captions, with no
-  download; the search bar finds every moment that mentions your words, and
-  a question such as "What does The Car Care Nut say about the 2004 4Runner?"
-  gets an answer that cites each point with a link to the moment it was said
-  and compares channels that disagree. Searching works without AI; asking
-  needs a chat model.
 
 Horde is meant for a home network or VPN. Everyone signs in, but before
 exposing it to the internet, follow the

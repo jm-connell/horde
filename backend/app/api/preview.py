@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
-from urllib.parse import urljoin, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -15,7 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..auth import current_user
-from ..context import get_engine, get_session
+from ..context import current, get_engine, get_session
 from ..errors import CodedHTTPException, extraction_error
 from ..openapi_responses import (
     DASH_MANIFEST,
@@ -52,7 +53,27 @@ logger = logging.getLogger(__name__)
 _CHUNK = 512 * 1024
 _CACHE_CONTROL = "private, max-age=1800, immutable"
 
+#: A stream's caption track is fetched from YouTube once for the player and
+#: the AI features alike: its caption endpoint rate-limits quickly.
+_VTT_CACHE_TTL_SEC = 1800
+_VTT_CACHE_MAX = 32
+#: After YouTube rate-limits a stream's captions, background caption work
+#: (library retries, Ask indexing) holds off this long so the viewer's next
+#: try can get through.
+_TIMEDTEXT_BLOCK_SEC = 120
+
 _preview_client: httpx.AsyncClient | None = None
+
+
+def _vtt_cache() -> dict[tuple[str, str], tuple[float, bytes]]:
+    """Fetched caption tracks, by ``(url, lang)``: ``(fetched at, body)``.
+
+    Only touched on the event loop, so it needs no lock.
+    """
+    cache: dict[tuple[str, str], tuple[float, bytes]] = current().caches.setdefault(
+        "preview_vtt", {}
+    )
+    return cache
 
 
 def get_preview_client() -> httpx.AsyncClient:
@@ -209,6 +230,67 @@ def _reresolve_preview(
         ) from exc
 
 
+def _media_client(direct_url: str) -> str:
+    """The YouTube client a media address was issued to (its ``c`` parameter)."""
+    values = parse_qs(urlparse(direct_url).query).get("c")
+    return values[0] if values else "unknown"
+
+
+def _log_rejected(
+    status: int, resolved: dict, request: Request, allow_refresh: tuple[str, str] | None
+) -> None:
+    """One line saying what the upstream refused, to read an incident from."""
+    extracted_at = float(resolved.get("extracted_at") or 0)
+    logger.warning(
+        "Upstream rejected preview media: status=%s itag=%s client=%s "
+        "address_age=%s range=%s",
+        status,
+        allow_refresh[1] if allow_refresh else "progressive",
+        _media_client(str(resolved.get("direct_url") or "")),
+        f"{time.time() - extracted_at:.0f}s" if extracted_at else "unknown",
+        request.headers.get("range") or "-",
+    )
+
+
+async def _refresh_rejected(
+    request: Request,
+    *,
+    allow_refresh: tuple[str, str] | None = None,
+    stream_url: str | None = None,
+) -> dict:
+    """Fresh media addresses after the upstream refused the current ones.
+
+    Only the request that runs the refresh takes a yt-dlp slot. The others
+    wait for it in a worker thread: holding slots while they waited left none
+    for anything else, so every other YouTube lookup answered 429.
+    """
+    started = time.monotonic()
+    waits_for_another = allow_refresh is not None and await run_in_threadpool(
+        stream_preview.media_refresh_in_flight, allow_refresh[0]
+    )
+    if waits_for_another:
+        resolved: dict = await run_in_threadpool(
+            _reresolve_preview, allow_refresh=allow_refresh, stream_url=stream_url
+        )
+    else:
+        resolved = await _in_ytdlp_thread(
+            request,
+            _reresolve_preview,
+            allow_refresh=allow_refresh,
+            stream_url=stream_url,
+        )
+    logger.info(
+        "Preview media request got fresh addresses after %.1fs (itag=%s client=%s, %s)",
+        time.monotonic() - started,
+        allow_refresh[1] if allow_refresh else "progressive",
+        _media_client(str(resolved.get("direct_url") or "")),
+        "waited for another request's refresh"
+        if waits_for_another
+        else "ran the refresh",
+    )
+    return resolved
+
+
 async def _proxy_upstream(
     request: Request,
     resolved: dict,
@@ -241,13 +323,11 @@ async def _proxy_upstream(
     can_refresh = allow_refresh is not None or stream_url is not None
     # Expired / PO-token-doomed CDN URL — re-resolve once and retry.
     if upstream.status_code in (401, 403) and can_refresh:
+        _log_rejected(upstream.status_code, resolved, request, allow_refresh)
         await _close_upstream(upstream)
         upstream = None
-        resolved = await _in_ytdlp_thread(
-            request,
-            _reresolve_preview,
-            allow_refresh=allow_refresh,
-            stream_url=stream_url,
+        resolved = await _refresh_rejected(
+            request, allow_refresh=allow_refresh, stream_url=stream_url
         )
         upstream_headers = dict(resolved.get("http_headers") or {})
         if range_header:
@@ -272,7 +352,12 @@ async def _proxy_upstream(
             detail = b""
         status = upstream.status_code
         await _close_upstream(upstream)
-        logger.warning("Upstream returned %s: %r", status, detail)
+        logger.warning(
+            "Upstream returned %s: %r (client=%s)",
+            status,
+            detail,
+            _media_client(str(resolved.get("direct_url") or "")),
+        )
         raise HTTPException(
             status_code=502,
             detail=f"Upstream returned {status}: {detail!r}",
@@ -347,9 +432,8 @@ async def _head_upstream(
         ) from exc
 
     if resp.status_code in (401, 403) and allow_refresh is not None:
-        resolved = await _in_ytdlp_thread(
-            request, _reresolve_preview, allow_refresh=allow_refresh
-        )
+        _log_rejected(resp.status_code, resolved, request, allow_refresh)
+        resolved = await _refresh_rejected(request, allow_refresh=allow_refresh)
         upstream_headers = dict(resolved.get("http_headers") or {})
         if range_header:
             upstream_headers["Range"] = range_header
@@ -472,6 +556,10 @@ async def fetch_preview_vtt(request: Request, cleaned: str, lang: str) -> bytes:
 
     Raises ``HTTPException`` (404 no such track, 502 upstream failure).
     """
+    cache = _vtt_cache()
+    cached = cache.get((cleaned, lang))
+    if cached is not None and time.monotonic() - cached[0] < _VTT_CACHE_TTL_SEC:
+        return cached[1]
     try:
         resolved = await _in_ytdlp_thread(
             request, stream_preview.resolve_preview_subtitle, cleaned, lang
@@ -539,6 +627,8 @@ async def fetch_preview_vtt(request: Request, cleaned: str, lang: str) -> bytes:
             resp.status_code,
             resp.content[:200],
         )
+        if resp.status_code == 429:
+            current().timedtext.block(_TIMEDTEXT_BLOCK_SEC)
         raise HTTPException(
             status_code=502,
             detail=f"Upstream returned {resp.status_code}",
@@ -551,6 +641,9 @@ async def fetch_preview_vtt(request: Request, cleaned: str, lang: str) -> bytes:
     if not body.lstrip().startswith(b"WEBVTT"):
         logger.warning("Upstream subtitle was not WEBVTT (prefix=%r)", body[:40])
         raise HTTPException(status_code=502, detail="Upstream subtitle was not WEBVTT")
+    if len(cache) >= _VTT_CACHE_MAX:
+        del cache[min(cache, key=lambda key: cache[key][0])]
+    cache[(cleaned, lang)] = (time.monotonic(), body)
     return body
 
 

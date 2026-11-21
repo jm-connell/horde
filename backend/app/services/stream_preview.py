@@ -61,6 +61,10 @@ _PREVIEW_PROBE_SIZES = (256 * 1024, 1024 * 1024, 4 * 1024 * 1024)
 _PREVIEW_REFRESH_DEBOUNCE_SEC = 10.0
 _PREVIEW_REFRESH_PROACTIVE_SEC = 5 * 60
 _PREVIEW_REFRESH_MAX_ATTEMPTS = 3
+#: How long a media request waits for a refresh another request started. Short:
+#: the player gives up on a request well before a minute, and a waiting request
+#: holds a worker thread.
+_PREVIEW_REFRESH_FOLLOW_WAIT_SEC = 20.0
 _preview_stream_cache: dict[str, dict[str, Any]] = {}
 _preview_manifest_by_url: dict[str, dict[str, Any]] = {}
 _preview_manifest_by_token: dict[str, dict[str, Any]] = {}
@@ -852,6 +856,7 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
         "duration": duration_f,
         "max_height": max_height,
         "formats": reps,
+        "extracted_at": time.time(),
         "expires_at": time.time() + _PREVIEW_MANIFEST_TTL_SEC,
     }
 
@@ -912,8 +917,12 @@ def resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, Any]
             leader = False
 
     if not leader:
-        # Wait for the in-flight refresh; fall back to cache or raise.
-        inflight.wait(timeout=120)
+        # Wait for the in-flight refresh. Still running after the wait: the
+        # cached addresses are the rejected ones, so say "try again" instead.
+        if not inflight.wait(timeout=_PREVIEW_REFRESH_FOLLOW_WAIT_SEC):
+            raise PreviewRefreshError(
+                "Preview media refresh is still in progress", retry_after=5
+            )
         with _preview_stream_lock:
             cached = _preview_manifest_by_url.get(url)
         if cached:
@@ -923,17 +932,28 @@ def resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, Any]
             retry_after=15,
         )
 
+    started = time.monotonic()
     try:
         entry = _do_resolve_preview_manifest(url, force=True)
         with _preview_stream_lock:
             _preview_refresh_last_at[url] = time.time()
             _preview_refresh_attempts[url] = 0
+        logger.info(
+            "Preview media addresses refreshed in %.1fs for %s",
+            time.monotonic() - started,
+            url,
+        )
         return entry
     except Exception as exc:
         with _preview_stream_lock:
             attempts = _preview_refresh_attempts.get(url, 0) + 1
             _preview_refresh_attempts[url] = attempts
-        logger.warning("Preview manifest refresh failed for %s: %s", url, exc)
+        logger.warning(
+            "Preview manifest refresh failed after %.1fs for %s: %s",
+            time.monotonic() - started,
+            url,
+            exc,
+        )
         if isinstance(exc, PreviewRefreshError):
             raise
         raise PreviewRefreshError(
@@ -945,6 +965,18 @@ def resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, Any]
             done = _preview_refresh_inflight.pop(url, None)
         if done is not None:
             done.set()
+
+
+def media_refresh_in_flight(token: str) -> bool:
+    """Whether another request is already refreshing this session's addresses.
+
+    A request that then asks for a refresh only waits for that one: it runs no
+    yt-dlp work of its own.
+    """
+    with _preview_stream_lock:
+        session = _preview_manifest_by_token.get(token)
+        url = str(session.get("source_url") or "") if session else ""
+        return bool(url) and url in _preview_refresh_inflight
 
 
 def build_dash_manifest(session: dict[str, Any]) -> str:
@@ -1140,4 +1172,5 @@ def lookup_preview_media(
         "http_headers": dict(fmt.get("http_headers") or {}),
         "content_type": str(fmt.get("content_type") or "video/mp4"),
         "source_url": source_url,
+        "extracted_at": float(session.get("extracted_at") or 0),
     }

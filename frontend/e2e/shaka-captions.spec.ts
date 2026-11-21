@@ -239,3 +239,68 @@ test("on a phone captions are centred and sized to the player", async ({
   // Medium on a 390 px wide picture: about 14 px, not the 20 px desktop floor.
   expect(fontPx).toBeLessThan(16);
 });
+
+/** Open the stream with `seg-2` failing: `failures` times, or always. */
+async function openWithFailingSegment(page: Page, failures: number) {
+  await mockStream(page, false);
+  const seen = { manifests: 0, failed: 0 };
+  page.on("request", (request) => {
+    if (
+      request.method() === "GET" &&
+      request.url().includes("/api/preview/manifest?")
+    ) {
+      seen.manifests += 1;
+    }
+  });
+  await page.route(/\/seg-2\.m4s$/, (route) => {
+    if (seen.failed >= failures) return route.fallback();
+    seen.failed += 1;
+    return route.fulfill({ status: 502, json: { detail: "upstream" } });
+  });
+  await page.goto(`/watch?url=${encodeURIComponent(STREAM_URL)}`);
+  await expect(
+    page.getByRole("heading", { name: "Ridge at dusk", level: 1 })
+  ).toBeVisible();
+  return seen;
+}
+
+test("a stream whose media requests fail is loaded again instead of dying", async ({
+  page,
+}) => {
+  test.slow();
+  // Shaka tries a segment five times before it reports the failure.
+  const seen = await openWithFailingSegment(page, 5);
+  // The stream is loaded again by itself and then plays through the segment.
+  await expect.poll(() => seen.manifests, { timeout: 30_000 }).toBe(2);
+  await expect
+    .poll(
+      () =>
+        page
+          .locator("video")
+          .first()
+          .evaluate((v: HTMLVideoElement) => v.currentTime),
+      { timeout: 30_000 }
+    )
+    .toBeGreaterThan(2.5);
+  await expect(page.getByText(/Compatibility-mode preview failed/)).toHaveCount(
+    0
+  );
+  await expect(page.getByText(/stopped loading/)).toHaveCount(0);
+});
+
+test("a stream that keeps failing says so, without a compatibility-mode detour", async ({
+  page,
+}) => {
+  test.slow();
+  const seen = await openWithFailingSegment(page, Infinity);
+  await expect(
+    page.getByText(
+      "The stream stopped loading. Try again or download the video."
+    )
+  ).toBeVisible({ timeout: 60_000 });
+  // Two reloads were tried first.
+  expect(seen.manifests).toBe(3);
+  await expect(page.getByText(/Compatibility-mode preview failed/)).toHaveCount(
+    0
+  );
+});

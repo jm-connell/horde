@@ -1,9 +1,4 @@
-import {
-  useEffect,
-  useRef,
-  type MutableRefObject,
-  type RefObject,
-} from "react";
+import { useEffect, type MutableRefObject, type RefObject } from "react";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
 /** Standing still this long with media buffered ahead: the decoder is stuck. */
@@ -15,11 +10,51 @@ export const STALL_BUFFERED_MS = 5000;
 export const STALL_STARVED_MS = 20_000;
 /** Reloads tried in a row before falling back to the progressive stream. */
 export const STALL_MAX_RELOADS = 2;
+/**
+ * Standing still this long right after playback was resumed from a pause: the
+ * stream did not come back. Short, because the viewer just pressed Play and is
+ * watching nothing happen.
+ */
+export const STALL_RESUME_MS = 6000;
+/** How long after a resume the short limit applies. */
+const RESUME_WINDOW_MS = 30_000;
 const CHECK_MS = 1000;
 /** Checks further apart than this were suspended (page hidden, device asleep). */
 const CHECK_GAP_MS = 3 * CHECK_MS;
 /** Playing this far past a reload means it worked. */
 const RECOVERED_AFTER_SEC = 10;
+
+/**
+ * How many times in a row a stream may be reloaded before giving up. Shared
+ * by everything that reloads it (a stall, a network error), so the two cannot
+ * loop between them. Playing well past the last reload starts a new count.
+ */
+export class ReloadBudget {
+  private count = 0;
+  private at = 0;
+
+  /** The playhead of the last reload: where a reload that never played resumes. */
+  get position(): number {
+    return this.at;
+  }
+
+  /**
+   * Take one reload at playhead `time`; false when they are used up. A
+   * playhead at the start is a reload that never got going: it counts as
+   * the same spot.
+   */
+  take(time: number): boolean {
+    if (time <= 1) time = this.at;
+    if (Math.abs(time - this.at) > RECOVERED_AFTER_SEC) this.count = 0;
+    if (this.count >= STALL_MAX_RELOADS) {
+      this.count = 0;
+      return false;
+    }
+    this.count += 1;
+    this.at = time;
+    return true;
+  }
+}
 
 export interface StallSample {
   now: number;
@@ -31,6 +66,8 @@ export interface StallSample {
   bufferedAheadSec: number;
   /** The player is waiting for media: rebuffering, or a seek under way. */
   buffering: boolean;
+  /** Playback was resumed from a pause a moment ago. */
+  resuming?: boolean;
 }
 
 /**
@@ -55,10 +92,12 @@ export class StallWatch {
       this.since = s.now;
       return false;
     }
-    const limit =
-      s.buffering || s.bufferedAheadSec < 1
-        ? STALL_STARVED_MS
-        : STALL_BUFFERED_MS;
+    const starved = s.buffering || s.bufferedAheadSec < 1;
+    const limit = !starved
+      ? STALL_BUFFERED_MS
+      : s.resuming
+        ? STALL_RESUME_MS
+        : STALL_STARVED_MS;
     if (s.now - this.since < limit) return false;
     this.since = s.now;
     return true;
@@ -88,7 +127,10 @@ function isBuffering(player: ShakaPlayer | null): boolean {
  * stream stuck after the audio route changes (AirPods moving to another
  * device and back): the element says it is playing, the clock stands still,
  * no more media arrives, and Play does nothing. Reloading the stream at the
- * same position is what closing and reopening the video did by hand. After
+ * same position is what closing and reopening the video did by hand. The
+ * same route change can also pause the video and leave it unable to resume:
+ * Play then shows it buffering for good, so a resume that brings no media is
+ * given up on sooner (`STALL_RESUME_MS`). After
  * `STALL_MAX_RELOADS` reloads that did not get it moving, `fallback` (the
  * progressive stream) takes over.
  */
@@ -96,7 +138,6 @@ export function useStallRecovery({
   enabled,
   videoRef,
   shakaPlayerRef,
-  pendingSeekRef,
   reload,
   fallback,
   setMediaError,
@@ -104,25 +145,31 @@ export function useStallRecovery({
   enabled: boolean;
   videoRef: RefObject<HTMLVideoElement | null>;
   shakaPlayerRef: MutableRefObject<ShakaPlayer | null>;
-  /** Where the reloaded stream starts. */
-  pendingSeekRef: MutableRefObject<number>;
-  /** Load the same stream again. */
-  reload: () => void;
+  /** Load the same stream again where it is; false when reloads are used up. */
+  reload: () => boolean;
   /** Switch to the progressive stream; false when there is none. */
   fallback: () => boolean;
   setMediaError: (message: string | null) => void;
 }): void {
-  const reloadsRef = useRef({ count: 0, at: 0 });
-
   useEffect(() => {
     if (!enabled) return;
     const watch = new StallWatch();
+    // When playback last resumed from a pause (not the first play of a load).
+    let pausedOnce = false;
+    let resumedAt = -Infinity;
+    const onPause = () => {
+      pausedOnce = true;
+    };
+    const onPlay = () => {
+      if (pausedOnce) resumedAt = Date.now();
+    };
+    const media = videoRef.current;
+    media?.addEventListener("pause", onPause);
+    media?.addEventListener("play", onPlay);
     const id = window.setInterval(() => {
       const el = videoRef.current;
       if (!el) return;
       const time = el.currentTime;
-      const reloads = reloadsRef.current;
-      if (Math.abs(time - reloads.at) > RECOVERED_AFTER_SEC) reloads.count = 0;
       const stalled = watch.check({
         now: Date.now(),
         time,
@@ -134,33 +181,21 @@ export function useStallRecovery({
         bufferedAheadSec: bufferedAheadSec(el),
         // A seek that never lands is a stall too, on the longer limit.
         buffering: el.seeking || isBuffering(shakaPlayerRef.current),
+        resuming: Date.now() - resumedAt < RESUME_WINDOW_MS,
       });
       if (!stalled) return;
       console.warn("[player] playback stalled", {
         time,
         readyState: el.readyState,
-        reloads: reloads.count,
       });
-      if (time > 1) pendingSeekRef.current = time;
-      if (reloads.count >= STALL_MAX_RELOADS) {
-        reloads.count = 0;
-        if (!fallback()) {
-          setMediaError("Playback stalled. Try again or reload the page.");
-        }
-        return;
+      if (!reload() && !fallback()) {
+        setMediaError("Playback stalled. Try again or reload the page.");
       }
-      reloads.count += 1;
-      reloads.at = time;
-      reload();
     }, CHECK_MS);
-    return () => window.clearInterval(id);
-  }, [
-    enabled,
-    videoRef,
-    shakaPlayerRef,
-    pendingSeekRef,
-    reload,
-    fallback,
-    setMediaError,
-  ]);
+    return () => {
+      window.clearInterval(id);
+      media?.removeEventListener("pause", onPause);
+      media?.removeEventListener("play", onPlay);
+    };
+  }, [enabled, videoRef, shakaPlayerRef, reload, fallback, setMediaError]);
 }

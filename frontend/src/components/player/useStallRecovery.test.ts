@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  ReloadBudget,
   STALL_BUFFERED_MS,
+  STALL_MAX_RELOADS,
+  STALL_RESUME_MS,
   STALL_STARVED_MS,
   StallWatch,
   type StallSample,
@@ -27,6 +30,30 @@ const frozen = {
   buffering: false,
 };
 
+describe("ReloadBudget", () => {
+  it("allows a few reloads in a row at one spot, then says stop", () => {
+    const budget = new ReloadBudget();
+    for (let i = 0; i < STALL_MAX_RELOADS; i++) {
+      expect(budget.take(45)).toBe(true);
+    }
+    expect(budget.take(45)).toBe(false);
+  });
+
+  it("counts a reload that never played as the same spot, and keeps the place", () => {
+    const budget = new ReloadBudget();
+    expect(budget.take(45)).toBe(true);
+    expect(budget.take(0)).toBe(true);
+    expect(budget.position).toBe(45);
+    expect(budget.take(0)).toBe(false);
+  });
+
+  it("starts over once playback got well past the last reload", () => {
+    const budget = new ReloadBudget();
+    for (let i = 0; i < STALL_MAX_RELOADS; i++) budget.take(45);
+    expect(budget.take(120)).toBe(true);
+  });
+});
+
 describe("StallWatch", () => {
   it("leaves playback that moves alone", () => {
     const moving = (now: number) => ({ ...frozen, time: now / 1000 });
@@ -44,6 +71,29 @@ describe("StallWatch", () => {
     const w = new StallWatch();
     expect(run(w, 0, STALL_STARVED_MS - 1000, () => starved)).toBe(false);
     expect(w.check({ now: STALL_STARVED_MS, ...starved })).toBe(true);
+  });
+
+  it("gives up sooner on a resume from pause that brings no media", () => {
+    // AirPods reconnecting pause the video; Play then buffers for good.
+    const resumed = {
+      ...frozen,
+      bufferedAheadSec: 0,
+      buffering: true,
+      resuming: true,
+    };
+    const w = new StallWatch();
+    expect(run(w, 0, STALL_RESUME_MS - 1000, () => resumed)).toBe(false);
+    expect(w.check({ now: STALL_RESUME_MS, ...resumed })).toBe(true);
+  });
+
+  it("leaves a resume that is still loading media alone", () => {
+    const loading = (now: number) => ({
+      ...frozen,
+      bufferedAheadSec: now / 10_000,
+      buffering: true,
+      resuming: true,
+    });
+    expect(run(new StallWatch(), 0, 60_000, loading)).toBe(false);
   });
 
   it("waits as long while the player is rebuffering", () => {

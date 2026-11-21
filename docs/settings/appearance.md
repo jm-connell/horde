@@ -2,6 +2,8 @@
 
 Controls under **Settings → Appearance** (`?tab=appearance`). The tab runs Theme, Font, Background, Motion, Panels, Tab bar and Custom CSS, with a row of buttons at the top that jump to each section. Most of these keys sync through the server [`ui` blob](index.md#three-layer-persistence); see [All settings](all-settings.md).
 
+You can change a great deal about how Horde looks without knowing how to code: everything on this page is a control in Settings, and for anything it does not cover you can describe the change to [Ask](../guides/ai-features.md#custom-css), which writes the [custom CSS](custom-css.md) for you and previews it first.
+
 ## Themes
 
 Built-in `data-theme` values (plus **Custom**). The palette dropdown lists the dark palettes first, then the light ones, then Custom.

@@ -29,7 +29,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useShakaDashLoad } from "../hooks/useShakaDash";
 import { clipBarRange, clipMarkAtBar } from "./player/clipMarkers";
 import { useLiveResume } from "./player/useLiveResume";
-import { useStallRecovery } from "./player/useStallRecovery";
+import { ReloadBudget, useStallRecovery } from "./player/useStallRecovery";
 import { behindLive, useLiveWindow } from "./player/useLiveWindow";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
@@ -259,6 +259,8 @@ export default function VideoPlayer({
     videoRef.current?.pause();
   }, [mediaSuspended, setBuffering]);
 
+  // Set below, once the reload function exists (it needs this hook's refs).
+  const reloadStreamRef = useRef<() => boolean>(() => false);
   useShakaDashLoad({
     src,
     effectiveStreamType,
@@ -273,6 +275,7 @@ export default function VideoPlayer({
     variantTracksRef,
     casting: chromecastCasting,
     enterCompatMode,
+    reloadStream: () => reloadStreamRef.current(),
     setShakaReady,
     setAvailableHeights,
     setQualityChoice,
@@ -310,6 +313,21 @@ export default function VideoPlayer({
     setBuffering(true);
     setDashReloadToken((n) => n + 1);
   }, [setMediaError, setBuffering, setDashReloadToken]);
+  /**
+   * Load the stream again at the playhead, as a page refresh would: what gets
+   * a stream going again after it froze or its media requests failed. False
+   * once several reloads in a row did not help.
+   */
+  const reloadBudgetRef = useRef(new ReloadBudget());
+  const reloadStream = useCallback(() => {
+    const time = videoRef.current?.currentTime ?? 0;
+    const budget = reloadBudgetRef.current;
+    if (!budget.take(time)) return false;
+    pendingSeekRef.current = budget.position;
+    reconnectLive();
+    return true;
+  }, [pendingSeekRef, reconnectLive]);
+  reloadStreamRef.current = reloadStream;
   useLiveResume({
     enabled: live,
     videoRef,
@@ -327,8 +345,7 @@ export default function VideoPlayer({
       !mediaError,
     videoRef,
     shakaPlayerRef,
-    pendingSeekRef,
-    reload: reconnectLive,
+    reload: reloadStream,
     fallback: enterCompatMode,
     setMediaError,
   });
@@ -353,15 +370,18 @@ export default function VideoPlayer({
     [chromecastCasting, seekChromecast, noteSeek]
   );
 
-  // Listen for programmatic seek requests (e.g., clicking a chapter in Watch.tsx)
+  // A timestamp was clicked (a chapter, a comment, the description, an Ask
+  // answer): go there and play, also when the video was paused.
   useEffect(() => {
     const handler = (e: Event) => {
       const { sec } = (e as CustomEvent<{ sec: number }>).detail;
       seekTo(sec);
+      if (chromecastCasting || mediaSuspended) return;
+      videoRef.current?.play().catch(() => undefined);
     };
     window.addEventListener("horde:seek", handler);
     return () => window.removeEventListener("horde:seek", handler);
-  }, [seekTo]);
+  }, [seekTo, chromecastCasting, mediaSuspended]);
 
   useEffect(() => {
     if (videoRef.current) videoRef.current.playbackRate = rate;

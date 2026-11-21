@@ -9,13 +9,13 @@ Everything Horde does, by area. Each section is a tour, not a settings dump: fol
 
 The top bar has **Home** (the library), **Playlists**, **Subscriptions**, **History**, **Download**, **Import** and **Settings**, plus **Ask** and a search box. The most common tasks:
 
+- **Have Horde do it for you**: **Ask** (top bar) links and changes settings, answers about your own downloads and library with **Use my data** on, offers downloads and playlists, and writes custom CSS you preview first.
 - **Find what a channel said**: turn on [Ask](guides/ask.md) for it (Settings → Library → Channels Ask can answer from), then search from the search bar: **Said in videos** lists every moment that mentions your words.
 - **Download a video**: open **Download** in the top bar, paste the link, pick a quality and press **Download**.
 - **Upgrade a video you have to a higher resolution** (say 1080p to 4K): open it, then **••• → Change resolution** under the player. The file is replaced; no need to delete and download again.
 - **Edit a video's title, notes or tags, normalize its volume, save it to this device or delete it**: the same **•••** menu on its watch page.
 - **Add files you already have**: **Import**, or drop them in the media folder.
 - **Change how Horde looks, downloads and plays**: **Settings → Appearance / Library / Playback**. **AI** and **System** are there for the administrator.
-- **Have Horde do it for you**: **Ask** (top bar) links and changes settings, answers about your own downloads and library with **Use my data** on, offers downloads and playlists, and writes custom CSS you preview first.
 
 ## Downloads
 
@@ -175,6 +175,8 @@ Setup: [AI setup](ops/ai-setup.md). What each feature does: [AI features](guides
 ## Appearance
 
 Thirteen built-in themes (nine dark, four light) plus your own colours, a choice of fonts, background effects such as the constellation, panel transparency and custom CSS with saved themes. Each account keeps its own look.
+
+None of it needs coding. Nearly everything is a setting, and for the rest you describe what you want to [Ask](guides/ai-features.md#custom-css) ("rounder video cards", "hide the channel sidebar"): it writes the CSS and previews it on the page before you keep it.
 
 Details: [Appearance](settings/appearance.md), [Custom CSS](settings/custom-css.md).
 
