@@ -40,6 +40,12 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- **A video no longer stops with "This device couldn't play the AV1
+  video" part-way through.** A playback error in a downloaded video that
+  was already playing (a phone does this after a call or time in the
+  background) was taken to mean the device cannot decode the format. The
+  player now loads the video again where it stopped, and offers the H.264
+  copy only when it keeps failing at the same spot.
 - **Summaries of streamed videos failing with "Could not load this video's
   captions".** YouTube rate-limits its caption endpoint, and Horde asked it
   twice for every stream (once for the player's captions, once for AI). The

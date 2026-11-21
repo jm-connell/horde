@@ -1,5 +1,6 @@
-import type { MutableRefObject, SyntheticEvent } from "react";
+import { useRef, type MutableRefObject, type SyntheticEvent } from "react";
 import type { StreamType } from "../videoPlayerTypes";
+import { ReloadBudget } from "./useStallRecovery";
 
 interface Options {
   prevTimeRef: MutableRefObject<number>;
@@ -61,6 +62,7 @@ export function useVideoEvents({
   onEnded,
   onSourceError,
 }: Options) {
+  const fileReloadBudget = useRef(new ReloadBudget());
   return {
     onPlay: () => {
       setPlaying(true);
@@ -121,6 +123,15 @@ export function useVideoEvents({
       }
       if (!effectiveSrc) return;
       const el = e.currentTarget;
+      // A file that was already playing can be decoded: an error now is a
+      // hiccup (a phone took the decoder away, a read failed), so load it
+      // again at the playhead. Only repeated failures at one spot go on.
+      const at = Math.max(el.currentTime, prevTimeRef.current);
+      if (at > 1 && fileReloadBudget.current.take(at)) {
+        pendingSeekRef.current = at;
+        el.load();
+        return;
+      }
       const failedSrc = el.currentSrc;
       const fail = () =>
         setMediaError(
