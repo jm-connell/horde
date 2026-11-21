@@ -10,6 +10,7 @@ import { createShaderEffect } from "./webgl";
 const FRAGMENT = `
 uniform vec3 uLow;
 uniform vec3 uHigh;
+uniform float uHeight;
 
 void main() {
   vec2 uv = gl_FragCoord.xy / uRes;
@@ -22,7 +23,7 @@ void main() {
     float lx = x * (0.8 + fi * 0.45) + fi * 13.7;
     float drift = t * (0.018 + fi * 0.006);
     // Where the curtain's lower edge hangs: long S-curves across the sky.
-    float edge = 0.5 + fi * 0.08
+    float edge = uHeight + fi * 0.08
       + 0.11 * sin(lx * 1.3 + drift * 2.0 + fi * 2.1)
       + 0.06 * sin(lx * 2.9 - drift * 1.3 + fi)
       + 0.12 * (fbm(vec2(lx * 0.5 + drift, fi * 4.1)) - 0.5);
@@ -54,7 +55,7 @@ void main() {
   vec2 cell = floor(gl_FragCoord.xy);
   float star = step(0.9978, hash12(cell));
   star *= 0.35 + 0.65 * (0.5 + 0.5 * sin(t * 1.7 + hash12(cell + 7.0) * 40.0));
-  star *= smoothstep(0.3, 0.95, uv.y) * (1.0 - glow) * 0.55;
+  star *= smoothstep(uHeight - 0.2, uHeight + 0.45, uv.y) * (1.0 - glow) * 0.55;
   float a = max(glow * 0.92, star);
   gl_FragColor = vec4(col * glow + vec3(star) + dither(), a);
 }
@@ -66,7 +67,7 @@ export function createNorthernLightsEffect(
   return createShaderEffect(canvas, {
     fragment: FRAGMENT,
     scale: 0.5,
-    uniforms(gl, location, { accent, isLight }) {
+    uniforms(gl, location, { accent, isLight, options }) {
       const [, s, l] = rgbToHsl(accent);
       // The lower edge glows in the accent; the rays fade into a cooler hue.
       const low = shiftHue(
@@ -83,6 +84,7 @@ export function createNorthernLightsEffect(
       );
       const [lr, lg, lb] = unit(isLight ? mixRgb(low, BLACK, 0.3) : low);
       const [hr, hg, hb] = unit(isLight ? mixRgb(high, BLACK, 0.3) : high);
+      gl.uniform1f(location("uHeight"), options.height);
       gl.uniform3f(location("uLow"), lr, lg, lb);
       gl.uniform3f(location("uHigh"), hr, hg, hb);
     },

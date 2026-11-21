@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
   SHADER_FAILED,
   createBackgroundEffect,
   setFlowingGradientPresetGetter,
 } from "../effects";
+import { effectOptions } from "../effects/controls";
 import { parseHexColor, type EffectController } from "../effects/shared";
 import {
   useSettings,
@@ -67,6 +68,14 @@ export default function BackgroundEffect() {
   const size = settings.backgroundEffectSize;
   const colorMode = settings.backgroundEffectColorMode;
   const customColor = settings.backgroundEffectColor;
+  // This effect's own sliders (rain angle, snowfall wind, ...).
+  const options = useMemo(
+    () =>
+      effect === "none" || effect === "custom-image"
+        ? {}
+        : effectOptions(effect, settings.backgroundEffectOptions[effect]),
+    [effect, settings.backgroundEffectOptions]
+  );
   const pauseWhileWatching = settings.pauseBackgroundWhileWatching;
   const onWatchPage = location.pathname.startsWith("/watch/");
   // A full-size player that is playing makes the effect pure overhead.
@@ -144,6 +153,7 @@ export default function BackgroundEffect() {
     controller.setOpacity(opacity);
     controller.setSpeed(speed);
     controller.setSize(size);
+    controller.setOptions(options);
     controller.setColor(
       colorMode === "custom" ? parseHexColor(customColor) : null
     );
@@ -157,7 +167,7 @@ export default function BackgroundEffect() {
         controllerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- opacity/speed/size/color/pause are pushed to the live controller by their own effects; rebuilding the canvas effect on them would restart the animation
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opacity/speed/size/options/color/pause are pushed to the live controller by their own effects; rebuilding the canvas effect on them would restart the animation
   }, [active, effect, isCustom, settings.flowingGradientPreset, shaders]);
 
   useEffect(() => {
@@ -171,6 +181,10 @@ export default function BackgroundEffect() {
   useEffect(() => {
     controllerRef.current?.setSize(size);
   }, [size]);
+
+  useEffect(() => {
+    controllerRef.current?.setOptions(options);
+  }, [options]);
 
   useEffect(() => {
     controllerRef.current?.setColor(

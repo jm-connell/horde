@@ -12,9 +12,11 @@ import { createShaderEffect } from "./webgl";
 const FRAGMENT = `
 uniform vec3 uColors[5];
 uniform vec2 uPoints[5];
+uniform float uFalloff;
 
 void main() {
-  vec2 uv = gl_FragCoord.xy / uRes;
+  // Size zooms the whole field about the middle of the screen.
+  vec2 uv = (gl_FragCoord.xy / uRes - 0.5) / uSize + 0.5;
   vec2 p = vec2(uv.x * (uRes.x / uRes.y), uv.y);
   // A gentle ripple, so the borders between colors are never straight.
   p += 0.05 * vec2(sin(p.y * 3.1 + uTime * 0.21), cos(p.x * 2.6 - uTime * 0.17));
@@ -22,7 +24,7 @@ void main() {
   float total = 0.0;
   for (int i = 0; i < 5; i++) {
     vec2 d = p - uPoints[i];
-    float w = 1.0 / (pow(dot(d, d), 1.6) + 0.004);
+    float w = 1.0 / (pow(dot(d, d), uFalloff) + 0.004);
     sum += uColors[i] * w;
     total += w;
   }
@@ -82,21 +84,20 @@ export function createMeshGradientEffect(
   return createShaderEffect(canvas, {
     fragment: FRAGMENT,
     scale: 0.5,
-    uniforms(gl, location, { accent, isLight, time, width, height, size }) {
+    uniforms(gl, location, { accent, isLight, time, width, height, options }) {
       const aspect = width / Math.max(1, height);
       ORBITS.forEach((o, i) => {
-        // Size widens the paths the colors travel.
-        const reach = 0.7 + 0.3 * size;
-        points[i * 2] =
-          (o.x + Math.sin(time * o.fx + o.p) * o.ax * reach) * aspect;
-        points[i * 2 + 1] =
-          o.y + Math.cos(time * o.fy + o.p * 1.3) * o.ay * reach;
+        points[i * 2] = (o.x + Math.sin(time * o.fx + o.p) * o.ax) * aspect;
+        points[i * 2 + 1] = o.y + Math.cos(time * o.fy + o.p * 1.3) * o.ay;
       });
       meshPalette(accent, getPreset(), isLight, time).forEach((c, i) => {
         colors[i * 3] = c[0] / 255;
         colors[i * 3 + 1] = c[1] / 255;
         colors[i * 3 + 2] = c[2] / 255;
       });
+      // How fast a color gives way to its neighbours: a low power blends
+      // them into one wash, a high one keeps each in its own patch.
+      gl.uniform1f(location("uFalloff"), 2.2 - 1.2 * options.softness);
       gl.uniform2fv(location("uPoints"), points);
       gl.uniform3fv(location("uColors"), colors);
     },

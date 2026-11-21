@@ -99,6 +99,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `backgroundOpacity` | `0.45` | number | 0.1–1 | UI blob |
 | `backgroundEffectSpeed` | `1` | number | 0.25–3 | UI blob |
 | `backgroundEffectSize` | `1` | number | 0.5–2 | UI blob |
+| `backgroundEffectOptions` | `{}` | object | Per-effect slider values, `{effect: {slider: number}}`; see [Appearance](appearance.md#controls-per-background) | UI blob |
 | `backgroundEffectColorMode` | `"accent"` | string | `accent` \| `custom` | UI blob |
 | `backgroundEffectColor` | `"#22d3ee"` | string | Hex | UI blob |
 | `flowingGradientPreset` | `"theme"` | string | `theme` \| `rgb` \| `cool` \| `warm` \| `mono` | UI blob |
@@ -108,7 +109,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `customBackgroundTint` | `"#08090c"` | string | Hex | UI blob |
 | `customBackgroundTintOpacity` | `0.45` | number | 0–1 | UI blob |
 | `pauseBackgroundWhileWatching` | `false` | bool | | UI blob |
-| `navIndicator` | `"underline"` | string | `none` \| `liquid` \| `underline` \| `fade` | UI blob |
+| `navIndicator` | `"underline"` | string | `none` \| `liquid` \| `underline` \| `fade` \| `dot` \| `focus` | UI blob |
 | `hoverMotion` | `"subtle"` | string | `off` \| `subtle` \| `lift` \| `glow` | UI blob |
 | `translucentPanelStrength` | `0.5` | number | 0–1 (higher = more see-through) | UI blob |
 | `translucentPanelBlur` | `0.5` | number | 0–1 (higher = stronger frost) | UI blob |
@@ -116,7 +117,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `translucentPanelTint` | `"#ffffff"` | string | Hex | UI blob |
 | `translucentPanelTintStrength` | `0.35` | number | 0–1 | UI blob |
 | `translucentPanelLegibility` | `true` | bool | | UI blob |
-| `loadingStyle` | `"dots"` | string | `dots` \| `spinner` \| `bar` \| `pulse` \| `wave` \| `comet` \| `tiles` \| `petal` \| `cube` \| `spiral` \| `swarm` \| `leapfrog` \| `plus` \| `ringwalk` | UI blob |
+| `loadingStyle` | `"dots"` | string | `spinner` \| `orbit` \| `helix` \| `infinity` \| `sweep` \| `spokes` \| `dots` \| `pulse` \| `wave` \| `cube` \| `spiral` \| `swarm` \| `leapfrog` | UI blob |
 | `fontSize` | `"medium"` | string | `small` \| `medium` \| `large` \| `xl` | UI blob |
 | `uiFont` | `"oxanium"` | string | Builtin id or saved custom id | UI blob |
 | `customFonts` | `[]` | array | Saved URL/file fonts | UI blob |

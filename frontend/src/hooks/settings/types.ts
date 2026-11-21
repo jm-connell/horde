@@ -51,41 +51,28 @@ export type LibrarySort =
 export type BackgroundEffect =
   | "none"
   | "custom-image"
-  | "rain"
   | "constellation"
-  | "perlin-flow"
-  | "matrix"
-  | "snow"
-  | "fireflies"
-  | "dust"
-  | "bokeh"
-  | "warp-grid"
-  | "scanlines"
-  | "grain"
-  | "modern-grid"
-  | "flowing-gradient"
-  | "lightspeed"
-  | "galaxy"
-  // New (preview) effects, listed under "New" in Settings.
-  | "northern-lights"
-  | "silk"
-  | "mesh-gradient"
-  | "spiral-galaxy"
-  | "plexus"
-  | "firefly-sync"
-  | "snowfall"
   | "contours"
-  | "projector"
-  | "film"
-  | "halftone";
+  | "dust"
+  | "lightspeed"
+  | "matrix"
+  | "mesh-gradient"
+  | "modern-grid"
+  | "northern-lights"
+  | "rain"
+  | "scanlines"
+  | "silk"
+  | "snowfall"
+  | "spiral-galaxy"
+  | "warp-grid";
 
 export type FlowingGradientPreset = "theme" | "rgb" | "cool" | "warm" | "mono";
 
-/** `tilt` and `zoom` are new (preview) options. */
-export type HoverMotion = "off" | "subtle" | "lift" | "glow" | "tilt" | "zoom";
-/** `stretch`, `dot` and `focus` are new (preview) options. */
+export type HoverMotion = "off" | "subtle" | "lift" | "glow";
 export type NavIndicator =
-  "none" | "liquid" | "underline" | "fade" | "stretch" | "dot" | "focus";
+  "none" | "liquid" | "underline" | "fade" | "dot" | "focus";
+/** Extra per-background slider values, keyed by effect then slider. */
+export type BackgroundEffectOptions = Record<string, Record<string, number>>;
 /** App text size (rem root). Replaces the old multi-step UI scale. */
 export type FontSize = "small" | "medium" | "large" | "xl";
 
@@ -99,6 +86,8 @@ export interface CustomThemePreset {
   backgroundEffectSize: number;
   backgroundEffectColorMode: "accent" | "custom";
   backgroundEffectColor: string;
+  /** Missing on older snapshots. */
+  backgroundEffectOptions: BackgroundEffectOptions;
   flowingGradientPreset: FlowingGradientPreset;
   customBackgroundId: string | null;
   customBackgroundMime: string | null;
@@ -158,6 +147,7 @@ export interface Settings {
   backgroundEffectSize: number;
   backgroundEffectColorMode: "accent" | "custom";
   backgroundEffectColor: string;
+  backgroundEffectOptions: BackgroundEffectOptions;
   flowingGradientPreset: FlowingGradientPreset;
   customBackgroundId: string | null;
   customBackgroundMime: string | null;

@@ -28,7 +28,6 @@ import ConnectionTag from "./components/ConnectionTag";
 import TopNav from "./components/TopNav";
 import AppFooter from "./components/AppFooter";
 import BackgroundEffect from "./components/BackgroundEffect";
-import HoverTilt from "./components/HoverTilt";
 import BottomTabBar from "./components/BottomTabBar";
 import EdgeSwipeBack from "./components/EdgeSwipeBack";
 import PullToRefresh from "./components/PullToRefresh";
@@ -210,7 +209,6 @@ function AppShell() {
       <BottomTabBar />
       <HelpChatHost />
       <EdgeSwipeBack />
-      <HoverTilt />
       <PullToRefresh />
     </div>
   );

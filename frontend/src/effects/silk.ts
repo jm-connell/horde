@@ -9,6 +9,7 @@ const FRAGMENT = `
 uniform vec3 uDeep;
 uniform vec3 uBody;
 uniform vec3 uSheen;
+uniform float uGloss;
 
 void main() {
   vec2 p = (gl_FragCoord.xy - 0.5 * uRes) / uRes.y;
@@ -26,10 +27,10 @@ void main() {
   float fold = 0.5 + 0.5 * sin(s * 3.14159265);
   float crest = pow(fold, 9.0);
   float shade = smoothstep(0.05, 0.95, fold);
-  vec3 col = mix(uDeep, uBody, shade) + uSheen * crest * 0.6;
+  vec3 col = mix(uDeep, uBody, shade) + uSheen * crest * uGloss;
   // Darker towards the corners, so the middle of the page carries the light.
   float vignette = 1.0 - smoothstep(0.3, 1.05, length(p * vec2(0.8, 1.1)));
-  float a = (0.16 + 0.5 * shade + 0.34 * crest) * (0.5 + 0.5 * vignette);
+  float a = (0.16 + 0.5 * shade + 0.57 * uGloss * crest) * (0.5 + 0.5 * vignette);
   if (uLight > 0.5) a *= 0.55;
   gl_FragColor = vec4(col * a + dither(), a);
 }
@@ -41,7 +42,7 @@ export function createSilkEffect(
   return createShaderEffect(canvas, {
     fragment: FRAGMENT,
     scale: 0.4,
-    uniforms(gl, location, { accent, isLight }) {
+    uniforms(gl, location, { accent, isLight, options }) {
       const [, s] = rgbToHsl(accent);
       // A neighbour hue in the shadows keeps the folds from looking flat.
       const deep = isLight
@@ -53,6 +54,9 @@ export function createSilkEffect(
       const sheen = isLight
         ? mixRgb(accent, WHITE, 0.6)
         : mixRgb(accent, WHITE, 0.55);
+      // The slider's top end eases off, so full sheen is glossy, not neon.
+      const sheenAmount = options.sheen * (1.15 - 0.25 * options.sheen);
+      gl.uniform1f(location("uGloss"), sheenAmount);
       gl.uniform3f(location("uDeep"), ...unit(deep));
       gl.uniform3f(location("uBody"), ...unit(body));
       gl.uniform3f(location("uSheen"), ...unit(sheen));

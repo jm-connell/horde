@@ -10,9 +10,10 @@ import { createCanvasLoop, rgba, type EffectController } from "./shared";
 
 /** Grid spacing in CSS pixels. */
 const CELL = 14;
+/** The heights the lines cover, and how far apart they are drawn. */
 const FIRST_LEVEL = 0.2;
+const LAST_LEVEL = 0.82;
 const LEVEL_STEP = 0.028;
-const LEVELS = 22;
 
 export function createContoursEffect(
   canvas: HTMLCanvasElement
@@ -33,7 +34,7 @@ export function createContoursEffect(
 
   return createCanvasLoop(
     canvas,
-    ({ ctx, width, height: h, accent, time, size, isLight }) => {
+    ({ ctx, width, height: h, accent, time, size, options, isLight }) => {
       const nextCols = Math.ceil(width / CELL) + 1;
       const nextRows = Math.ceil(h / CELL) + 1;
       if (nextCols !== cols || nextRows !== rows) {
@@ -49,6 +50,8 @@ export function createContoursEffect(
         }
       }
 
+      const step = LEVEL_STEP * options.spacing;
+      const levels = Math.ceil((LAST_LEVEL - FIRST_LEVEL) / step);
       const minor = new Path2D();
       const major = new Path2D();
       for (let r = 0; r < rows; r++) {
@@ -61,13 +64,13 @@ export function createContoursEffect(
           const bl = grid[(r + 1) * stride + c];
           const lo = Math.min(tl, tr, br, bl);
           const hi = Math.max(tl, tr, br, bl);
-          const kFrom = Math.max(0, Math.ceil((lo - FIRST_LEVEL) / LEVEL_STEP));
+          const kFrom = Math.max(0, Math.ceil((lo - FIRST_LEVEL) / step));
           const kTo = Math.min(
-            LEVELS - 1,
-            Math.floor((hi - FIRST_LEVEL) / LEVEL_STEP)
+            levels - 1,
+            Math.floor((hi - FIRST_LEVEL) / step)
           );
           for (let k = kFrom; k <= kTo; k++) {
-            const level = FIRST_LEVEL + k * LEVEL_STEP;
+            const level = FIRST_LEVEL + k * step;
             traceCell(
               k % 5 === 0 ? major : minor,
               x0,

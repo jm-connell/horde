@@ -193,6 +193,7 @@ export function createFlowingGradientEffect(
     setOpacity: (v: number) => controller.setOpacity(v),
     setSpeed: (v: number) => controller.setSpeed(v),
     setSize: (v: number) => controller.setSize(v),
+    setOptions: (o: Record<string, number>) => controller.setOptions(o),
     setColor: (c: Rgb | null) => controller.setColor(c),
     setPaused: (p: boolean) => controller.setPaused(p),
   };

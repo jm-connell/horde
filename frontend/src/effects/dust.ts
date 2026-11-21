@@ -1,4 +1,10 @@
-import { createCanvasLoop, rand, rgba, type EffectController } from "./shared";
+import {
+  createCanvasLoop,
+  rand,
+  resizePool,
+  rgba,
+  type EffectController,
+} from "./shared";
 
 interface Speck {
   x: number;
@@ -11,40 +17,40 @@ interface Speck {
 }
 
 export function createDustEffect(canvas: HTMLCanvasElement): EffectController {
-  let specks: Speck[] = [];
+  const specks: Speck[] = [];
   let lastW = 0;
   let lastH = 0;
-
-  let lastSize = 0;
-
-  const rebuild = (w: number, h: number, size: number) => {
-    const count = Math.floor(((w * h) / 9000) * size) + Math.floor(60 * size);
-    specks = Array.from({ length: count }, () => ({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      r: rand(0.5, 1.6) * Math.sqrt(size),
-      speed: rand(8, 22),
-      wobble: rand(6, 18),
-      phase: Math.random() * Math.PI * 2,
-      alpha: rand(0.15, 0.45),
-    }));
-  };
 
   return createCanvasLoop(
     canvas,
     ({ ctx, width, height, accent, dt, time, size }) => {
-      if (
-        width !== lastW ||
-        height !== lastH ||
-        Math.abs(size - lastSize) > 0.05
-      ) {
-        lastW = width;
-        lastH = height;
-        lastSize = size;
-        rebuild(width, height, size);
+      if (lastW > 0 && lastH > 0 && (width !== lastW || height !== lastH)) {
+        // Spread the motes over the new window instead of leaving them
+        // bunched in the old one.
+        for (const s of specks) {
+          s.x *= width / lastW;
+          s.y *= height / lastH;
+        }
       }
+      lastW = width;
+      lastH = height;
+      resizePool(
+        specks,
+        Math.floor(((width * height) / 9000 + 60) * size),
+        () => ({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          r: rand(0.5, 1.6),
+          speed: rand(8, 22),
+          wobble: rand(6, 18),
+          phase: Math.random() * Math.PI * 2,
+          alpha: rand(0.15, 0.45),
+        })
+      );
 
       ctx.clearRect(0, 0, width, height);
+      const scale = Math.sqrt(size);
+      ctx.fillStyle = rgba(accent, 1);
       for (const s of specks) {
         s.y -= s.speed * dt;
         s.x += Math.sin(time * 0.4 + s.phase) * s.wobble * dt;
@@ -52,11 +58,12 @@ export function createDustEffect(canvas: HTMLCanvasElement): EffectController {
           s.y = height + 4;
           s.x = Math.random() * width;
         }
-        ctx.fillStyle = rgba(accent, s.alpha);
+        ctx.globalAlpha = s.alpha;
         ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, s.r * scale, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.globalAlpha = 1;
     }
   );
 }

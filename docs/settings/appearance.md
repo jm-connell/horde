@@ -1,6 +1,6 @@
 # Appearance
 
-Controls under **Settings → Appearance** (`?tab=appearance`). Most of these keys sync through the server [`ui` blob](index.md#three-layer-persistence); see [All settings](all-settings.md).
+Controls under **Settings → Appearance** (`?tab=appearance`). The tab runs Theme, Font, Background, Motion, Panels, Tab bar and Custom CSS, with a row of buttons at the top that jump to each section. Most of these keys sync through the server [`ui` blob](index.md#three-layer-persistence); see [All settings](all-settings.md).
 
 ## Themes
 
@@ -73,84 +73,59 @@ Oxanium, the default, ships with Horde (`@fontsource/oxanium`, SIL Open Font Lic
 
 Applied as `documentElement` font-size. Legacy `uiScale` percentages migrate into these four steps.
 
-## New (preview)
-
-The **New** section, between Font and Background, holds reworked and new backgrounds, loaders, nav indicators and hover motions to try before they join the usual lists. Picking one sets the same key the usual pickers do, so it syncs and persists like any other choice; the existing options are unchanged. The Background dropdown also lists the new effects under a **New** heading, and a reworked background offers **Compare with** (the effect it reworks) and **Back to** to flip between the two.
-
-New `backgroundEffect` values. The three shader effects run on the GPU (WebGL). Flowing gradient takes their place where the browser has no WebGL, warns that WebGL would be slow (as some do on a virtual machine or remote desktop, where it runs on the CPU), or cannot start the shader:
-
-| Value | Description | Reworks |
-|-------|-------------|---------|
-| `northern-lights` | Curtains of light with a bright hem and rising rays; faint stars on dark themes (shader) | |
-| `silk` | Slow folds of satin with a sheen along each crest (shader) | |
-| `mesh-gradient` | Five drifting colors blended per pixel, dithered so dark ramps do not band; takes the Flowing palette (shader) | `flowing-gradient` |
-| `spiral-galaxy` | A tilted galaxy whose arms come from stars on nested, twisted orbits, so they keep their shape | `galaxy` |
-| `plexus` | A linked node cloud turning in 3D, near links brighter, with signals passing along them | `constellation` |
-| `firefly-sync` | Fireflies with real flash timing that gradually fall into step, then drift apart, over about two minutes | `fireflies` |
-| `snowfall` | Snow in three depths (size, speed and softness agree) moved by one gusting wind | `snow` |
-| `contours` | Survey-map contour lines over land that slowly reshapes, every fifth line heavier | |
-| `projector` | A projector beam from above the page, dust glinting only where the light catches it | |
-| `film` | Grain at 24 fps from pre-made tiles, gate flicker, single-frame dust and the odd scratch | `grain` |
-| `halftone` | A dot screen whose dots swell and shrink with a slow wave | |
-
-New `loadingStyle` values. Each moves only by `transform` and `opacity`, so it keeps its pace while the page is busy, and under reduced motion it holds still and breathes instead:
-
-| Value | Notes |
-|-------|--------|
-| `arc` | An arc that grows and shrinks as it turns (reworks `spinner`) |
-| `orbit` | Two moons circling a planet in real 3D |
-| `helix` | A double strand twisting in place |
-| `infinity` | A comet looping a figure eight |
-| `cradle` | Newton's cradle, swinging end to end |
-| `spokes` | Fading spokes ticking round |
-| `sweep` | Two segments racing along a track (reworks `bar`, which animates width and left) |
-| `clapper` | A clapperboard snapping shut |
-| `play` | A glint circling a play button |
-
-New `navIndicator` values, moved by transform from wherever they are on screen:
-
-| Value | Behavior |
-|-------|----------|
-| `stretch` | The bar's leading end reaches the new item first, then the tail catches up (reworks `underline`) |
-| `dot` | A dot that stretches along its way, then squashes and settles under the item |
-| `focus` | Viewfinder corners that glide over, land a little wide and lock on |
-
-New `hoverMotion` values (mouse or trackpad only, like the others):
-
-| Value | Behavior |
-|-------|----------|
-| `tilt` | The video card under the pointer leans toward it, with a soft sheen over the picture |
-| `zoom` | The thumbnail eases closer; the card stays put |
-
-Both keep Subtle's brightness on buttons and fields.
-
 ## Background effects
 
-`backgroundEffect` options:
+One picker, **Background animation**: None and Custom image first, then the animations by name. `backgroundEffect` options:
 
 | Value | Description |
 |-------|-------------|
 | `none` | Solid theme background (**default**) |
 | `custom-image` | Uploaded still or animated background (administrators upload, delete and extract palettes; anyone picks one of the uploaded images) |
-| `rain` | Falling rain streaks |
 | `constellation` | Drifting linked stars |
-| `perlin-flow` | Particles in a noise field |
-| `matrix` | Cascading glyph rain |
-| `snow` | Gentle drifting flakes |
-| `fireflies` | Glowing wandering lights |
+| `contours` | Survey-map contour lines over land that slowly reshapes |
 | `dust` | Rising motes |
-| `bokeh` | Soft out-of-focus orbs |
-| `warp-grid` | Grid distorted by noise |
-| `scanlines` | CRT-style line sweep |
-| `grain` | Subtle animated film grain |
-| `modern-grid` | Gradient + grid + floating dust |
-| `flowing-gradient` | Multi-hue soft color blooms |
 | `lightspeed` | Tunnel of light streaks |
-| `galaxy` | Slow-rotating starfield / nebula |
+| `matrix` | Cascading glyph rain |
+| `mesh-gradient` | Five drifting colors blended per pixel, dithered so dark ramps do not band (shader) |
+| `modern-grid` | Gradient, a drifting grid and floating dust |
+| `northern-lights` | Curtains of light with a bright hem and rising rays; faint stars on dark themes (shader) |
+| `rain` | Soft rain in three depths, slanted by the wind |
+| `scanlines` | CRT-style lines with a slow sweep |
+| `silk` | Slow folds of satin with a sheen along each crest (shader) |
+| `snowfall` | Snow in three depths moved by one gusting wind |
+| `spiral-galaxy` | A tilted galaxy whose arms keep their shape as it turns |
+| `warp-grid` | Grid distorted by noise |
 
-### Flowing gradient presets
+The three shader effects run on the GPU (WebGL). Where the browser has no WebGL, warns that WebGL would be slow (as some do on a virtual machine or remote desktop, where it runs on the CPU), or cannot start the shader, a plain 2D gradient in the same palette runs in their place.
 
-When effect is `flowing-gradient` (or the new `mesh-gradient`), `flowingGradientPreset`:
+Effects that were removed move to the closest one that is left the next time settings load, in saved custom themes too: `snow` → `snowfall`, `galaxy` → `spiral-galaxy`, `flowing-gradient` → `mesh-gradient`, `plexus` → `constellation`; `perlin-flow`, `fireflies`, `firefly-sync`, `bokeh`, `grain`, `film`, `projector` and `halftone` → `none`.
+
+### Controls per background
+
+Settings shows only the controls the selected background uses. Every animation has **Intensity**, **Speed**, **Size** and **Color**; where Size means something more specific, the slider is named for it. Each also has at most one slider of its own, stored under `backgroundEffectOptions.<effect>.<key>`:
+
+| Effect | Size slider is | Own slider (`key`) | Range | Default |
+|--------|----------------|--------------------|-------|---------|
+| `constellation` | Size | Link distance (`linkDistance`) | 0.5–2× | 1× |
+| `contours` | Size | Line spacing (`spacing`) | 0.5–2× | 1× |
+| `dust` | Size | | | |
+| `lightspeed` | Density | Streak length (`length`) | 0.5–3× | 1× |
+| `matrix` | Size | Trail length (`trail`) | 0.5–2× | 1× |
+| `mesh-gradient` | Size | Softness (`softness`) | 0–100% | 50% |
+| `modern-grid` | Grid size | Dust (`dust`) | 0–2× | 1× |
+| `northern-lights` | Size | Height (`height`) | 20–80% | 50% |
+| `rain` | Density | Angle (`angle`) | −45–45° | 12° |
+| `scanlines` | Line spacing | Sweep (`sweep`) | 0–100% | 50% |
+| `silk` | Size | Sheen (`sheen`) | 0–100% | 60% |
+| `snowfall` | Size | Wind (`wind`) | 0–3× | 1× |
+| `spiral-galaxy` | Size | Tilt (`tilt`) | 0–80° | 63° |
+| `warp-grid` | Grid size | Warp (`warp`) | 0–2× | 1× |
+
+Each background keeps its own slider values, so switching away and back restores them. A saved custom theme stores the sliders of its own background only, and applying it leaves the other backgrounds' values alone. Values outside the range are clamped, and unknown effects or keys are dropped, when settings load.
+
+### Mesh gradient palette
+
+When the effect is `mesh-gradient`, `flowingGradientPreset` picks its colors:
 
 | Value | Label |
 |-------|--------|
@@ -172,7 +147,7 @@ When effect is `flowing-gradient` (or the new `mesh-gradient`), `flowingGradient
 
 **Extract palette** samples accent candidates from the custom image.
 
-### Effect intensity knobs
+### Shared effect controls
 
 | Key | Default | Range |
 |-----|---------|--------|
@@ -186,7 +161,7 @@ When effect is `flowing-gradient` (or the new `mesh-gradient`), `flowingGradient
 
 `pauseBackgroundWhileWatching` (**default `false`**) stops animated backgrounds during playback to save GPU/CPU. Fit-window and fullscreen playback pause the animation either way, since it is hidden; standard and theater keep it running unless this is on.
 
-## Interface chrome
+## Motion
 
 ### Nav indicator (`navIndicator`)
 
@@ -196,8 +171,10 @@ When effect is `flowing-gradient` (or the new `mesh-gradient`), `flowingGradient
 | `liquid` | Liquid pill: the edge nearest the clicked item flows ahead and the pill thins as it stretches, then the trailing edge follows and settles |
 | `underline` | Sliding accent bar (**default**) |
 | `fade` | Soft pill that eases between items |
+| `dot` | A dot that stretches along its way, then squashes and settles under the item |
+| `focus` | Viewfinder corners that glide over, land a little wide and lock on |
 
-Legacy boolean `liquidNav` migrates to `liquid` / `none`.
+Legacy boolean `liquidNav` migrates to `liquid` / `none`; the removed `stretch` becomes `underline`.
 
 ### Hover motion (`hoverMotion`)
 
@@ -208,11 +185,34 @@ Legacy boolean `liquidNav` migrates to `liquid` / `none`.
 | `lift` | Cards rise with soft shadow |
 | `glow` | Accent glow around hovered surfaces |
 
-Hover motion only shows on devices with a mouse or trackpad, so a tap on a phone does not leave a card lifted. When the system asks for reduced motion, hover motion and button press feedback are off whatever this setting says; pages, cards and thumbnails still fade in, without moving.
+Hover motion only shows on devices with a mouse or trackpad, so a tap on a phone does not leave a card lifted. When the system asks for reduced motion, hover motion and button press feedback are off whatever this setting says; pages, cards and thumbnails still fade in, without moving. The removed `tilt` and `zoom` become `subtle`.
+
+### Loading animation (`loadingStyle`)
+
+Settings shows a looping preview of each option instead of a text label. Under reduced motion every loader holds still and breathes instead.
+
+| Value | Notes |
+|-------|--------|
+| `spinner` | An arc that grows and shrinks as it turns |
+| `orbit` | Two moons circling a planet in real 3D |
+| `helix` | A double strand twisting in place |
+| `infinity` | A comet looping a figure eight |
+| `sweep` | Two segments racing along a track |
+| `spokes` | Fading spokes ticking round |
+| `dots` | **Default.** Bouncing beads |
+| `pulse` | Expanding sonar rings |
+| `wave` | Equalizer bars |
+| `cube` | Wireframe cube on every axis |
+| `spiral` | Beads funneling inward |
+| `swarm` | Fireflies on tangled paths |
+| `leapfrog` | Beads leaping over each other |
+
+Loaders that were removed move to a kept one when settings load: `arc` → `spinner` (the same animation, renamed), `bar` → `sweep`, and `comet`, `tiles`, `petal`, `plus`, `ringwalk`, `cradle`, `clapper` and `play` → `dots`.
+
+## Panels
 
 The phone status bar and installed-app title bar take the theme's page background color.
 
-### Panel transparency
 
 Sliders are always visible. First install defaults to **50%** transparency and **50%** blur. Existing installs that had the old “Translucent panels” toggle **off** migrate to 0% / 0% (opaque).
 
@@ -227,7 +227,7 @@ Sliders are always visible. First install defaults to **50%** transparency and *
 
 Legacy `translucentPanels` (bool) is still read: `false` → both sliders 0%; `true` keeps the saved strength and converts the old coupled blur.
 
-### Tab bar (`tabBarItems`)
+## Tab bar (`tabBarItems`)
 
 On a phone, the installed app (added to the Home Screen) shows a floating bar of tabs at the bottom of the screen. **Tab bar** chooses which tabs it shows and in what order (up to 5): move a tab earlier or later, remove it, or add one from the list below. **Reset** puts back the default.
 
@@ -241,27 +241,6 @@ On a phone, the installed app (added to the Home Screen) shows a floating bar of
 | Offline | The Offline page, when this device has offline downloads |
 
 A tab this account cannot use, or one that needs the server while Horde is offline, is left out of the bar. The bar follows the panel transparency, blur and tint above, but not the legibility boost. A browser tab has no tab bar.
-
-### Loading style (`loadingStyle`)
-
-Settings shows a looping preview of each option instead of a text label.
-
-| Value | Notes |
-|-------|--------|
-| `dots` | **Default** — bouncing beads |
-| `spinner` | Classic rotating ring |
-| `bar` | Indeterminate sweep |
-| `pulse` | Expanding sonar rings |
-| `wave` | Equalizer bars |
-| `comet` | Sweeping tail |
-| `tiles` | Staggered squares |
-| `petal` | Blooming ring of beads |
-| `cube` | Wireframe cube on every axis |
-| `spiral` | Beads funneling inward |
-| `swarm` | Fireflies on tangled paths |
-| `leapfrog` | Beads hopping over each other |
-| `plus` | Arms fold in, then the plus turns |
-| `ringwalk` | Pentagon stepping on a spinning ring |
 
 ## Custom CSS
 

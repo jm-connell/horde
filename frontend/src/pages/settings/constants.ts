@@ -444,22 +444,6 @@ export const NAV_INDICATOR_OPTIONS: {
     label: "Fade",
     description: "Soft pill that eases between items",
   },
-];
-
-/** New (preview) options, shown in Settings' "New" section. */
-export const NEW_NAV_INDICATOR_OPTIONS: {
-  value: NavIndicator;
-  label: string;
-  description: string;
-  reworks?: string;
-}[] = [
-  {
-    value: "stretch",
-    label: "Stretch",
-    description:
-      "The bar's leading end reaches the new item first, then the tail catches up",
-    reworks: "Underline",
-  },
   {
     value: "dot",
     label: "Dot",
@@ -470,25 +454,6 @@ export const NEW_NAV_INDICATOR_OPTIONS: {
     value: "focus",
     label: "Focus",
     description: "Viewfinder corners that glide over and lock onto the item",
-  },
-];
-
-/** New (preview) options, shown in Settings' "New" section. */
-export const NEW_HOVER_MOTION_OPTIONS: {
-  value: HoverMotion;
-  label: string;
-  description: string;
-}[] = [
-  {
-    value: "tilt",
-    label: "Tilt",
-    description:
-      "Cards lean toward the pointer, with a soft sheen on the picture",
-  },
-  {
-    value: "zoom",
-    label: "Zoom",
-    description: "The thumbnail eases closer; the card stays put",
   },
 ];
 

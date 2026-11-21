@@ -42,92 +42,93 @@ test("appearance changes theme and loading animation", async ({ page }) => {
     "rgb(0 0 0)"
   );
 
-  const comet = page
-    .getByRole("group", { name: "Loading animation" })
-    .getByRole("button", { name: "Comet" });
-  await comet.click();
-  await expect(comet).toHaveAttribute("aria-pressed", "true");
-  await expect(
-    page.getByText("A bright head with a fading tail")
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Font" })).toBeVisible();
-  await expect(page.getByLabel("Background animation").first()).toBeVisible();
-});
-
-test("the New section tries reworked and new looks, and they stick", async ({
-  page,
-}) => {
-  await page.goto("/settings?tab=appearance");
-  const backgrounds = page.getByRole("group", { name: "New backgrounds" });
-  const galaxy = backgrounds.getByRole("button", { name: /^Spiral galaxy/ });
-  await galaxy.click();
-  await expect(galaxy).toHaveAttribute("aria-pressed", "true");
-  // The Background picker shows it too (under its "New" heading).
-  await expect(
-    page.getByRole("button", { name: "Background animation: Spiral galaxy" })
-  ).toBeVisible();
-  await expect(page.locator('canvas[data-horde="background"]')).toBeVisible();
-
-  // A rework can be set against the effect it replaces, and back again.
-  await page.getByRole("button", { name: "Compare with Galaxy" }).click();
-  await expect(
-    page.getByRole("button", { name: "Background animation: Galaxy" })
-  ).toBeVisible();
-  // The same button flips, so keyboard focus stays on it.
-  const back = page.getByRole("button", { name: "Back to Spiral galaxy" });
-  await expect(back).toBeFocused();
-  await back.press("Enter");
-  await expect(galaxy).toHaveAttribute("aria-pressed", "true");
-
   const helix = page
-    .getByRole("group", { name: "New loaders" })
+    .getByRole("group", { name: "Loading animation" })
     .getByRole("button", { name: "Helix" });
   await helix.click();
   await expect(helix).toHaveAttribute("aria-pressed", "true");
   await expect(
     page.getByText("Helix — A double strand twisting in place")
   ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Font" })).toBeVisible();
+  await expect(page.getByLabel("Background animation").first()).toBeVisible();
+});
 
+test("a background shows only its own controls, and they stick", async ({
+  page,
+}) => {
+  await page.goto("/settings?tab=appearance");
+  const picker = page.getByRole("button", { name: /^Background animation:/ });
+  // Nothing to tune until an animation is picked.
+  await expect(page.getByRole("slider", { name: "Intensity" })).toHaveCount(0);
+
+  await picker.click();
+  // One list: None and Custom image, then every animation by name.
+  const names = await page.getByRole("option").allTextContents();
+  expect(names.slice(0, 2)).toEqual(["None", "Custom image"]);
+  const animations = names.slice(2);
+  expect(animations).toEqual([...animations].sort());
+  expect(animations).toHaveLength(14);
+  await page.getByRole("option", { name: "Rain" }).click();
+  await expect(page.locator('canvas[data-horde="background"]')).toBeVisible();
+  await expect(page.getByRole("slider", { name: "Intensity" })).toBeVisible();
+  const angle = page.getByRole("slider", { name: "Angle" });
+  const saved = waitForSettingsPatch(page, "background_effect", "rain");
+  await angle.focus();
+  await angle.press("ArrowRight");
+  const tilted = await angle.inputValue();
+  await saved;
+
+  // Another animation has its own sliders, not Rain's.
+  await picker.click();
+  await page.getByRole("option", { name: "Mesh gradient" }).click();
+  await expect(angle).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "RGB wave" })).toBeVisible();
+
+  // Rain remembers its angle.
+  await picker.click();
+  await page.getByRole("option", { name: "Rain" }).click();
+  await expect(angle).toHaveValue(tilted);
+  await page.reload();
+  await expect(angle).toHaveValue(tilted);
+});
+
+test("motion options apply and stick", async ({ page }) => {
+  await page.goto("/settings?tab=appearance");
+  const saved = waitForSettingsPatch(page, "nav_indicator", "focus");
   await page
-    .getByRole("group", { name: "New navigation indicators" })
+    .locator('[data-setting="nav-indicator"]')
     .getByRole("button", { name: "Focus" })
     .click();
   await expect(page.locator("html")).toHaveAttribute(
     "data-nav-indicator",
     "focus"
   );
-
-  const saved = waitForSettingsPatch(page, "hover_motion", "zoom");
-  await page
-    .getByRole("group", { name: "New hover motions" })
-    .getByRole("button", { name: "Zoom" })
-    .click();
-  await expect(page.locator("html")).toHaveAttribute(
-    "data-hover-motion",
-    "zoom"
-  );
   await saved;
-
   await page.reload();
-  await expect(galaxy).toHaveAttribute("aria-pressed", "true");
-  await expect(helix).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("html")).toHaveAttribute(
     "data-nav-indicator",
     "focus"
   );
-  await expect(page.locator("html")).toHaveAttribute(
-    "data-hover-motion",
-    "zoom"
-  );
 });
 
-test("settings search finds the New section by an option's name", async ({
-  page,
-}) => {
+test("the section row jumps to a section", async ({ page }) => {
+  await page.goto("/settings?tab=appearance");
+  await page
+    .getByRole("navigation", { name: "Appearance sections" })
+    .getByRole("link", { name: "Panels" })
+    .click();
+  await expect(page.locator('[data-setting="panels"]')).toBeFocused();
+  await expect(
+    page.getByRole("slider", { name: "Panel blur" })
+  ).toBeInViewport();
+});
+
+test("settings search finds a background by name", async ({ page }) => {
   await page.goto("/settings?tab=playback");
   await page.getByLabel("Search settings").fill("northern lights");
   await expect(
-    page.getByRole("group", { name: "New backgrounds" })
+    page.getByRole("button", { name: /^Background animation:/ })
   ).toBeVisible();
 });
 

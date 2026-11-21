@@ -1,14 +1,8 @@
-import { NEW_BACKGROUND_EFFECT_OPTIONS } from "../../effects";
-import {
-  LOADING_STYLE_SEARCH_KEYWORDS,
-  NEW_LOADING_STYLE_OPTIONS,
-} from "../../loadingStyles";
+import { BACKGROUND_EFFECT_OPTIONS } from "../../effects";
+import { EFFECT_CONTROLS } from "../../effects/controls";
+import { LOADING_STYLE_SEARCH_KEYWORDS } from "../../loadingStyles";
 import type { Permission } from "../../types";
-import {
-  NEW_HOVER_MOTION_OPTIONS,
-  NEW_NAV_INDICATOR_OPTIONS,
-  TABS,
-} from "./constants";
+import { TABS } from "./constants";
 import type { AiPane, SettingsTab } from "./types";
 
 /** Who sees a setting beyond its tab: administrators, or holders of a permission. */
@@ -29,28 +23,18 @@ export interface SearchRegistryEntry {
 }
 
 /**
- * Words in the new options' names that other tabs answer to: "play" is
- * Playback's, "sync" and "arc" (as in search) are Library's. A query that
- * matches here keeps the search on Appearance, so they are left out.
+ * The animations' names and their own sliders' labels, as search words.
+ * Not "None" or "Custom image": everyday words other tabs answer to.
  */
-const SHARED_WORDS = new Set(["play", "sync", "arc"]);
-
-/**
- * Words that find Appearance's "New" (preview) section: the options' names,
- * not their descriptions, whose everyday words ("system", "button") would
- * pull other tabs' searches here. Not "preview" either: that is Playback's.
- */
-export const NEW_SECTION_KEYWORDS = [
-  "new",
-  ...[
-    ...NEW_BACKGROUND_EFFECT_OPTIONS,
-    ...NEW_LOADING_STYLE_OPTIONS,
-    ...NEW_NAV_INDICATOR_OPTIONS,
-    ...NEW_HOVER_MOTION_OPTIONS,
-  ]
-    .flatMap((o) => o.label.toLowerCase().split(" "))
-    .filter((word) => !SHARED_WORDS.has(word)),
-].join(" ");
+export const BACKGROUND_EFFECT_WORDS = [
+  ...BACKGROUND_EFFECT_OPTIONS.slice(2).map((o) => o.label),
+  ...Object.values(EFFECT_CONTROLS).flatMap((c) => [
+    ...(c.sizeLabel ? [c.sizeLabel] : []),
+    ...c.sliders.map((slider) => slider.label),
+  ]),
+]
+  .join(" ")
+  .toLowerCase();
 
 /** Search keywords / synonyms → tab. Used for cross-tab search + auto-switch. */
 export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
@@ -63,7 +47,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "appearance",
-    keywords: `interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency blur frost glass tint legibility ${LOADING_STYLE_SEARCH_KEYWORDS}`,
+    keywords: `interface motion navigation indicator nav liquid jelly underline fade dot focus glow lift hover motion cards controls translucent panels panel transparency blur frost glass tint legibility ${LOADING_STYLE_SEARCH_KEYWORDS}`,
   },
   {
     tab: "appearance",
@@ -81,11 +65,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "appearance",
-    keywords:
-      "background animation atmospheric effects intensity speed size color pause while watching custom image upload blur tint palette flowing rgb wave cool warm mono",
+    keywords: `background animation atmospheric effects intensity speed size color pause while watching custom image upload blur tint palette rgb wave cool warm mono ${BACKGROUND_EFFECT_WORDS}`,
   },
-  // New (preview) options: their own section on Appearance.
-  { tab: "appearance", keywords: NEW_SECTION_KEYWORDS },
   // Library
   {
     tab: "library",

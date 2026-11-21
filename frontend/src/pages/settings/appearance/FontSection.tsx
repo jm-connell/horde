@@ -26,6 +26,7 @@ export default function FontSection({
 
   return (
     <Section
+      anchor="font-section"
       title="Font"
       hidden={
         !!q &&

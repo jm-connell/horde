@@ -23,7 +23,7 @@ describe("settings search routing", () => {
     expect(firstMatchingTab("self promo")).toBe("playback");
     expect(firstMatchingTab("filler")).toBe("playback");
     expect(firstMatchingTab("ask to skip")).toBe("playback");
-    expect(firstMatchingTab("comet")).toBe("appearance");
+    expect(firstMatchingTab("helix")).toBe("appearance");
     expect(firstMatchingTab("leapfrog")).toBe("appearance");
     expect(firstMatchingTab("equalizer")).toBe("appearance");
     expect(firstMatchingTab("custom css")).toBe("appearance");
@@ -52,11 +52,13 @@ describe("settings search routing", () => {
     expect(firstMatchingTab("factory reset")).toBe("system");
     expect(firstMatchingTab("erase")).toBe("system");
   });
-  it("finds the New section by an option's name, without taking other tabs' words", () => {
+  it("finds a background by name, without taking other tabs' words", () => {
     expect(firstMatchingTab("northern lights")).toBe("appearance");
-    expect(firstMatchingTab("firefly")).toBe("appearance");
-    expect(firstMatchingTab("clapper")).toBe("appearance");
-    // Words from the new options' names and descriptions that belong elsewhere.
+    expect(firstMatchingTab("spiral galaxy")).toBe("appearance");
+    expect(firstMatchingTab("contours")).toBe("appearance");
+    // A background's own slider.
+    expect(firstMatchingTab("streak length")).toBe("appearance");
+    // Words in the options' descriptions that belong elsewhere.
     expect(firstMatchingTab("system")).toBe("system");
     expect(firstMatchingTab("play")).not.toBe("appearance");
     expect(firstMatchingTab("sync")).not.toBe("appearance");
