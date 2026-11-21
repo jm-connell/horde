@@ -85,6 +85,23 @@ test("a timestamp in a comment scrolls back up to the player", async ({
     .toBe(0);
 });
 
+test("a timestamp in a comment plays a paused video from there", async ({
+  page,
+}) => {
+  await page.goto(`/watch/${await videoId(page, "Cedar Notes")}`);
+  const video = page.locator("video").first();
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState))
+    .toBeGreaterThan(0);
+  await video.evaluate((v: HTMLVideoElement) => v.pause());
+  expect(await video.evaluate((v: HTMLVideoElement) => v.paused)).toBe(true);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  await panel.getByRole("button", { name: "0:42" }).click();
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.paused))
+    .toBe(false);
+});
+
 test("a library video with nothing saved yet loads its top comments at once", async ({
   page,
 }) => {

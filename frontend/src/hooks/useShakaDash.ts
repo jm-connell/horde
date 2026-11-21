@@ -41,7 +41,7 @@ const VOD_STREAMING_CONFIG = {
   gapDetectionThreshold: 0.5,
   gapJumpTimerTime: 0.25,
   retryParameters: {
-    maxAttempts: 4,
+    maxAttempts: 5,
     baseDelay: 400,
     backoffFactor: 2,
     fuzzFactor: 0.5,
@@ -77,6 +77,16 @@ const LIVE_MANIFEST_CONFIG = {
     timeout: 15_000,
   },
 };
+
+/**
+ * A stream whose media requests keep failing is loaded again after this
+ * pause, which gives the server time to fetch fresh media addresses.
+ */
+const NETWORK_RELOAD_DELAY_MS = 2000;
+export const STREAM_FAILED_MESSAGE =
+  "The stream stopped loading. Try again or download the video.";
+/** Shaka's error category for failed requests (bad status, timeout, offline). */
+const SHAKA_NETWORK_CATEGORY = 1;
 
 const LIVE_MAX_RETRIES = 6;
 /** Recoverable errors (failed playlist refreshes) in a row before giving up. */
@@ -138,6 +148,11 @@ export interface UseShakaDashArgs {
   >;
   casting: boolean;
   enterCompatMode: () => boolean;
+  /**
+   * Load the stream again at the playhead; false when reloads are used up.
+   * Read when an error arrives, so it need not be stable.
+   */
+  reloadStream: () => boolean;
   setShakaReady: Dispatch<SetStateAction<boolean>>;
   setAvailableHeights: Dispatch<SetStateAction<number[]>>;
   setQualityChoice: Dispatch<SetStateAction<QualityChoice>>;
@@ -159,6 +174,7 @@ export function useShakaDashLoad({
   variantTracksRef,
   casting,
   enterCompatMode,
+  reloadStream,
   setShakaReady,
   setAvailableHeights,
   setQualityChoice,
@@ -166,6 +182,8 @@ export function useShakaDashLoad({
   setBuffering,
 }: UseShakaDashArgs): void {
   const destroyQueueRef = useRef(Promise.resolve());
+  const reloadStreamRef = useRef(reloadStream);
+  reloadStreamRef.current = reloadStream;
 
   useEffect(() => {
     let cancelled = false;
@@ -203,6 +221,7 @@ export function useShakaDashLoad({
     if (!video) return;
 
     let criticalHits = 0;
+    let networkReloadTimer: number | null = null;
     // Live: consecutive failures since the stream last played.
     let liveFailures = 0;
     let liveRecoverable = 0;
@@ -342,8 +361,23 @@ export function useShakaDashLoad({
             stopLive("The live stream stopped responding.");
             return;
           }
-          criticalHits += 1;
           console.error("[preview] critical shaka error", detail);
+          if (detail?.category === SHAKA_NETWORK_CATEGORY) {
+            // Media requests failed after Shaka's own retries (1001 bad
+            // status, 1002, 1003 timeout). The progressive fallback asks the
+            // same upstream, so it cannot help; loading the stream again,
+            // as a page refresh does, usually can.
+            if (networkReloadTimer != null) return;
+            setBuffering(true);
+            networkReloadTimer = window.setTimeout(() => {
+              networkReloadTimer = null;
+              if (cancelled || reloadStreamRef.current()) return;
+              setMediaError(STREAM_FAILED_MESSAGE);
+              setBuffering(false);
+            }, NETWORK_RELOAD_DELAY_MS);
+            return;
+          }
+          criticalHits += 1;
           if (criticalHits >= 2 && enterCompatMode()) {
             return;
           }
@@ -436,6 +470,7 @@ export function useShakaDashLoad({
 
     return () => {
       cancelled = true;
+      if (networkReloadTimer != null) window.clearTimeout(networkReloadTimer);
       video.removeEventListener("playing", onLivePlaying);
       setShakaReady(false);
       const active = created ?? shakaPlayerRef.current;
