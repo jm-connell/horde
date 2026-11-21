@@ -270,6 +270,7 @@ def search(
     wanted = moments.words(q)
     items = []
     lines_of: dict[int, list[chunking.Line]] = {}
+    outside_of: dict[int, list[chunking.Line]] = {}
     for hit in hits:
         video = videos.get(hit.kb_video_id)
         if video is None:
@@ -282,8 +283,11 @@ def search(
                 continue  # a sponsor read (SponsorBlock)
             if video.id not in lines_of:
                 lines_of[video.id] = chunking.unpack_lines(video.cues)
+                outside_of[video.id] = sponsorblock.lines_outside(
+                    lines_of[video.id], spans
+                )
             every = lines_of[video.id]
-            lines = sponsorblock.lines_outside(every, spans)
+            lines = outside_of[video.id]
             if (
                 spans
                 and moments.best_line(lines, hit.start_sec, hit.end_sec, wanted) is None

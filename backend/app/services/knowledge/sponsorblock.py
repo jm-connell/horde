@@ -21,6 +21,7 @@ on it. ``HORDE_ASK_SPONSORBLOCK=0`` turns the requests off.
 
 from __future__ import annotations
 
+import bisect
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -249,10 +250,15 @@ def lines_outside(lines: list[Line], spans: list[tuple[float, float]]) -> list[L
     next one starts; the last ``LINE_WINDOW_SEC``)."""
     if not spans:
         return lines
+    ends = [e for _, e in spans]
     out: list[Line] = []
     for i, (t, text) in enumerate(lines):
         end = lines[i + 1][0] if i + 1 < len(lines) else t + LINE_WINDOW_SEC
-        if not mostly_ad(t, max(end, t + 0.01), spans):
+        end = max(end, t + 0.01)
+        # Only the spans that can overlap (spans are merged and sorted).
+        first = bisect.bisect_right(ends, t)
+        near = spans[first : bisect.bisect_left(ends, end, lo=first) + 1]
+        if not mostly_ad(t, end, near):
             out.append((t, text))
     return out
 
@@ -262,11 +268,17 @@ _ROUNDING = 0.01
 
 
 def without_ads(
-    lines: list[Line], start: float, end: float, spans: list[tuple[float, float]]
+    lines: list[Line],
+    start: float,
+    end: float,
+    spans: list[tuple[float, float]],
+    outside: list[Line] | None = None,
 ) -> tuple[float, float, str] | None:
     """The passage ``start``–``end`` rebuilt from its caption lines without the
-    ones inside an ad: ``(start, end, text)``, or None when nothing is left."""
-    outside = lines_outside(lines, spans)
+    ones inside an ad: ``(start, end, text)``, or None when nothing is left.
+    ``outside`` is ``lines_outside(lines, spans)`` when the caller has it."""
+    if outside is None:
+        outside = lines_outside(lines, spans)
     kept = [
         (t, text) for t, text in outside if start - _ROUNDING <= t < end - _ROUNDING
     ]

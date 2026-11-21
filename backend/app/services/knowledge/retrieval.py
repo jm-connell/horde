@@ -407,7 +407,7 @@ def _pick(
         for video_id, video in videos.items()
         if (found := sponsorblock.parse(video.sponsor_segments))
     }
-    lines: dict[int, list[chunking.Line]] = {}
+    lines: dict[int, tuple[list[chunking.Line], list[chunking.Line]]] = {}
     by_video: dict[int, list[KbChunk]] = {}
     for chunk_id in sorted(scores, key=lambda c: -scores[c]):
         chunk = chunks.get(chunk_id)
@@ -461,7 +461,7 @@ def _without_ads(
     chunk: KbChunk,
     video: KbVideo,
     spans: list[tuple[float, float]],
-    lines: dict[int, list[chunking.Line]],
+    lines: dict[int, tuple[list[chunking.Line], list[chunking.Line]]],
 ) -> KbChunk | None:
     """``chunk`` without its sponsor read: None when it is mostly ad, else a
     copy (never added to the session) rebuilt from the caption lines outside
@@ -472,13 +472,15 @@ def _without_ads(
         return None
     video_id = require_id(video)
     if video_id not in lines:
-        lines[video_id] = chunking.unpack_lines(video.cues)
+        every = chunking.unpack_lines(video.cues)
+        lines[video_id] = (every, sponsorblock.lines_outside(every, spans))
+    every, outside = lines[video_id]
     kept = sponsorblock.without_ads(
-        lines[video_id], chunk.start_sec, chunk.end_sec, spans
+        every, chunk.start_sec, chunk.end_sec, spans, outside
     )
     if kept is None:
         # No stored lines to cut with: the passage is mostly not ad, keep it.
-        return chunk if not lines[video_id] else None
+        return chunk if not every else None
     start, end, text = kept
     return KbChunk(
         id=chunk.id,
