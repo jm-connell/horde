@@ -253,7 +253,16 @@ def generate_stream_chapters(
         )
     youtube_id = state.youtube_id
     session.commit()
-    cleaned = generate_chapters(video, cues, log_id=f"youtube_id={youtube_id}")
+    try:
+        cleaned = generate_chapters(video, cues, log_id=f"youtube_id={youtube_id}")
+    except ChaptersError as exc:
+        stale = find_state(session, youtube_id)
+        if exc.code == "no_breaks" and stale is not None and stale.chapters:
+            # Regenerate found a single part: the old markers do not stand.
+            stale.chapters = None
+            session.add(stale)
+            session.commit()
+        raise
     fresh = find_state(session, youtube_id)
     if fresh is None:
         if _save_on_library_video(session, youtube_id, chapters=cleaned):

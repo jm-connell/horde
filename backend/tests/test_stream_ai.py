@@ -175,6 +175,26 @@ def test_chapters_are_generated_from_the_streams_captions(client, stream_env):
     assert again["chapters"] == chapters
 
 
+def test_a_stream_with_one_part_gets_no_chapters(client, stream_env, session):
+    _meta, llm, _seen = stream_env
+    two = {
+        "chapters": [
+            {"part": "Start", "start": "0:00"},
+            {"part": "Climb", "start": "4:00"},
+        ]
+    }
+    one = {"parts": ["The ride"], "chapters": [{"part": "The ride", "start": "0:00"}]}
+    llm.replies = [json.dumps(two), json.dumps(one)]
+    first = client.post("/api/preview/ai/chapters", json={"url": URL})
+    assert [c["title"] for c in first.json()["chapters"]] == ["Start", "Climb"]
+
+    # Regenerate finds a single part: an answer, so the old markers go.
+    res = client.post("/api/preview/ai/chapters", json={"url": URL, "force": True})
+    assert res.status_code == 400
+    assert res.json()["code"] == "no_breaks"
+    assert client.get("/api/preview/ai", params={"url": URL}).json()["chapters"] == []
+
+
 def test_description_chapters_are_not_replaced(client, stream_env):
     meta, _llm, _seen = stream_env
     meta["description"] = "0:00 Intro\n2:00 Climb\n5:00 Summit"

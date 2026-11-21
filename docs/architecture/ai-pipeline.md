@@ -12,7 +12,7 @@ Background and on-demand AI for search, tags, chat, recommendations, and catalog
 | `embed_catalog_video` | Embed a channel-catalog upload |
 | `embed_kb_channel` | Embed one batch (25 videos) of an [Ask](../design/channel-knowledge.md) channel's passages, then queue the next. Picked only when no library job is runnable |
 | `summarize` | Generate a Watch summary from captions (after download) |
-| `chapters` | Generate Watch chapter markers from a timed transcript (after download when `ai_chapters_mode` is `on_download`, or from Watch) |
+| `chapters` | Generate Watch chapter markers from a timed transcript (after download when `ai_chapters_mode` is `on_download`, or from Watch). The model lists the video's parts, then one start time per part; long transcripts go in sections (`services/chapters.py`, `tasks.generate_chapters`) |
 
 The worker is single-flight with up to **3 attempts** and `run_after` backoff ([Workers](workers.md), [Single-flight AI](../design/single-flight-ai.md)).
 
@@ -64,7 +64,7 @@ One OpenAI-compatible client (`services/ai/provider.py`, [ADR 0017](../adr/0017-
 
 | Concern | Routing |
 |---------|---------|
-| Chat / summary / tags / chapters | `/chat/completions` on the chat connection |
+| Chat / summary / tags / chapters | `/chat/completions` on the chat connection. The background jobs (summary, chapters, tags, categories, duplicates, discovery searches) pass `think=False`: OpenRouter's `reasoning: {enabled: false}`, resent as `{effort: "minimal"}` when the model refuses ("Reasoning is mandatory"). Thinking counts against `max_tokens`, and a reply cut off while still thinking is treated as empty, never as the answer |
 | Embeddings | `/embeddings` on `embed_base_url` when set, else on the chat connection; none when `embed_model` is empty |
 | Cost | Recorded when the response carries `usage.cost` (OpenRouter) |
 | Model downloads, VRAM sizing | Only when the endpoint's host answers Ollama's `/api/version` |

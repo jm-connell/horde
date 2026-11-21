@@ -24,7 +24,7 @@ const KEY_PROVIDERS: (AiProvider & { isKey: (key: string) => boolean })[] = [
     label: "OpenRouter",
     isKey: (k) => k.startsWith("sk-or-"),
     url: "https://openrouter.ai/api/v1",
-    chat: "google/gemini-2.5-flash-lite",
+    chat: "deepseek/deepseek-v4.1-flash",
     embed: "openai/text-embedding-3-small",
   },
   {

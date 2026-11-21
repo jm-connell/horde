@@ -135,3 +135,65 @@ def test_summarize_still_fails_when_both_attempts_empty(
     except tasks.SummarizeError as exc:
         assert exc.status_code == 502
         assert "empty summary" in str(exc).lower()
+
+
+def test_summaries_ask_for_no_thinking(session, add_video, tmp_dirs, monkeypatch):
+    """Thinking counts against the summary's token limit: left on, a thinking
+    model's summary came back cut short, or not at all."""
+    video = _captioned_video(add_video, session, tmp_dirs, title="Ridge ride")
+    fake = FakeLlm([json.dumps({"summary": _words(20)})])
+    monkeypatch.setattr(tasks, "get_llm_provider", lambda: fake)
+    monkeypatch.setattr(tasks, "require_llm_chat_model", lambda *a, **k: None)
+    monkeypatch.setattr(tasks, "llm_features_allowed", lambda: (True, None))
+
+    tasks.run_summarize(session, video.id, force=True)
+    assert fake.calls
+    assert all(call["think"] is False for call in fake.calls)
+
+
+def test_a_models_thinking_is_never_stored_as_the_summary(
+    session, add_video, tmp_dirs, monkeypatch, serve_ai
+):
+    """What a DeepSeek summary looked like when its thinking used the whole
+    token limit: "We need answer JSON only. Need summary 75-120 words. ..."."""
+    import httpx
+
+    from app.models import VideoAiMeta
+    from app.services import app_settings
+
+    video = _captioned_video(add_video, session, tmp_dirs, title="Ridge ride")
+    thinking = "We need answer JSON only. Need summary 75-120 words. " * 20
+    cut_off = {
+        "choices": [
+            {
+                "message": {"content": "", "reasoning": thinking},
+                "finish_reason": "length",
+            }
+        ]
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/chat/completions"):
+            return httpx.Response(200, json=cut_off)
+        return httpx.Response(200, json={"data": [{"id": "deepseek/x"}]})
+
+    serve_ai(handler)
+    app_settings.save(
+        {
+            "ai": {
+                "enabled": True,
+                "base_url": "https://openrouter.ai/api/v1",
+                "api_key": "k",
+                "chat_model": "deepseek/x",
+            }
+        }
+    )
+
+    try:
+        tasks.run_summarize(session, video.id, force=True)
+        raise AssertionError("expected SummarizeError")
+    except tasks.SummarizeError as exc:
+        assert exc.status_code == 502
+    session.expire_all()
+    meta = session.get(VideoAiMeta, video.id)
+    assert meta is None or not (meta.summary or "").strip()

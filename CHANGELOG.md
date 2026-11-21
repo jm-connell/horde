@@ -7,6 +7,46 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **New OpenRouter presets.** A new setup, and the **Budget** preset, now
+  use `deepseek/deepseek-v4.1-flash` for the background jobs instead of
+  `google/gemini-2.5-flash-lite`: it names chapters more specifically and
+  its list price is half. **Best** is now `openai/gpt-5.6-luna` instead of
+  `google/gemini-2.5-flash`: on the same test videos it placed chapters
+  about as well or better for about 60% of the cost. An install
+  already set up keeps its saved model; pick a preset in Settings → AI to
+  move to it.
+- **AI chapters mark real parts of the video.** A chapter now starts where
+  the video moves on to something else, so chapters are as long as the parts
+  they cover instead of evenly spaced, and each is named for what happens in
+  it ("Kidnapping Greg", "Planning the art gallery heist"). A long video is
+  read in sections, so the middle of a stream is no longer skimmed, and a
+  video that is one continuous part gets no chapters at all. Press
+  **Regenerate** on a video to replace chapters made before.
+
+### Fixed
+
+- **AI chapters titled with random caption words.** When the model's reply
+  could not be read (on long videos it usually was cut off), Horde quietly
+  made evenly spaced markers named after three frequent caption words
+  ("Know Man It's"). It now reports the failure and stores nothing.
+- **Summaries that were the model's own notes.** With a thinking model as
+  the Background model (DeepSeek, for one), a summary could come out as
+  "We need answer JSON only. Need summary 75-120 words…" or stop
+  mid-sentence: the thinking used up the length limit, and what was left
+  was stored. Summaries, chapters, tags, categories and duplicate checks now
+  run with thinking off, and a reply cut off while the model was still
+  thinking is never taken as the answer. Categories on such a model take
+  seconds instead of minutes.
+- **Models that always think** (Gemini 2.5 Pro, GPT-5, DeepSeek R1) refused
+  requests that ask for no thinking, so Ask failed with one of them as its
+  model. They are now asked for minimal thinking instead.
+- **AI chapters starting at the wrong moment.** The model was shown clock
+  times and asked for seconds, and often answered "119" for 1:19, which put
+  the chapter 40 seconds late (and minutes late further into a video). Start
+  times are now read as the clock times they are.
+
 ## [1.4.1] - 2026-11-20
 
 ### Added

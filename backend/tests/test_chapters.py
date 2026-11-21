@@ -108,23 +108,35 @@ def test_resolve_priority_description_over_source_and_ai(add_video, session):
     assert resolved[0]["title"] == "AI A"
 
 
-def test_parse_vtt_cues_and_downsample_keeps_ends():
-    cues = []
-    for i in range(0, 3600, 5):
-        cues.append((float(i), f"cue at {i}"))
-    text = chapters_svc.format_timed_transcript(cues, max_chars=800)
-    assert text.startswith("[0:00]")
-    assert "[59:" in text
-    assert text.count("[") >= 20
+def _spoken_cues(count: int) -> list[tuple[float, str]]:
+    return [(float(i * 12), f"section{i} unique words here") for i in range(count)]
 
 
-def test_timed_transcript_char_cap_samples_whole_file():
-    windows = [(float(i * 12), f"section-{i} unique words here") for i in range(200)]
-    # Build fake cues every 12s already window-sized.
-    text = chapters_svc.format_timed_transcript(windows, max_chars=600)
-    assert "section-0" in text
-    assert "section-199" in text
-    assert len(text) <= 600
+def test_short_transcript_is_one_section_with_every_line():
+    sections = chapters_svc.transcript_sections(_spoken_cues(40), max_chars=32_000)
+    assert len(sections) == 1
+    text = chapters_svc.render_transcript(sections[0])
+    assert text.startswith("[0:00] section0 unique words here")
+    assert "[7:48] section39 unique words here" in text
+    assert text.count("[") == 40
+
+
+def test_long_transcript_is_split_into_sections_not_thinned():
+    """A transcript over the cap used to lose words from every line (down to one
+    word each); now it is read in sections and every word reaches the model."""
+    sections = chapters_svc.transcript_sections(_spoken_cues(200), max_chars=1500)
+    assert len(sections) > 1
+    rendered = [chapters_svc.render_transcript(s) for s in sections]
+    joined = "\n".join(rendered)
+    for i in range(200):
+        assert f"section{i} unique words here" in joined
+    assert all(len(text) <= 1600 for text in rendered)
+    # Evenly sized: no stub of a few lines at the end.
+    sizes = [len(text) for text in rendered]
+    assert min(sizes) >= 0.9 * max(sizes)
+    # In order, without overlap.
+    starts = [line[0] for section in sections for line in section]
+    assert starts == sorted(set(starts))
 
 
 def test_skip_too_short_and_description(add_video):
@@ -189,11 +201,6 @@ def test_snap_and_validate_rejects_and_snaps():
     assert out[1]["start_sec"] == 90.0
     assert out[2]["start_sec"] == 400.0
 
-    only = chapters_svc.snap_and_validate(
-        [{"start_sec": 10, "title": "Only"}], cues, 500
-    )
-    assert len(only) >= 2
-    assert only[0]["start_sec"] == 0.0
     descending = [
         {"start_sec": 90, "title": "Later"},
         {"start_sec": 0, "title": "First"},
@@ -204,10 +211,11 @@ def test_snap_and_validate_rejects_and_snaps():
     assert snapped[1]["start_sec"] == 90.0
 
 
-def test_topic_onset_walks_back_to_first_mention():
+def test_start_stays_on_the_line_the_model_picked():
+    """A start used to be walked back to an earlier caption sharing a word with
+    the title. Measured against creators' own chapters that made it worse."""
     cues = [
         (0.0, "welcome back to the channel"),
-        (80.0, "quick look at the motherboard"),
         (95.0, "let's talk about the case for this sff build"),
         (110.0, "the case is tiny so airflow matters"),
         (134.0, "choosing the right chassis for small form factor"),
@@ -216,29 +224,67 @@ def test_topic_onset_walks_back_to_first_mention():
     ]
     out = chapters_svc.snap_and_validate(
         [
-            {"start_sec": 0, "title": "Intro"},
-            {
-                "start_sec": 134,
-                "title": "Choosing the Right Chassis for Small Form Factor",
-            },
-            {"start_sec": 200, "title": "Installing the GPU"},
+            {"part": "Intro", "start": "0:00"},
+            {"part": "Choosing the chassis", "start": "2:14"},
+            {"part": "Installing the GPU", "start": "3:20"},
         ],
         cues,
         500,
     )
-    chassis = next(c for c in out if "Chassis" in c["title"] or "chassis" in c["title"])
-    assert chassis["start_sec"] == 95.0
+    assert [c["start_sec"] for c in out] == [0.0, 134.0, 200.0]
 
 
-def test_transcript_keeps_all_windows_when_compressed():
-    windows = [
-        (float(i * 12), f"talking about unique topic {i} with extra filler words")
-        for i in range(40)
+def test_single_chapter_is_not_padded_with_an_invented_one():
+    cues = [(0.0, "a"), (30.0, "b"), (90.0, "c"), (200.0, "d"), (400.0, "e")]
+    assert (
+        chapters_svc.snap_and_validate([{"start_sec": 10, "title": "Only"}], cues, 500)
+        == []
+    )
+
+
+def test_model_clock_times_are_read_as_clock_times():
+    """The model copies a line's time as written: "1:19" is 79 seconds. Asked for
+    a number of seconds it answered 119, which put the chapter 40 seconds late."""
+    reply = (
+        '{"parts":["Meth stash stolen","Kidnapping the hostage"],'
+        '"chapters":[{"part":"Meth stash stolen","start":"0:00"},'
+        '{"part":"Kidnapping the hostage","start":"1:19"}]}'
+    )
+    items = chapters_svc.chapters_from_model_output(reply)
+    cues = [(0.0, "a"), (79.0, "b"), (119.0, "c"), (300.0, "d")]
+    out = chapters_svc.snap_and_validate(items, cues, 400)
+    assert out == [
+        {"start_sec": 0.0, "title": "Meth stash stolen"},
+        {"start_sec": 79.0, "title": "Kidnapping the hostage"},
     ]
-    text = chapters_svc.format_timed_transcript(windows, max_chars=2500)
-    assert "[0:00]" in text
-    assert "[7:48]" in text
-    assert text.count("[") == 40
+
+
+def test_too_many_chapters_merge_the_shortest_parts():
+    """Over the limit, the shortest parts join their neighbour; chapters are not
+    thinned to an even spacing."""
+    cues = [(float(i), "x") for i in range(0, 180, 10)]
+    assert chapters_svc.max_chapter_count(180) == 3
+    raw = [
+        {"start_sec": 0, "title": "Cold open"},
+        {"start_sec": 20, "title": "Sponsor"},
+        {"start_sec": 40, "title": "Teardown"},
+        {"start_sec": 100, "title": "Benchmarks"},
+        {"start_sec": 160, "title": "Outro"},
+    ]
+    out = chapters_svc.snap_and_validate(raw, cues, 180)
+    assert [(c["start_sec"], c["title"]) for c in out] == [
+        (0.0, "Cold open"),
+        (40.0, "Teardown"),
+        (100.0, "Benchmarks"),
+    ]
+
+
+def test_chapter_limit_grows_slowly_with_length():
+    counts = [chapters_svc.max_chapter_count(m * 60) for m in (3, 10, 40, 80, 600)]
+    assert counts == sorted(counts)
+    assert counts[0] >= 2
+    assert chapters_svc.max_chapter_count(80 * 60) <= 20
+    assert counts[-1] == chapters_svc.MAX_CHAPTERS_HARD
 
 
 def test_chapters_from_model_output_clock_strings_and_fences():
@@ -256,15 +302,6 @@ def test_chapters_from_model_output_clock_strings_and_fences():
         '[{"start":"0:00","title":"A"},{"start_time":95,"title":"B"}]'
     )
     assert len(as_array) == 2
-
-
-def test_fallback_chapters_from_cues():
-    cues = [(float(i), f"unique topic {i} continues") for i in range(0, 480, 12)]
-    out = chapters_svc.fallback_chapters_from_cues(cues, 480)
-    assert len(out) >= 2
-    assert out[0]["start_sec"] == 0.0
-    assert out[0]["title"] == "Intro"
-    assert all("unique topic" not in c["title"] for c in out[1:])
 
 
 def test_caption_artifacts_stripped_timestamps_kept():
@@ -285,7 +322,8 @@ Let's hold here.
     cues = chapters_svc.parse_vtt_cues(raw)
     assert cues
     assert all(">>" not in text and "Music" not in text for _, text in cues)
-    text = chapters_svc.format_timed_transcript(cues, max_chars=4000)
+    (section,) = chapters_svc.transcript_sections(cues, max_chars=4000)
+    text = chapters_svc.render_transcript(section)
     assert "[1:42]" in text
     assert "[5:03]" in text
     assert ">>" not in text
@@ -293,34 +331,44 @@ Let's hold here.
     assert text.count("digging") == 1
 
 
-def test_spoken_caption_titles_are_quotes_topic_labels_are_not():
-    cues = [
-        (0.0, "welcome back"),
-        (100.0, "we're digging down looking for gold"),
-        (120.0, "digging for gold and getting rich"),
-        (140.0, "so much gold from digging"),
-        (400.0, "wrap up the show"),
-    ]
-    hold = "1:42 >> All right, lets hold. Let’s hold"
-    digging = "5:03 >>I’m digging down. >> I’m digging"
-    assert chapters_svc.title_is_spoken_quote(hold, cues, 0)
-    assert chapters_svc.title_is_spoken_quote(digging, cues, 100)
-    for title in ("Digging for treasure", "Installing the GPU", "Opening remarks"):
-        assert not chapters_svc.title_is_spoken_quote(title, cues, 100)
+def test_caption_marks_are_stripped_from_titles():
+    items = chapters_svc.chapters_from_model_output(
+        '{"chapters":[{"part":"0:00 >> Opening remarks","start":"0:00"},'
+        '{"part":"\\"Digging for treasure\\"","start":"1:40"}]}'
+    )
+    cues = [(0.0, "welcome back"), (100.0, "digging down"), (400.0, "wrap up")]
+    out = chapters_svc.snap_and_validate(items, cues, 500)
+    assert [c["title"] for c in out] == ["Opening remarks", "Digging for treasure"]
 
-    replaced = chapters_svc.replace_spoken_titles(
-        [
-            {"start_sec": 0.0, "title": "Intro"},
-            {"start_sec": 100.0, "title": digging},
-            {"start_sec": 400.0, "title": "Wrap up"},
-        ],
-        cues,
-    )
-    assert replaced[0]["title"] == "Intro"
-    assert replaced[2]["title"] == "Wrap up"
-    assert ">>" not in replaced[1]["title"]
-    assert "digging" in replaced[1]["title"].lower()
-    assert "gold" in replaced[1]["title"].lower()
-    assert not chapters_svc.title_is_spoken_quote(
-        replaced[1]["title"], cues, replaced[1]["start_sec"]
-    )
+
+def test_section_chapters_stay_inside_the_section():
+    lines = [(600.0, "a"), (612.0, "b"), (900.0, "c"), (1188.0, "d")]
+    payload = [
+        {"part": "Painting it red", "start": "15:00"},
+        {"part": "Building the Shed", "start": "10:00"},
+        {"part": "From another section", "start": "45:00"},
+        {"part": "No such time", "start": "soon"},
+    ]
+    assert chapters_svc.section_chapters(payload, lines) == [
+        {"start_sec": 600.0, "title": "Building the Shed"},
+        {"start_sec": 900.0, "title": "Painting it red"},
+    ]
+    # How a section that opens still in the previous chapter is recognised.
+    assert chapters_svc.same_title("Building the Shed", "building the shed.")
+    assert not chapters_svc.same_title("Building the Shed", "Painting it red")
+    assert not chapters_svc.same_title("Building the Shed", None)
+
+
+def test_long_chapters_are_the_ones_far_above_average():
+    chapters = [
+        {"start_sec": 0.0, "title": "A"},
+        {"start_sec": 300.0, "title": "B"},
+        {"start_sec": 600.0, "title": "C"},
+        {"start_sec": 2400.0, "title": "D"},
+    ]
+    # 50 minutes, 4 chapters: only the 30-minute one is over twice the average.
+    assert chapters_svc.long_chapters(chapters, 3000) == [(2, 2400.0)]
+    # An even 10-minute video has none, however few chapters it has.
+    assert chapters_svc.long_chapters(chapters[:2], 600) == []
+    # Two chapters in three hours: the one holding nearly all of it qualifies.
+    assert chapters_svc.long_chapters(chapters[:2], 10_800) == [(1, 10_800.0)]

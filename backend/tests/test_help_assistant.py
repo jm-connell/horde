@@ -256,18 +256,23 @@ def test_the_assistant_model_wins_over_the_chat_model(app, monkeypatch):
     assert help_model.assistant_model() == "strong-m"
 
 
-def test_on_openrouters_budget_setup_the_assistant_defaults_to_a_stronger_model(
+def test_on_openrouters_former_budget_setup_the_assistant_defaults_to_a_stronger_model(
     app, monkeypatch
 ):
-    """Ask on the budget model miscited videos; background jobs stay on it."""
+    """Ask on the former budget model miscited videos; an install still on it
+    keeps its background jobs there and Ask on the stronger model."""
     from app.services.ai import workload
     from app.services.ai.provider import (
         OPENROUTER_ASSISTANT_MODEL,
+        OPENROUTER_FORMER_BUDGET_MODEL,
         OPENROUTER_PRESETS,
         Connection,
     )
 
-    budget, best = OPENROUTER_PRESETS["budget"], OPENROUTER_ASSISTANT_MODEL
+    budget, best = OPENROUTER_FORMER_BUDGET_MODEL, OPENROUTER_ASSISTANT_MODEL
+    assert budget == "google/gemini-2.5-flash-lite"
+    # Today's budget default is that stronger model: Ask just follows it.
+    assert OPENROUTER_PRESETS["budget"] == best == "deepseek/deepseek-v4.1-flash"
     assert help_model.tier(best) == "large"
     monkeypatch.setattr(workload, "ensure_quality_chat_model", lambda: "chat-m")
     monkeypatch.setattr(
@@ -283,6 +288,8 @@ def test_on_openrouters_budget_setup_the_assistant_defaults_to_a_stronger_model(
     assert help_model.assistant_model() == "anthropic/claude-sonnet-4.5"
     app_settings.save({"ai": {"help_model": "", "chat_model": "openai/gpt-5"}})
     assert help_model.assistant_model() == "chat-m"
+    app_settings.save({"ai": {"chat_model": OPENROUTER_PRESETS["budget"]}})
+    assert help_model.default_model() == ""
     # Another provider's budget model is not OpenRouter's.
     monkeypatch.setattr(
         help_model,
