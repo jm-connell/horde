@@ -319,7 +319,6 @@ function OnlineLibrary() {
               channelUrl={activeChannelUrl}
               stat={activeChannelStat}
               autodownload={catalog.autodownload}
-              catalogProgress={catalog.catalogProgress}
               onOpenSettings={setSettingsSheet}
             />
             <ChannelControls

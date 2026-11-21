@@ -189,46 +189,23 @@ export function useMayIndexOnSubscribe(): boolean {
 }
 
 /**
- * Subscribe to a channel and, where allowed, turn Ask on for it: by itself up
- * to the server's limit, while a bigger channel only gets a warning (with
- * "Index anyway" for those who manage Ask).
+ * Subscribe to a channel and, where allowed, turn Ask on for it (its newest
+ * videos, up to the limit).
  */
 export function useSubscribe() {
-  const { can } = useAuth();
   const { showToast, showError } = useToast();
   const queryClient = useQueryClient();
   const follow = useFollowMutation();
   const mayIndex = useMayIndexOnSubscribe();
 
-  const indexFor = async (
-    channelUrl: string,
-    name: string,
-    confirmLarge = false
-  ) => {
+  const indexFor = async (channelUrl: string, name: string) => {
     try {
-      const done = await api.indexSubscribedChannel(channelUrl, confirmLarge);
+      const done = await api.indexSubscribedChannel(channelUrl);
       // YouTube's name for it, when the subscription had none yet.
       const shown = done.channel_name ?? name;
       void queryClient.invalidateQueries({ queryKey: queryKeys.ask.channels });
       void queryClient.invalidateQueries({ queryKey: ["follows"] });
-      if (done.large) {
-        const count = done.video_count;
-        showToast(
-          `${shown} has ${
-            count == null ? "more than 500" : count.toLocaleString()
-          } videos, so it was not indexed for Ask and search: fetching every caption takes hours.`,
-          {
-            key: `ask-index-${channelUrl}`,
-            persistent: true,
-            action: can("manage_ask")
-              ? {
-                  label: "Index anyway",
-                  onClick: () => void indexFor(channelUrl, shown, true),
-                }
-              : undefined,
-          }
-        );
-      } else if (done.indexed && !done.already) {
+      if (done.indexed && !done.already) {
         showToast(`Indexing ${shown} for Ask and search`);
       }
     } catch (err) {

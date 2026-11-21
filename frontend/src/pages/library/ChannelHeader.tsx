@@ -6,13 +6,9 @@ import ChannelAvatar from "../../components/ChannelAvatar";
 import { useHelpChat } from "../../context/HelpChatContext";
 import { useAskChannels } from "../../queries/ask";
 import { useChannelFollow } from "../../queries/follows";
-import { findAskChannel } from "../ask/askLinks";
+import { askIndexedLabel, findAskChannel } from "../ask/askLinks";
 import type { ChannelAutodownload, ChannelStat } from "../../types";
 import { formatCompactCount, joinDotList } from "../../utils";
-import {
-  formatCatalogProgress,
-  type CatalogProgress,
-} from "../libraryCatalogProgress";
 import {
   autodownloadChipLabel,
   channelHandle,
@@ -22,15 +18,14 @@ import {
 
 /**
  * A channel page's header: who the channel is, the primary actions (Follow,
- * Download…, Channel settings) beside how much of it is indexed, and chips
- * that sum up its active policies.
+ * Download…, Channel settings) beside how much of it Ask has indexed, and
+ * chips that sum up its active policies.
  */
 export default function ChannelHeader({
   channel,
   channelUrl,
   stat,
   autodownload,
-  catalogProgress,
   onOpenSettings,
 }: {
   channel: string;
@@ -38,11 +33,11 @@ export default function ChannelHeader({
   /** The channel's row in the library list (absent for a channel not in it). */
   stat: ChannelStat | null;
   autodownload: ChannelAutodownload | null;
-  catalogProgress: CatalogProgress | null;
   onOpenSettings: (section: ChannelSettingsSection | null) => void;
 }) {
   const { can } = useAuth();
   const youtube = isYoutubeChannelUrl(channelUrl);
+  const askChannels = useAskChannels(youtube, { poll: true });
   const handle = channelHandle(channelUrl);
   const count = stat?.count ?? 0;
   const meta = joinDotList([
@@ -60,12 +55,17 @@ export default function ChannelHeader({
   const retentionLabel = retentionChipLabel(stat?.retention);
   if (retentionLabel)
     chips.push({ section: "retention", label: retentionLabel, tone: "accent" });
+  const asked = findAskChannel(
+    askChannels.data?.items ?? [],
+    channelUrl,
+    channel
+  );
   const indexChip: Chip | null =
-    youtube && catalogProgress
+    youtube && askChannels.data
       ? {
-          section: "manage",
-          label: formatCatalogProgress(catalogProgress),
-          tone: catalogProgress.status === "error" ? "error" : "muted",
+          section: "ask",
+          label: askIndexedLabel(asked),
+          tone: asked?.status === "error" ? "error" : "muted",
         }
       : null;
 
