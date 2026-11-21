@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { OPENROUTER_RECOMMENDED_MODELS } from "./constants";
+import {
+  OPENROUTER_ASSISTANT_MODEL,
+  OPENROUTER_PRESETS,
+  OPENROUTER_RECOMMENDED_MODELS,
+  assistantDefaultModel,
+} from "./constants";
 import { openRouterSelectOptions } from "./openRouterModels";
 
 const models = [
@@ -16,8 +21,8 @@ describe("openRouterSelectOptions", () => {
     });
     const ids = opts.map((o) => o.value);
     expect(ids.slice(0, 3)).toEqual([
-      "google/gemini-2.5-flash-lite",
       "google/gemini-2.5-flash",
+      "google/gemini-2.5-flash-lite",
       "openai/gpt-4o-mini",
     ]);
     expect(
@@ -33,8 +38,8 @@ describe("openRouterSelectOptions", () => {
       pinRecommended: true,
     });
     expect(opts.map((o) => o.value)).toEqual([
-      "google/gemini-2.5-flash-lite",
       "google/gemini-2.5-flash",
+      "google/gemini-2.5-flash-lite",
     ]);
   });
 
@@ -57,11 +62,27 @@ describe("openRouterSelectOptions", () => {
 
   it("includes every recommended slug in the pin list", () => {
     expect(OPENROUTER_RECOMMENDED_MODELS).toHaveLength(9);
-    expect(OPENROUTER_RECOMMENDED_MODELS[0]).toBe(
+    // The default background model leads the list.
+    expect(OPENROUTER_RECOMMENDED_MODELS[0]).toBe(OPENROUTER_PRESETS[0].model);
+    expect(OPENROUTER_PRESETS[0].model).toBe("deepseek/deepseek-v4.1-flash");
+    expect(OPENROUTER_RECOMMENDED_MODELS).toContain(
       "google/gemini-2.5-flash-lite"
     );
-    expect(OPENROUTER_RECOMMENDED_MODELS).toContain(
-      "deepseek/deepseek-v4.1-flash"
+  });
+});
+
+describe("assistantDefaultModel", () => {
+  it("keeps Ask on the stronger model for installs still on the former budget model", () => {
+    expect(assistantDefaultModel(true, "google/gemini-2.5-flash-lite")).toBe(
+      OPENROUTER_ASSISTANT_MODEL
+    );
+  });
+
+  it("follows the background model otherwise", () => {
+    expect(assistantDefaultModel(true, OPENROUTER_PRESETS[0].model)).toBe("");
+    expect(assistantDefaultModel(true, "openai/gpt-5")).toBe("");
+    expect(assistantDefaultModel(false, "google/gemini-2.5-flash-lite")).toBe(
+      ""
     );
   });
 });

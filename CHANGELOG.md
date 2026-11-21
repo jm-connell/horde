@@ -9,6 +9,14 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **The default OpenRouter model is DeepSeek V4.1 Flash.** A new setup, and
+  the **Budget** preset, now use `deepseek/deepseek-v4.1-flash` for the
+  background jobs instead of `google/gemini-2.5-flash-lite`. On the same
+  videos it named chapters more specifically than Gemini 2.5 Flash (the
+  **Best** preset) at under half its cost; it costs somewhat more than the
+  model it replaces (about $0.003 against $0.002 for the chapters of an
+  80-minute video). An install already set up keeps its saved model; pick
+  **Budget** in Settings → AI to move to it.
 - **AI chapters mark real parts of the video.** A chapter now starts where
   the video moves on to something else, so chapters are as long as the parts
   they cover instead of evenly spaced, and each is named for what happens in

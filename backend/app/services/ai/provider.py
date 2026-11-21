@@ -29,16 +29,22 @@ from ..app_settings import normalize_base_url
 
 logger = logging.getLogger(__name__)
 
+#: Budget is the default background model. On seven test videos it named
+#: chapters better than Gemini 2.5 Flash for under half the cost, and wrote
+#: clean summaries, tags and categories with its thinking off (``think=False``).
 OPENROUTER_PRESETS: dict[str, str] = {
-    "budget": "google/gemini-2.5-flash-lite",
+    "budget": "deepseek/deepseek-v4.1-flash",
     "best": "google/gemini-2.5-flash",
 }
 OPENROUTER_DEFAULT_MODEL = OPENROUTER_PRESETS["budget"]
-#: What Ask answers with on OpenRouter until an Assistant model is chosen
-#: (``help_model.default_model``). In a comparison on one indexed channel it
-#: gave the best-grounded answers of the cheap models, for less than half the
-#: cost of the Best preset; it thinks first, so its first word takes longer.
-OPENROUTER_ASSISTANT_MODEL = "deepseek/deepseek-v4.1-flash"
+#: The Budget preset before it became DeepSeek. Installs set up then still
+#: have it saved as their background model.
+OPENROUTER_FORMER_BUDGET_MODEL = "google/gemini-2.5-flash-lite"
+#: What Ask answers with on OpenRouter while the background model is the former
+#: budget model and no Assistant model is chosen (``help_model.default_model``).
+#: In a comparison on one indexed channel it gave the best-grounded answers of
+#: the cheap models, for less than half the cost of the Best preset.
+OPENROUTER_ASSISTANT_MODEL = OPENROUTER_PRESETS["budget"]
 
 ProviderKind = Literal["openrouter", "ollama", "openai_compatible"]
 Target = Literal["chat", "embed"]

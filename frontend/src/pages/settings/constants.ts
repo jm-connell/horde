@@ -354,7 +354,7 @@ export const OPENROUTER_PRESETS = [
   {
     id: "budget",
     label: "Budget",
-    model: "google/gemini-2.5-flash-lite",
+    model: "deepseek/deepseek-v4.1-flash",
     recommended: true,
   },
   {
@@ -368,25 +368,29 @@ export const OPENROUTER_PRESETS = [
 /** The server's `OPENROUTER_ASSISTANT_MODEL` (services/ai/provider.py). */
 export const OPENROUTER_ASSISTANT_MODEL = "deepseek/deepseek-v4.1-flash";
 
+/** The Budget preset before it became DeepSeek (the server's
+ * `OPENROUTER_FORMER_BUDGET_MODEL`); installs set up then still have it saved. */
+export const OPENROUTER_FORMER_BUDGET_MODEL = "google/gemini-2.5-flash-lite";
+
 /**
  * What an empty Assistant model means on OpenRouter while the background model is
- * the Budget preset (the server's `help_model.default_model`). "" when the
+ * the former Budget preset (the server's `help_model.default_model`). "" when the
  * assistant follows the background model.
  */
 export function assistantDefaultModel(
   isOpenRouter: boolean,
   chatModel: string
 ): string {
-  return isOpenRouter && chatModel === OPENROUTER_PRESETS[0].model
+  return isOpenRouter && chatModel === OPENROUTER_FORMER_BUDGET_MODEL
     ? OPENROUTER_ASSISTANT_MODEL
     : "";
 }
 
 /** Pinned at the top of the OpenRouter chat-model dropdown. */
 export const OPENROUTER_RECOMMENDED_MODELS = [
-  "google/gemini-2.5-flash-lite",
-  "google/gemini-2.5-flash",
   "deepseek/deepseek-v4.1-flash",
+  "google/gemini-2.5-flash",
+  "google/gemini-2.5-flash-lite",
   "google/gemini-3.1-flash-lite",
   "openai/gpt-4.1-nano",
   "openai/gpt-4o-mini",
