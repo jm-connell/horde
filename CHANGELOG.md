@@ -7,6 +7,8 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-11-20
+
 ### Added
 
 - **New looks to try.** Settings → Appearance has a **New** section of
@@ -1359,7 +1361,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.4.0...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.4.1...main
+[1.4.1]: https://github.com/jm-connell/horde/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/jm-connell/horde/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/jm-connell/horde/compare/v1.2.2...v1.3.1
 [1.2.2]: https://github.com/jm-connell/horde/compare/v1.2.1...v1.2.2
