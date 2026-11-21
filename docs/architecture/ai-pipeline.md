@@ -64,7 +64,7 @@ One OpenAI-compatible client (`services/ai/provider.py`, [ADR 0017](../adr/0017-
 
 | Concern | Routing |
 |---------|---------|
-| Chat / summary / tags / chapters | `/chat/completions` on the chat connection |
+| Chat / summary / tags / chapters | `/chat/completions` on the chat connection. The background jobs (summary, chapters, tags, categories, duplicates, discovery searches) pass `think=False`: OpenRouter's `reasoning: {enabled: false}`, resent as `{effort: "minimal"}` when the model refuses ("Reasoning is mandatory"). Thinking counts against `max_tokens`, and a reply cut off while still thinking is treated as empty, never as the answer |
 | Embeddings | `/embeddings` on `embed_base_url` when set, else on the chat connection; none when `embed_model` is empty |
 | Cost | Recorded when the response carries `usage.cost` (OpenRouter) |
 | Model downloads, VRAM sizing | Only when the endpoint's host answers Ollama's `/api/version` |

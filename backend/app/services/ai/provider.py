@@ -139,16 +139,19 @@ def _stringify_message_content(content: Any) -> str:
     return str(content)
 
 
-def assistant_message_text(message: Any) -> str:
+def assistant_message_text(message: Any, *, cut_off: bool = False) -> str:
     """Best-effort assistant text from an OpenAI/Ollama chat message.
 
     JSON mode plus thinking models (Gemini 2.5, Qwen3, …) often leave
     ``content`` as ``{  }`` and put the real answer in ``reasoning`` /
-    ``thinking``.
+    ``thinking``. Not when the reply was ``cut_off`` at the token limit: then
+    the model was still thinking, and its reasoning is not an answer.
     """
     if not isinstance(message, dict):
         return ""
     content = _stringify_message_content(message.get("content"))
+    if cut_off:
+        return content
     extras: list[str] = []
     for key in ("reasoning", "reasoning_content", "thinking"):
         extra = message.get(key)
@@ -186,6 +189,20 @@ def openrouter_response_format(fmt: ChatFormat) -> dict[str, Any] | None:
     if fmt == "json":
         return {"type": "json_object"}
     return None
+
+
+#: What "thinking off" becomes for a model that always thinks.
+_MINIMAL_REASONING = {"effort": "minimal"}
+
+
+def _thinking_cannot_be_off(resp: httpx.Response, payload: dict[str, Any]) -> bool:
+    """OpenRouter refuses ``reasoning.enabled = false`` for a model that always
+    thinks (Gemini 2.5 Pro, GPT-5, DeepSeek R1): 400 "Reasoning is mandatory"."""
+    return (
+        resp.status_code == 400
+        and payload.get("reasoning") == {"enabled": False}
+        and "reasoning" in _error_detail(resp).lower()
+    )
 
 
 # Keep probes snappy: reachability is checked from request handlers too.
@@ -517,7 +534,8 @@ class OpenAICompatProvider:
         unified ``reasoning`` field; other servers get nothing, so it is safe
         for models that never think). Thinking counts against ``max_tokens``:
         left on for a short structured call, it used the whole budget and the
-        reply came back cut off or empty."""
+        reply came back cut off or empty. A model that cannot stop thinking is
+        asked for as little as it allows (``_thinking_cannot_be_off``)."""
         if think or not self.connection.is_openrouter:
             return {}
         return {"reasoning": {"enabled": False}}
@@ -558,6 +576,9 @@ class OpenAICompatProvider:
         try:
             with self._client(timeout=req_timeout) as client:
                 resp = client.post("/chat/completions", json=payload)
+                if _thinking_cannot_be_off(resp, payload):
+                    payload["reasoning"] = _MINIMAL_REASONING
+                    resp = client.post("/chat/completions", json=payload)
                 if resp.status_code in (400, 422) and "response_format" in payload:
                     # Schema/json_object unsupported: loosen, then drop format.
                     payload.pop("response_format", None)
@@ -574,8 +595,11 @@ class OpenAICompatProvider:
             choices = data.get("choices") if isinstance(data, dict) else None
             if not isinstance(choices, list) or not choices:
                 raise RuntimeError("AI provider returned no choices")
-            message = choices[0].get("message") if isinstance(choices[0], dict) else {}
-            content = assistant_message_text(message or {})
+            choice = choices[0] if isinstance(choices[0], dict) else {}
+            content = assistant_message_text(
+                choice.get("message") or {},
+                cut_off=choice.get("finish_reason") == "length",
+            )
             self._record_usage(
                 data, model=model, usage_kind=usage_kind, video_id=video_id
             )
@@ -614,6 +638,20 @@ class OpenAICompatProvider:
             time.sleep(wait)
         raise AssertionError("unreachable")
 
+    def _send_stream(
+        self, client: httpx.Client, payload: dict[str, Any]
+    ) -> httpx.Response:
+        """``_send_retrying_429``, sent again with minimal thinking when the
+        model refuses to have it turned off."""
+        resp = self._send_retrying_429(client, payload)
+        if resp.status_code == 400:
+            resp.read()
+            if _thinking_cannot_be_off(resp, payload):
+                resp.close()
+                payload["reasoning"] = _MINIMAL_REASONING
+                resp = self._send_retrying_429(client, payload)
+        return resp
+
     def chat_stream(
         self,
         prompt: str,
@@ -649,7 +687,7 @@ class OpenAICompatProvider:
         try:
             with (
                 self._client(timeout=req_timeout) as client,
-                closing(self._send_retrying_429(client, payload)) as resp,
+                closing(self._send_stream(client, payload)) as resp,
             ):
                 resp.raise_for_status()
                 for line in resp.iter_lines():

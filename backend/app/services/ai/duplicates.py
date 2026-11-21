@@ -87,6 +87,7 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
             system="You compare archived videos for duplicates. Reply with JSON only.",
             usage_kind="duplicates",
             video_id=getattr(a, "id", None),
+            think=False,
         )
         data = _parse_json_object(raw)
         verdict = str(data.get("verdict") or "").lower().strip()

@@ -23,6 +23,17 @@ All notable changes to Horde are documented here. The format follows
   could not be read (on long videos it usually was cut off), Horde quietly
   made evenly spaced markers named after three frequent caption words
   ("Know Man It's"). It now reports the failure and stores nothing.
+- **Summaries that were the model's own notes.** With a thinking model as
+  the Background model (DeepSeek, for one), a summary could come out as
+  "We need answer JSON only. Need summary 75-120 words…" or stop
+  mid-sentence: the thinking used up the length limit, and what was left
+  was stored. Summaries, chapters, tags, categories and duplicate checks now
+  run with thinking off, and a reply cut off while the model was still
+  thinking is never taken as the answer. Categories on such a model take
+  seconds instead of minutes.
+- **Models that always think** (Gemini 2.5 Pro, GPT-5, DeepSeek R1) refused
+  requests that ask for no thinking, so Ask failed with one of them as its
+  model. They are now asked for minimal thinking instead.
 - **AI chapters starting at the wrong moment.** The model was shown clock
   times and asked for seconds, and often answered "119" for 1:19, which put
   the chapter 40 seconds late (and minutes late further into a video). Start

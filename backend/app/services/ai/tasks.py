@@ -298,6 +298,7 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
         ),
         usage_kind="tags",
         video_id=video_id,
+        think=False,
     )
     data = _parse_json_object(raw)
     suggested_raw = data.get("tags")
@@ -431,6 +432,9 @@ def generate_summary(
             temperature=0.2 if use_schema else 0.5,
             usage_kind="summary",
             video_id=usage_video_id,
+            # Thinking counts against num_predict: a thinking model spent the
+            # whole limit on it and the summary came back cut short or empty.
+            think=False,
         )
         _accumulate_cost()
         summary = _extract_summary_text(raw)
@@ -471,6 +475,7 @@ def generate_summary(
             format=ai_text.SUMMARY_JSON_SCHEMA,
             usage_kind="summary",
             video_id=usage_video_id,
+            think=False,
         )
         _accumulate_cost()
         continuation = _extract_summary_text(cont_raw)
@@ -976,6 +981,9 @@ def run_refresh_categories(session: Session, _video_id: int | None = None) -> No
         chat_model,
         system=ai_text.category_system_prompt(),
         usage_kind="categories",
+        # A thinking model reasoned for two minutes over a small sample, past
+        # the request timeout.
+        think=False,
     )
     data = _parse_json_object(raw)
     categories_value = data.get("categories")
