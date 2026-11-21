@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "../../api";
+import { api, ApiError } from "../../api";
 import { describeError } from "../../apiErrors";
 import type { AiTarget } from "../../components/aiTarget";
 import type { AskVideo } from "../../components/helpChat";
@@ -15,6 +15,49 @@ import { useAiStatus } from "../../queries/status";
 import type { AiChaptersMode, StreamAi, Video } from "../../types";
 import { chaptersFromApi, formatDate, parseChapters } from "../../utils";
 import type { WatchSource } from "./useWatchVideo";
+
+/**
+ * Waits before each further try while a stream's captions have not loaded.
+ * Spaced out: YouTube's caption endpoint rate-limits, and asking again at
+ * once keeps it limited.
+ */
+const CAPTION_RETRY_DELAYS_MS = [3000, 6000, 12_000, 20_000];
+
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      window.clearTimeout(id);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    const id = window.setTimeout(() => {
+      signal?.removeEventListener("abort", abort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", abort, { once: true });
+  });
+}
+
+/**
+ * Run a stream AI request, waiting while its captions load. The server
+ * answers `captions_unavailable` when the caption fetch failed for a passing
+ * reason (YouTube was slow or busy) and fetches them again on the next try,
+ * so that is a reason to wait, and an error only once it keeps happening.
+ */
+async function whileCaptionsLoad<T>(
+  run: () => Promise<T>,
+  signal?: AbortSignal
+): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run();
+    } catch (err) {
+      const waiting =
+        err instanceof ApiError && err.code === "captions_unavailable";
+      if (!waiting || attempt >= CAPTION_RETRY_DELAYS_MS.length) throw err;
+      await abortableDelay(CAPTION_RETRY_DELAYS_MS[attempt], signal);
+    }
+  }
+}
 
 /**
  * Which AI features this install offers for the video on screen (summary,
@@ -109,7 +152,11 @@ export function useWatchAi(
       url: string;
       force: boolean;
       signal?: AbortSignal;
-    }) => api.generateStreamChapters(url, { force, signal }),
+    }) =>
+      whileCaptionsLoad(
+        () => api.generateStreamChapters(url, { force, signal }),
+        signal
+      ),
     onMutate: () => {
       setChapterError(null);
     },
@@ -265,7 +312,10 @@ export function useWatchAi(
     async (force: boolean, signal: AbortSignal) => {
       if (!streamUrl) return;
       try {
-        const res = await api.summarizeStream(streamUrl, { force, signal });
+        const res = await whileCaptionsLoad(
+          () => api.summarizeStream(streamUrl, { force, signal }),
+          signal
+        );
         queryClient.setQueryData(queryKeys.preview.ai(streamUrl), res);
       } catch (err) {
         // Refresh has_captions / expires_at, which a failed run may change.
@@ -295,6 +345,7 @@ export function useWatchAi(
         key: `stream:${streamUrl}`,
         summary: aiSummary ?? null,
         processingSummary: false,
+        generateOnExpand: true,
         note: until
           ? `Saved until ${until} \u2014 downloading the video keeps it.`
           : null,

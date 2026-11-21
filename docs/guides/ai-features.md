@@ -93,6 +93,8 @@ The assistant uses the background model unless the administrator sets an **Assis
 
 A video you stream without downloading (`/watch?url=…`) gets the same **Summary** section (with **Chat**, which opens Ask on it) and **Generate** chapters, from its title, description and English captions (fetched from the stream the first time you use AI on it; a stream without captions can still be asked about from its metadata). Only YouTube videos are supported.
 
+Nothing summarizes a stream on its own, so its Summary section starts collapsed while it has no summary; opening it writes one. If YouTube is slow to hand over the captions (it rate-limits them), the section keeps waiting and tries again for up to a minute before it reports an error. The captions are fetched once for the player and the AI features alike, and a rate limit makes background caption work (library retries, Ask indexing) hold off for two minutes so your next try gets through.
+
 Results are saved per video. Opening the stream again shows them without spending tokens, and **downloading the video moves them onto the library copy** (its own summary or chapters win if it already has some). Questions about it live in Ask, and an Ask conversation about the stream carries on with the library copy. If nobody opens the stream for `HORDE_STREAM_AI_RETENTION_DAYS` (default **30**) days and it was not downloaded, its saved results are deleted. The Summary section shows the date they are kept until. See [ADR 0010](../adr/0010-stream-ai-retention.md).
 
 ## Enrich tags

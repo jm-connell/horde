@@ -170,7 +170,14 @@ test("a streamed video gets an AI summary with a retention note, and Chat opens 
     page.getByRole("heading", { name: "Ridge at dusk", level: 1 })
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Generate summary" }).click();
+  // Nothing summarizes a stream on its own: the section starts collapsed, and
+  // opening it writes the summary.
+  const toggle = page.getByRole("button", { name: "Summary", exact: true });
+  await expect(toggle).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Generate summary" })
+  ).not.toBeInViewport();
+  await toggle.click();
   await expect(page.getByText(SUMMARY)).toBeVisible();
   await expect(page.getByText(/Saved until Nov 16, 2026/)).toBeVisible();
   await expect(page.getByText(/downloading the video keeps it/)).toBeVisible();
@@ -184,6 +191,38 @@ test("a streamed video gets an AI summary with a retention note, and Chat opens 
   await input.fill("What is it about?");
   await input.press("Enter");
   await expect(panel.getByText("Mostly about a hike.")).toBeVisible();
+});
+
+test("a stream's summary waits while its captions load instead of failing", async ({
+  page,
+}) => {
+  await enableAi(page);
+  const state = await mockStream(page);
+  let calls = 0;
+  await page.route(/\/api\/preview\/ai\/summarize$/, (route) => {
+    calls += 1;
+    if (calls === 1) {
+      return route.fulfill({
+        status: 502,
+        json: {
+          detail: "Could not load this video's captions; try again",
+          code: "captions_unavailable",
+        },
+      });
+    }
+    state.summary = SUMMARY;
+    state.has_captions = true;
+    return route.fulfill({ json: state });
+  });
+  await page.goto(WATCH);
+  await page.getByRole("button", { name: "Summary", exact: true }).click();
+  // Still waiting after the first answer: no error is shown.
+  await expect.poll(() => calls).toBe(1);
+  await expect(page.getByText("Generating summary")).toBeVisible();
+  await expect(page.getByText(/Could not load/)).toHaveCount(0);
+  await expect(page.getByText(SUMMARY)).toBeVisible();
+  expect(calls).toBe(2);
+  await expect(page.getByText(/Could not load/)).toHaveCount(0);
 });
 
 test("AI chapters generated for a stream replace the empty chapter list", async ({
@@ -375,7 +414,7 @@ test("a stream's AI is hidden when the server does not support it", async ({
     page.getByRole("heading", { name: "Ridge at dusk", level: 1 })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Generate summary" })
+    page.getByRole("button", { name: "Summary", exact: true })
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Generate chapters" })
@@ -509,7 +548,7 @@ test("without captions a stream offers neither a summary nor chapters", async ({
     page.getByRole("button", { name: "Chat", exact: true })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Generate summary" })
+    page.getByRole("button", { name: "Summary", exact: true })
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Generate chapters" })
@@ -560,7 +599,7 @@ test("a member without the AI grant sees related videos but no stream AI", async
     page.getByRole("link", { name: /Not yet downloaded clip/ })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Generate summary" })
+    page.getByRole("button", { name: "Summary", exact: true })
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Generate chapters" })
@@ -695,7 +734,7 @@ test("a live broadcast offers no chapters or caption-based AI", async ({
     page.getByRole("button", { name: /Saved AI chapter/ })
   ).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: "Generate summary" })
+    page.getByRole("button", { name: "Summary", exact: true })
   ).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Generate chapters" })
