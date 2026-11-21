@@ -67,9 +67,29 @@ hide:
 
 <section class="horde-section" markdown>
 
+## Just ask { #ask }
+
+**Ask** is a chat box on every page, and the quickest way to do most things in Horde. Say what you want in plain words:
+
+- *"Make the video cards rounder and hide the channel sidebar."* It writes the CSS, previews it on the page, and keeps it only if you like it.
+- *"Turn on SponsorBlock."* *"Make the text bigger."* It finds the setting and changes it once you confirm.
+- *"What does The Car Care Nut say about the 2004 4Runner?"* It answers from what the channel said in its videos, with a link to the moment for every point.
+- *"What is this video about?"* *"Why did my last download fail?"* *"Make a playlist of the cooking videos."*
+
+Asking needs an AI model, from a cloud provider or one you run yourself. Without one, Ask still shows the documentation page that answers your question, and search still finds every moment a channel mentioned your words. [Ask](guides/ask.md), [what it can do](guides/ai-features.md#ask)
+
+</section>
+
+<section class="horde-section" markdown>
+
 ## What Horde does { #what-horde-does }
 
 <div class="horde-features" markdown>
+
+<div class="horde-feature" markdown>
+### Ask, and optional AI
+One chat on every page that changes settings for you, restyles the app, and answers "what did this channel say about…" with links to the moment. Plus summaries and chapters. Use a cloud provider or your own Ollama, or leave it off. [Ask](guides/ask.md), [AI features](guides/ai-features.md)
+</div>
 
 <div class="horde-feature" markdown>
 ### Download
@@ -112,18 +132,13 @@ Installs as an app, saves videos to the device for offline viewing, and casts to
 </div>
 
 <div class="horde-feature" markdown>
-### Ask, and optional AI
-Summaries, chapters, chat about a video, and "what did this channel say about…" answered with links to the moment. Use a cloud provider or your own Ollama, or leave it off. [Ask](guides/ask.md), [AI features](guides/ai-features.md)
-</div>
-
-<div class="horde-feature" markdown>
 ### Bring what you have
 Point Horde at an archive from yt-dlp, Tube Archivist, Pinchflat or another Horde, and import your YouTube history from Google Takeout. [Moving an archive](guides/migrating.md)
 </div>
 
 <div class="horde-feature" markdown>
 ### Make it yours
-Thirteen themes, your own colours and fonts, background effects and custom CSS. Nearly everything is a setting. [Appearance](settings/appearance.md)
+No coding needed. Thirteen themes, your own colours and fonts, background effects, and nearly everything is a setting. For the rest, describe the look you want to Ask and it writes the custom CSS for you. [Appearance](settings/appearance.md), [Custom CSS](settings/custom-css.md)
 </div>
 
 <div class="horde-feature" markdown>
