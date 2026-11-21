@@ -6,16 +6,25 @@ import logging
 import re
 from dataclasses import dataclass
 
-from sqlalchemy import delete, text
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
 from ...context import current
 from ...errors import CodedHTTPException
-from ...models import KbChannel, KbChannelStatus, KbChunk, KbVideo, require_id, utcnow
+from ...models import (
+    ChannelCatalog,
+    KbChannel,
+    KbChannelStatus,
+    KbChunk,
+    KbVideo,
+    require_id,
+    utcnow,
+)
+from .. import app_settings
 from ..follows import normalize_channel_url
 from ..ytdlp_common import classify_ytdlp_error
-from . import captions, listing
+from . import captions, indexing, listing
 
 logger = logging.getLogger(__name__)
 
@@ -104,21 +113,14 @@ class SubscribeIndex:
     video_count: int | None
     indexed: bool
     already: bool = False
-    large: bool = False
 
 
 def index_on_subscribe(
-    session: Session,
-    channel_url: str,
-    *,
-    user_id: int,
-    auto_max: int,
-    confirm_large: bool,
+    session: Session, channel_url: str, *, user_id: int
 ) -> SubscribeIndex:
-    """Turn Ask on for a channel someone subscribed to: by itself up to
-    ``auto_max`` uploads, beyond that only with ``confirm_large`` (the caller
-    checks who may confirm). Raises 502 ``youtube_error`` when the uploads
-    cannot be counted."""
+    """Turn Ask on for a channel someone subscribed to, whatever its size: the
+    limit (``effective_limit``) caps how much of it is indexed. Raises 502
+    ``youtube_error`` when YouTube cannot be asked about the channel."""
     url = parse_channel_input(channel_url)
     on = _find(session, url)
     if on is not None:
@@ -130,19 +132,6 @@ def index_on_subscribe(
         return SubscribeIndex(
             canonical, on.channel_name, found.video_count, indexed=True, already=True
         )
-    count = found.video_count
-    if not confirm_large:
-        if count is None:
-            try:
-                large = listing.has_more_uploads_than(canonical, auto_max)
-            except Exception as exc:
-                raise _youtube_error(exc, canonical) from exc
-        else:
-            large = count > auto_max
-        if large:
-            return SubscribeIndex(
-                canonical, found.channel_name, count, indexed=False, large=True
-            )
     try:
         channel = add(session, url, include_streams=False, user_id=user_id, found=found)
     except CodedHTTPException as exc:
@@ -154,7 +143,7 @@ def index_on_subscribe(
         session.rollback()
         return _already(session, canonical, found)
     return SubscribeIndex(
-        channel.channel_url, channel.channel_name, count, indexed=True
+        channel.channel_url, channel.channel_name, found.video_count, indexed=True
     )
 
 
@@ -178,6 +167,49 @@ def get_or_404(session: Session, channel_id: int) -> KbChannel:
     return channel
 
 
+def default_limit() -> int:
+    """The app-wide number of newest uploads Ask indexes per channel."""
+    return app_settings.clamp_ask_max_videos(app_settings.load().get("ask_max_videos"))
+
+
+def effective_limit(channel: KbChannel) -> int:
+    """The channel's own limit, or the app-wide one."""
+    return channel.max_videos or default_limit()
+
+
+def _list_again(channel: KbChannel) -> None:
+    """Queue a new listing (a listing in flight is discarded: it used the old
+    choice). A paused channel lists when it is resumed."""
+    channel.updated_at = utcnow()
+    if channel.status != KbChannelStatus.paused:
+        channel.status = KbChannelStatus.queued
+
+
+def set_limit(session: Session, channel: KbChannel, limit: int | None) -> None:
+    """Give the channel its own limit (None: follow the app-wide one). The next
+    listing fetches up to it and deletes what lies beyond it."""
+    if limit == channel.max_videos:
+        return
+    before = effective_limit(channel)
+    channel.max_videos = limit
+    if effective_limit(channel) != before:
+        _list_again(channel)
+    session.add(channel)
+    session.commit()
+    current().knowledge.wake.set()
+
+
+def default_limit_changed(session: Session) -> None:
+    """The app-wide limit changed: list the channels that follow it again."""
+    for channel in session.exec(
+        select(KbChannel).where(col(KbChannel.max_videos).is_(None))
+    ).all():
+        _list_again(channel)
+        session.add(channel)
+    session.commit()
+    current().knowledge.wake.set()
+
+
 def set_streams(session: Session, channel: KbChannel, include: bool) -> None:
     """Turning streams off removes their passages; on lists them at the next pass."""
     channel_id = require_id(channel)
@@ -199,7 +231,7 @@ def set_streams(session: Session, channel: KbChannel, include: bool) -> None:
                 )
             ).all()
         )
-        _delete_videos(session, [i for i in stream_ids if i is not None])
+        indexing.delete_videos(session, [i for i in stream_ids if i is not None])
     session.add(channel)
     session.commit()
     current().knowledge.wake.set()
@@ -221,15 +253,6 @@ def resume(session: Session, channel: KbChannel) -> None:
     session.add(channel)
     session.commit()
     current().knowledge.wake.set()
-
-
-def _delete_videos(session: Session, video_ids: list[int]) -> None:
-    """Delete in batches so the FTS triggers never hold the write lock for long."""
-    for i in range(0, len(video_ids), 50):
-        batch = video_ids[i : i + 50]
-        session.execute(delete(KbChunk).where(col(KbChunk.kb_video_id).in_(batch)))
-        session.execute(delete(KbVideo).where(col(KbVideo.id).in_(batch)))
-        session.commit()
 
 
 def remove(session: Session, channel: KbChannel) -> None:
@@ -289,6 +312,17 @@ def counts(session: Session) -> dict[int, ChannelCounts]:
     ).all():
         out.setdefault(channel_id, ChannelCounts()).passages = n
     return out
+
+
+def channel_totals(session: Session) -> dict[str, int]:
+    """Uploads each channel has on YouTube, by channel URL, where the channel
+    catalog knows it (Ask's own listing stops at the limit)."""
+    rows = session.exec(
+        select(ChannelCatalog.channel_url, ChannelCatalog.channel_total).where(
+            col(ChannelCatalog.channel_total).is_not(None)
+        )
+    ).all()
+    return {normalize_channel_url(url): total for url, total in rows if total}
 
 
 def list_channels(session: Session) -> list[KbChannel]:

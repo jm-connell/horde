@@ -22,8 +22,21 @@ PENDING = "pending"
 _FINAL = (captions.FETCHED, captions.NO_CAPTIONS, captions.MEMBERS_ONLY)
 
 
-def apply_listing(session: Session, channel: KbChannel, listing: Listing) -> int:
-    """Upsert the listed uploads; returns how many are new. Unlisted rows are kept."""
+def delete_videos(session: Session, video_ids: list[int]) -> None:
+    """Delete in batches so the FTS triggers never hold the write lock for long."""
+    for i in range(0, len(video_ids), 50):
+        batch = video_ids[i : i + 50]
+        session.execute(delete(KbChunk).where(col(KbChunk.kb_video_id).in_(batch)))
+        session.execute(delete(KbVideo).where(col(KbVideo.id).in_(batch)))
+        session.commit()
+
+
+def apply_listing(
+    session: Session, channel: KbChannel, listing: Listing, limit: int
+) -> int:
+    """Upsert the listed uploads; returns how many are new. Rows that left the
+    listing are kept (a video YouTube no longer lists) unless they sit beyond
+    ``limit``: those are older than what the channel indexes now, and go."""
     channel_id = require_id(channel)
     existing = {
         v.yt_id: v
@@ -60,6 +73,15 @@ def apply_listing(session: Session, channel: KbChannel, listing: Listing) -> int
         .values(status=KbChannelStatus.indexing)
     )
     session.commit()
+    listed = {upload.yt_id for upload in listing.uploads}
+    delete_videos(
+        session,
+        [
+            require_id(row)
+            for yt_id, row in existing.items()
+            if yt_id not in listed and row.position >= limit
+        ],
+    )
     return added
 
 

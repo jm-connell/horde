@@ -14,7 +14,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0034_kb_sponsor_segments"
+HEAD = "0035_kb_keep_indexed_videos"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -1505,3 +1505,47 @@ def test_stream_resume_revision_resumes_unfinished_streams(tmp_dirs):
             ).fetchall()
         )
     assert rows == {"halfway0001": 2640.0, "finished001": 0.0}
+
+
+def test_ask_limit_revision_keeps_what_large_channels_have(tmp_dirs):
+    """0034 -> 0035: a channel holding more uploads than the new app-wide limit
+    gets its count as its own limit, so the upgrade deletes nothing."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0034_kb_sponsor_segments")
+    with engine.begin() as conn:
+        for channel_id, uploads, streams in [(1, 620, 0), (2, 40, 0), (3, 10, 700)]:
+            conn.execute(
+                text(
+                    "INSERT INTO kb_channels (id, channel_url, include_streams, "
+                    "status, embed_dim, created_at, updated_at) VALUES (:id, "
+                    "'https://youtube.com/@c' || :id, 0, 'ready', 0, "
+                    "'2024-01-01 00:00:00', '2024-01-01 00:00:00')"
+                ),
+                {"id": channel_id},
+            )
+            for is_stream, count in ((0, uploads), (1, streams)):
+                conn.execute(
+                    text(
+                        "INSERT INTO kb_videos (kb_channel_id, yt_id, is_stream, "
+                        "position, fetch_status, attempts, updated_at) "
+                        "WITH RECURSIVE n(i) AS (SELECT 0 UNION ALL SELECT i + 1 "
+                        "FROM n WHERE i + 1 < :count) SELECT :id, "
+                        "'v' || :id || '-' || :s || '-' || i, :s, i, 'pending', 0, "
+                        "'2024-01-01 00:00:00' FROM n WHERE :count > 0"
+                    ),
+                    {"id": channel_id, "s": is_stream, "count": count},
+                )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        limits = dict(
+            conn.execute(text("SELECT id, max_videos FROM kb_channels")).fetchall()
+        )
+    assert limits == {1: 620, 2: None, 3: 700}

@@ -1942,6 +1942,11 @@
           "ai": {
             "$ref": "#/components/schemas/AiSettingsRead"
           },
+          "ask_max_videos": {
+            "default": 500,
+            "title": "Ask Max Videos",
+            "type": "integer"
+          },
           "channel_catalog_enabled": {
             "default": true,
             "title": "Channel Catalog Enabled",
@@ -2060,6 +2065,19 @@
                 "type": "null"
               }
             ]
+          },
+          "ask_max_videos": {
+            "anyOf": [
+              {
+                "maximum": 5000.0,
+                "minimum": 50.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ask Max Videos"
           },
           "channel_catalog_enabled": {
             "anyOf": [
@@ -2396,6 +2414,17 @@
             ],
             "title": "Channel Name"
           },
+          "channel_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Total"
+          },
           "channel_url": {
             "title": "Channel Url",
             "type": "string"
@@ -2442,6 +2471,21 @@
             ],
             "title": "Last Listed At"
           },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "max_videos": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Videos"
+          },
           "no_captions": {
             "default": 0,
             "title": "No Captions",
@@ -2476,21 +2520,40 @@
           "id",
           "channel_url",
           "status",
+          "limit",
           "created_at"
         ],
         "title": "AskChannelRead",
         "type": "object"
       },
       "AskChannelUpdate": {
+        "description": "Only the fields sent change. ``max_videos`` null returns the channel to\nthe app-wide limit.",
         "properties": {
           "include_streams": {
-            "title": "Include Streams",
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Streams"
+          },
+          "max_videos": {
+            "anyOf": [
+              {
+                "maximum": 5000.0,
+                "minimum": 50.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Videos"
           }
         },
-        "required": [
-          "include_streams"
-        ],
         "title": "AskChannelUpdate",
         "type": "object"
       },
@@ -12596,11 +12659,6 @@
             "minLength": 1,
             "title": "Channel Url",
             "type": "string"
-          },
-          "confirm_large": {
-            "default": false,
-            "title": "Confirm Large",
-            "type": "boolean"
           }
         },
         "required": [
@@ -12634,11 +12692,6 @@
           "indexed": {
             "default": false,
             "title": "Indexed",
-            "type": "boolean"
-          },
-          "large": {
-            "default": false,
-            "title": "Large",
             "type": "boolean"
           },
           "video_count": {
@@ -21878,7 +21931,7 @@
     },
     "/api/follows/ask-index": {
       "post": {
-        "description": "Turn Ask indexing on for a channel the caller subscribes to.\n\nUp to ``ASK_INDEX_AUTO_MAX`` uploads it starts by itself; a larger channel\nanswers ``large`` and starts only with ``confirm_large``, which needs\n``manage_ask``. Members without ``manage_ask`` may do this while the\nadministrator includes their new channels (``follows.may_index_on_subscribe``).\nReads the channel's upload count from YouTube.",
+        "description": "Turn Ask indexing on for a channel the caller subscribes to.\n\nWhatever its size: Ask indexes its newest uploads up to the limit. Members\nwithout ``manage_ask`` may do this while the administrator includes their\nnew channels (``follows.may_index_on_subscribe``). Reads the channel's name\nand address from YouTube.",
         "operationId": "index_subscribed_channel_api_follows_ask_index_post",
         "requestBody": {
           "content": {
