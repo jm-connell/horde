@@ -146,3 +146,21 @@ test("live chat passes axe", async ({ page }) => {
   await expect(chatLog(page)).toContainText("hello live");
   await expectNoSeriousViolations(page, "watch a live stream with chat");
 });
+
+test("a failed read is tried again without bothering the viewer", async ({
+  page,
+}) => {
+  await openLive(page, [
+    (route) =>
+      route.fulfill({
+        status: 503,
+        json: {
+          detail: "Could not reach YouTube",
+          code: "youtube_unreachable",
+        },
+      }),
+    json(chatPage([message("a", "back again")])),
+  ]);
+  await expect(chatLog(page)).toContainText("back again");
+  await expect(page.getByText("Could not reach YouTube.")).toHaveCount(0);
+});

@@ -6,6 +6,8 @@ import type { ChatReplayState, ChatReplayStatus } from "./useChatReplay";
 
 /** How often the server's buffer is read. */
 const TICK_MS = 2_000;
+/** Failed reads in a row (each waiting a little longer) before giving up. */
+const MAX_FAILURES = 3;
 
 export type LiveChatState = ChatReplayState & {
   /** "Chat from before HH:MM isn't available." when the viewer is that early. */
@@ -16,7 +18,8 @@ export type LiveChatState = ChatReplayState & {
  * A live broadcast's chat at the moment being watched: every 2 s, read what
  * the server holds up to `getBehindLiveSec()` behind the live edge, after the
  * last message read; a scrub back reads afresh from that moment. One request
- * at a time; an error stops reading until `retry`. `null` stops.
+ * at a time; a failed read is tried again a little later, and only three in a
+ * row stop reading until `retry`. `null` stops.
  */
 export function useLiveChat(
   videoId: string | null,
@@ -47,6 +50,9 @@ export function useLiveChat(
     setStatus("loading");
     let cancelled = false;
     let inFlight = false;
+    // Failed reads in a row, and ticks to skip before the next try.
+    let failures = 0;
+    let skip = 0;
     let after = 0;
     let previousBehindMs: number | null = null;
     let list: ChatReplayItem[] = [];
@@ -54,6 +60,10 @@ export function useLiveChat(
 
     const tick = () => {
       if (cancelled || inFlight) return;
+      if (skip > 0) {
+        skip -= 1;
+        return;
+      }
       const behindMs = Math.max(0, (getBehind.current() ?? 0) * 1000);
       const reset = needsLiveReset(previousBehindMs, behindMs);
       if (reset) after = 0;
@@ -71,6 +81,7 @@ export function useLiveChat(
               setStatus(page.status);
               return;
             }
+            failures = 0;
             list = mergeLive(list, page, reset || after === 0);
             after = page.next_after ?? after;
             setItems(list);
@@ -80,6 +91,13 @@ export function useLiveChat(
           (error: unknown) => {
             if (cancelled) return;
             inFlight = false;
+            // A blip (Wi-Fi, a busy server, a restart) is tried again, each
+            // time a little later; only repeated failures show the error.
+            failures += 1;
+            if (failures < MAX_FAILURES) {
+              skip = failures;
+              return;
+            }
             cancelled = true;
             window.clearInterval(timer);
             setErrorCode(
