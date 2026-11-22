@@ -8,6 +8,7 @@ import {
   mergeChunk,
   needsNext,
   needsReload,
+  trimBehind,
   visibleItems,
 } from "./model";
 
@@ -115,7 +116,10 @@ export function useChatReplay(
             setStatus(result.status);
             return;
           }
-          loaded = mergeChunk(loaded, result, cursor === null ? atMs : null);
+          loaded = trimBehind(
+            mergeChunk(loaded, result, cursor === null ? atMs : null),
+            positionMs()
+          );
           setStatus("ok");
           show();
         },

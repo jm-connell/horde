@@ -8,11 +8,13 @@ import type {
 import type { WatchSource } from "../useWatchVideo";
 import {
   CHAT_KEEP,
+  KEEP_BEHIND_MS,
   chatPlacement,
   chatTarget,
   mergeChunk,
   needsNext,
   needsReload,
+  trimBehind,
   visibleItems,
 } from "./model";
 
@@ -212,5 +214,22 @@ describe("chatPlacement", () => {
         wide: false,
       })
     ).toBe("inline");
+  });
+});
+
+describe("trimBehind", () => {
+  it("drops messages long past, so a long watch does not grow without end", () => {
+    const loaded = mergeChunk(null, page(range(0, 3_600_000, 3_600), "c"), 0);
+    const trimmed = trimBehind(loaded, 3_000_000);
+    expect(trimmed.items[0].offset_ms).toBeGreaterThanOrEqual(
+      3_000_000 - KEEP_BEHIND_MS
+    );
+    expect(trimmed.startMs).toBe(trimmed.items[0].offset_ms);
+    expect(trimmed.endMs).toBe(loaded.endMs);
+    expect(trimmed.nextCursor).toBe("c");
+    // Still shows a full list at the position.
+    expect(visibleItems(trimmed, 3_000_000)).toHaveLength(CHAT_KEEP);
+    // Nothing to drop: the same object.
+    expect(trimBehind(loaded, 0)).toBe(loaded);
   });
 });

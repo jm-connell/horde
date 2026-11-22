@@ -262,6 +262,8 @@ export default function ChatReplayPanel({
           <div
             ref={listRef}
             role="log"
+            // A busy chat would otherwise be read aloud over the video.
+            aria-live="off"
             aria-label="Live chat messages"
             data-horde="chat-replay-messages"
             // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)

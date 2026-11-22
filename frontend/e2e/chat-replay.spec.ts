@@ -492,3 +492,56 @@ test("desktop fullscreen stays video only", async ({ page }) => {
   ).toHaveCount(0);
   await page.evaluate(() => document.exitFullscreen());
 });
+
+test("a library video not known to be a stream shows nothing when YouTube is out of reach", async ({
+  page,
+}) => {
+  const id = await libraryId(page, "Cedar Notes");
+  await page.route(new RegExp(`/api/videos/${id}$`), async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const video = await response.json();
+    await route.fulfill({ response, json: { ...video, live_status: null } });
+  });
+  const reads = await mockChat(page, {
+    answer: (route) =>
+      route.fulfill({
+        status: 503,
+        json: {
+          detail: "Could not reach YouTube; try again later",
+          code: "youtube_unreachable",
+        },
+      }),
+  });
+  await page.goto(`/watch/${id}`);
+  await expect.poll(() => reads.length).toBeGreaterThan(0);
+  await page.waitForTimeout(1000);
+  await expect(chatRegion(page)).toHaveCount(0);
+  await expect(page.getByText("Could not reach YouTube.")).toHaveCount(0);
+});
+
+test("theater on a tablet-sized window puts chat above the comments", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 900 });
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("horde-e2e-theater")) return;
+    sessionStorage.setItem("horde-e2e-theater", "1");
+    localStorage.setItem(
+      "horde.settings",
+      JSON.stringify({ playbackMode: "theater" })
+    );
+  });
+  await openCedar(page);
+  const chat = chatRegion(page);
+  await expect(chat).toBeVisible();
+  const comments = page.getByRole("region", { name: /Comments/ });
+  const chatBox = (await chat.boundingBox())!;
+  const commentsBox = (await comments.boundingBox())!;
+  expect(commentsBox.y).toBeGreaterThan(chatBox.y + chatBox.height - 1);
+});
+
+test("a busy chat is not read aloud over the video", async ({ page }) => {
+  await openCedar(page);
+  await expect(chatLog(page)).toHaveAttribute("aria-live", "off");
+});

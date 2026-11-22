@@ -153,6 +153,7 @@ export default function Watch() {
   );
   const landscape = useMediaQuery("(orientation: landscape)");
   const wideScreen = useMediaQuery("(min-width: 1280px)");
+  const largeScreen = useMediaQuery("(min-width: 1024px)");
 
   // Registered here, above the early returns: the loading and error views must
   // not unregister the dock, or the player would jump to the mini player.
@@ -202,7 +203,8 @@ export default function Watch() {
   const chatPlace = chatPlacement({
     isMobile,
     landscape,
-    theater: isWide,
+    // Theater has a column beside the description only from `lg` up.
+    theater: isWide && largeScreen,
     wide: wideScreen && mode === "standard",
   });
   // Shown once it has something to show; a library video not yet known to be
@@ -211,8 +213,8 @@ export default function Watch() {
     chatFor != null &&
     settings.showChatReplay &&
     (chat.status === "ok" ||
-      chat.status === "error" ||
-      (chat.status === "loading" && chatFor.known));
+      ((chat.status === "error" || chat.status === "loading") &&
+        chatFor.known));
   const chatHidden =
     chatFor != null && chatFor.known && !settings.showChatReplay;
   const hideChat = () => updateSettings({ showChatReplay: false });

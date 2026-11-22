@@ -16,6 +16,8 @@ export const PREFETCH_MS = 20_000;
 export const SEEK_BACK_SLACK_MS = 5_000;
 /** A seek this far past the loaded stretch reads afresh instead of continuing. */
 export const JUMP_AHEAD_MS = 60_000;
+/** Messages this far behind the position are dropped (beyond `CHAT_KEEP`). */
+export const KEEP_BEHIND_MS = 5 * 60_000;
 
 /** The stretch of chat loaded so far. */
 export type Loaded = {
@@ -56,6 +58,28 @@ export function mergeChunk(
     atMs === null && loaded ? loaded.endMs : 0
   );
   return { startMs, endMs, items, nextCursor: page.next_cursor ?? null };
+}
+
+/**
+ * Drop messages well behind the position, keeping at least the `CHAT_KEEP`
+ * the list shows, so watching a long, busy stream does not grow memory without
+ * end. Seeking back past what is kept reads that stretch again.
+ */
+export function trimBehind(loaded: Loaded, positionMs: number): Loaded {
+  const items = loaded.items;
+  let shown = items.length;
+  while (shown > 0 && items[shown - 1].offset_ms > positionMs) shown -= 1;
+  let firstKept = 0;
+  while (
+    firstKept < items.length &&
+    items[firstKept].offset_ms < positionMs - KEEP_BEHIND_MS
+  ) {
+    firstKept += 1;
+  }
+  const cut = Math.max(0, Math.min(firstKept, shown - CHAT_KEEP));
+  if (cut === 0) return loaded;
+  const kept = items.slice(cut);
+  return { ...loaded, items: kept, startMs: kept[0].offset_ms };
 }
 
 /** The messages up to `positionMs`, newest last, at most `keep`. */
