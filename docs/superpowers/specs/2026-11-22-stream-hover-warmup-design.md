@@ -109,7 +109,9 @@ asserts one build, one token, and that the token resolves through
   - A started warm-up is never aborted, because the server would keep working
     anyway.
   - A URL warmed in the last 3 minutes, matching the server's lookup cache, is
-    skipped. A failed warm-up may be retried.
+    skipped. A failed warm-up waits out the same window, so a video that can't
+    play doesn't cost a lookup per hover; only a cancelled one may retry at
+    once.
   - Warm-ups don't go through `ytPreviewQueue`, so they never wait behind the
     viewport quality-label probes.
   - No module-level state that tests must reset: keep it per `QueryClient`, or

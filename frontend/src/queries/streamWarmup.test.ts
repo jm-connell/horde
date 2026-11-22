@@ -1,3 +1,4 @@
+import { CancelledError } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StreamWarmer, WARM_REPEAT_MS, type WarmDeps } from "./streamWarmup";
 
@@ -33,8 +34,8 @@ function harness(details: (url: string) => Meta = () => PLAIN) {
       open.delete(url);
       await vi.advanceTimersByTimeAsync(0);
     },
-    async fail(url: string) {
-      open.get(url)?.reject(new Error("502"));
+    async fail(url: string, error: Error = new Error("502")) {
+      open.get(url)?.reject(error);
       open.delete(url);
       await vi.advanceTimersByTimeAsync(0);
     },
@@ -126,10 +127,24 @@ describe("StreamWarmer", () => {
     expect(h.metaCalls()).toEqual(["A", "A"]);
   });
 
-  it("a failed warm-up can be retried at once", async () => {
+  it("a failed warm-up also waits 3 minutes", async () => {
+    // A video that cannot play (premiere, private, removed) would otherwise
+    // cost a YouTube lookup on every hover.
     const h = harness();
     h.warmer.warm("A");
     await h.fail("A");
+    await h.warmer.idle();
+    h.warmer.warm("A");
+    expect(h.metaCalls()).toEqual(["A"]);
+    h.tick(WARM_REPEAT_MS + 1);
+    h.warmer.warm("A");
+    expect(h.metaCalls()).toEqual(["A", "A"]);
+  });
+
+  it("a cancelled warm-up can be retried at once", async () => {
+    const h = harness();
+    h.warmer.warm("A");
+    await h.fail("A", new CancelledError());
     await h.warmer.idle();
     h.warmer.warm("A");
     expect(h.metaCalls()).toEqual(["A", "A"]);

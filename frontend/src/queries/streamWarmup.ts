@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import { isCancelledError, type QueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { StreamPreviewMeta } from "../types";
 import { queryKeys } from "./keys";
@@ -23,7 +23,9 @@ export interface WarmDeps {
  * One warm-up runs at a time; while it runs, only the newest request waits and
  * older ones are dropped. A started warm-up is never cancelled: the server
  * would keep working on it anyway. Failures are ignored (the click loads as
- * usual) and may be retried at once.
+ * usual) and wait out the same window: a video that cannot play (a premiere,
+ * a private or removed video) would otherwise cost a YouTube lookup per hover.
+ * Only a cancelled warm-up may be retried at once.
  */
 export class StreamWarmer {
   private readonly deps: WarmDeps;
@@ -86,9 +88,9 @@ export class StreamWarmer {
       if (!meta.is_live && meta.library_video_id == null) {
         await this.deps.fetchManifest(url);
       }
-    } catch {
-      // Best effort: the click loads it as usual. Allow another try.
-      this.recent.delete(url);
+    } catch (err) {
+      // Best effort: the click loads it as usual.
+      if (isCancelledError(err)) this.recent.delete(url);
     }
     this.running = null;
     const next = this.pending;
