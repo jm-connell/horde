@@ -1,6 +1,7 @@
 import type { ViewMode } from "../../components/videoPlayerTypes";
 import type { SavedCustomFont, UiFont } from "../../fonts";
 import type { HotkeyOverrides } from "../../hotkeys";
+import type { NavBarItem } from "../../navBar";
 import type { TabBarItem } from "../../tabBar";
 import type { LoadingStyle } from "../../loadingStyles";
 import type {
@@ -202,6 +203,8 @@ export interface Settings {
   showDownloadNavBadge: boolean;
   /** Tabs on the installed app's bottom island on phones, in order. */
   tabBarItems: TabBarItem[];
+  /** Pages in the top bar on a wider screen, in order (Settings always). */
+  navBarItems: NavBarItem[];
   normalizeVolumeOnDownload: boolean;
   /** Quality preselected on the Download page (a `PRESET_ORDER` value). */
   defaultDownloadPreset: string;

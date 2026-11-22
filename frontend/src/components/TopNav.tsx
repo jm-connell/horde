@@ -82,7 +82,10 @@ export default function TopNav() {
     activeOffline,
     offlineSnap.liveBytes
   ).progress;
+  // The menu (phones, narrow windows) lists every page; the bar on a wider
+  // screen shows the ones this account chose, in its order.
   const NAV_LINKS = useNavLinks();
+  const BAR_LINKS = useNavLinks(settings.navBarItems);
   // Matches Watch.tsx's `isWide` so the nav breaks out full-bleed with the player.
   const isTheaterWide =
     !isMobile && mode === "theater" && location.pathname.startsWith("/watch");
@@ -208,7 +211,7 @@ export default function TopNav() {
     activeCount,
     net.status,
     net.offerOffline,
-    NAV_LINKS.length,
+    BAR_LINKS.length,
   ]);
 
   useLayoutEffect(() => {
@@ -378,7 +381,7 @@ export default function TopNav() {
         ? downloadBadge
         : null;
 
-  const desktopLinks = NAV_LINKS.map((link) => {
+  const desktopLinks = BAR_LINKS.map((link) => {
     const active = isLinkActive(location.pathname, link.to, link.end);
     return (
       <NavLink
@@ -449,7 +452,7 @@ export default function TopNav() {
             className="pointer-events-none invisible absolute left-0 top-0 -z-10 flex w-max items-center gap-1"
             aria-hidden
           >
-            {NAV_LINKS.map((link) => (
+            {BAR_LINKS.map((link) => (
               <span
                 key={link.to}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap"

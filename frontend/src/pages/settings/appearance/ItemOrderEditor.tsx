@@ -16,6 +16,7 @@ export default function ItemOrderEditor<T extends string>({
   label,
   icon,
   max,
+  locked,
   listLabel,
   addHeading,
   focusAfter,
@@ -28,6 +29,8 @@ export default function ItemOrderEditor<T extends string>({
   icon?: (item: T) => ReactNode;
   /** At most this many chosen. */
   max?: number;
+  /** This one stays chosen (it can still move). */
+  locked?: T;
   /** Accessible name of the chosen list, e.g. "Tabs shown". */
   listLabel: string;
   /** Over the items to add, e.g. "Add a tab". */
@@ -128,7 +131,7 @@ export default function ItemOrderEditor<T extends string>({
                 type="button"
                 className={ICON_BTN}
                 aria-label={`Remove ${n}`}
-                disabled={items.length === 1}
+                disabled={items.length === 1 || item === locked}
                 onClick={() => remove(i)}
               >
                 <CloseIcon />

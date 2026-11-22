@@ -7,6 +7,14 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Choose the top bar's pages.** Settings → Appearance → **Top bar** picks
+  which pages the bar at the top links to on a wider screen and puts them
+  in order, like **Tab bar** does for the installed app on a phone. The
+  choice is saved with your account, so it follows you to other devices.
+  Settings always stays, and the ☰ menu on a phone still lists every page.
+
 ### Changed
 
 - **New OpenRouter presets.** A new setup, and the **Budget** preset, now

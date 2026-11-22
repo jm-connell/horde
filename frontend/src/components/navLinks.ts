@@ -1,6 +1,7 @@
 import type { Permission } from "../types";
 import { useAuth } from "../context/AuthContext";
 import { useConnectivity, useOfflineDownloads } from "../offline/hooks";
+import { NAV_BAR_ITEMS, NAV_BAR_LABELS, type NavBarItem } from "../navBar";
 
 export interface NavLinkDef {
   to: string;
@@ -12,41 +13,34 @@ export interface NavLinkDef {
   permission?: Permission;
 }
 
-const BASE_LINKS: NavLinkDef[] = [
-  { to: "/", label: "Home", end: true },
-  { to: "/playlists", label: "Playlists", end: false, serverOnly: true },
-  {
-    to: "/subscriptions",
-    label: "Subscriptions",
-    end: false,
-    serverOnly: true,
-  },
-  { to: "/history", label: "History", end: false, serverOnly: true },
-  {
+const LINKS: Record<NavBarItem, Omit<NavLinkDef, "label">> = {
+  home: { to: "/", end: true },
+  playlists: { to: "/playlists", end: false, serverOnly: true },
+  subscriptions: { to: "/subscriptions", end: false, serverOnly: true },
+  history: { to: "/history", end: false, serverOnly: true },
+  offline: { to: "/offline", end: false },
+  download: {
     to: "/download",
-    label: "Download",
     end: false,
     serverOnly: true,
     permission: "download",
   },
-  {
+  import: {
     to: "/import",
-    label: "Import",
     end: false,
     serverOnly: true,
     permission: "download",
   },
-  { to: "/settings", label: "Settings", end: false },
-];
-
-const OFFLINE_LINK: NavLinkDef = {
-  to: "/offline",
-  label: "Offline",
-  end: false,
+  settings: { to: "/settings", end: false },
 };
 
-/** The primary pages this account can open now, in nav order. */
-export function useNavLinks(): NavLinkDef[] {
+/**
+ * The primary pages this account can open now, in `order` (every page in the
+ * nav's own order by default; the top bar passes the account's choice).
+ */
+export function useNavLinks(
+  order: readonly NavBarItem[] = NAV_BAR_ITEMS
+): NavLinkDef[] {
   const { can } = useAuth();
   const net = useConnectivity();
   const offlineMode = net.status === "offline";
@@ -55,15 +49,14 @@ export function useNavLinks(): NavLinkDef[] {
   // how to get at them.
   const hasOfflineItems =
     offlineSnap.items.length > 0 || offlineSnap.hidden.length > 0;
-  return (
-    hasOfflineItems || offlineMode
-      ? [...BASE_LINKS.slice(0, 4), OFFLINE_LINK, ...BASE_LINKS.slice(4)]
-      : BASE_LINKS
-  ).filter(
-    (link) =>
-      !(offlineMode && link.serverOnly) &&
-      (!link.permission || can(link.permission))
-  );
+  return order
+    .filter((item) => item !== "offline" || hasOfflineItems || offlineMode)
+    .map((item) => ({ ...LINKS[item], label: NAV_BAR_LABELS[item] }))
+    .filter(
+      (link) =>
+        !(offlineMode && link.serverOnly) &&
+        (!link.permission || can(link.permission))
+    );
 }
 
 export function isLinkActive(

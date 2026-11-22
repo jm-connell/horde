@@ -1,4 +1,4 @@
-import { expect, test, videoCard } from "./fixtures";
+import { contextAs, expect, test, videoCard } from "./fixtures";
 
 /**
  * The response to the PATCH /api/settings that carries `field` set to `value`.
@@ -344,4 +344,77 @@ test("a change still in flight when the page reloads is not overwritten by the s
       return (await res.json()).ui.default_library_sort;
     })
     .toBe("title");
+});
+
+test("Settings chooses the top bar's pages and order, for the account", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  await page.goto("/settings?tab=appearance");
+  const shown = page.getByRole("list", { name: "Pages in the top bar" });
+  // Settings stays: nothing else in a wide bar leads to it.
+  await expect(
+    shown.getByRole("button", { name: "Remove Settings" })
+  ).toBeDisabled();
+  await shown.getByRole("button", { name: "Remove Import" }).click();
+  await shown.getByRole("button", { name: "Remove Subscriptions" }).click();
+  const saved = page.waitForResponse((response) => {
+    const request = response.request();
+    if (
+      !response.url().includes("/api/settings") ||
+      request.method() !== "PATCH" ||
+      !response.ok()
+    ) {
+      return false;
+    }
+    const ui = (request.postDataJSON() as { ui?: Record<string, unknown> }).ui;
+    return (ui?.nav_bar_items as string[] | undefined)?.[0] === "history";
+  });
+  const earlier = shown.getByRole("button", { name: "Move History earlier" });
+  for (let i = 0; i < 2; i++) await earlier.click();
+  // Focus follows the page to its new row; at the top, earlier is disabled.
+  await expect(
+    shown.getByRole("button", { name: "Move History later" })
+  ).toBeFocused();
+  await saved;
+  await expect(shown.getByRole("listitem")).toHaveText([
+    "History",
+    "Home",
+    "Playlists",
+    "Offline",
+    "Download",
+    "Settings",
+  ]);
+  // Offline joins the bar only on a device with offline downloads.
+  const bar = page.getByRole("banner");
+  const barLinks = ["History", "Home", "Playlists", "Download", "Settings"];
+  await expect(
+    bar.getByRole("link", {
+      name: /^(History|Home|Playlists|Download|Settings|Subscriptions|Import)\b/,
+    })
+  ).toHaveText(barLinks.map((name) => new RegExp(`^${name}`)));
+
+  // A narrow window's menu still lists every page.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Toggle navigation menu" }).click();
+  const menu = page.locator("[data-horde='nav-menu']");
+  await expect(menu.getByRole("link", { name: /^Import\b/ })).toBeVisible();
+  await expect(
+    menu.getByRole("link", { name: "Subscriptions", exact: true })
+  ).toBeVisible();
+
+  // The choice follows the account to another browser.
+  const other = await contextAs(browser, baseURL, "admin");
+  try {
+    const elsewhere = await other.newPage();
+    await elsewhere.goto("/");
+    await expect(
+      elsewhere.getByRole("banner").getByRole("link", {
+        name: /^(History|Home|Playlists|Download|Settings|Subscriptions|Import)\b/,
+      })
+    ).toHaveText(barLinks.map((name) => new RegExp(`^${name}`)));
+  } finally {
+    await other.close();
+  }
 });

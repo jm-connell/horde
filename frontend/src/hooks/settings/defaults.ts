@@ -1,4 +1,5 @@
 import { DEFAULT_SPONSOR_BLOCK_CATEGORIES } from "../../sponsorBlock";
+import { DEFAULT_NAV_BAR } from "../../navBar";
 import { DEFAULT_TAB_BAR } from "../../tabBar";
 import type { CustomColors, FontSize, Settings } from "./types";
 
@@ -54,6 +55,7 @@ export const DEFAULTS: Settings = {
   showRecommendedSources: false,
   showDownloadNavBadge: true,
   tabBarItems: [...DEFAULT_TAB_BAR],
+  navBarItems: [...DEFAULT_NAV_BAR],
   normalizeVolumeOnDownload: true,
   defaultDownloadPreset: "best",
   downloadVideoCodec: "av1",
@@ -135,6 +137,7 @@ export const SERVER_UI_KEYS: (keyof Settings)[] = [
   "showRecommendedSources",
   "showDownloadNavBadge",
   "tabBarItems",
+  "navBarItems",
   "normalizeVolumeOnDownload",
   "defaultDownloadPreset",
   "downloadVideoCodec",
