@@ -166,6 +166,18 @@ test("an AI setting saved in Settings shows on the Watch page without another re
       json: { ...body, enabled: true, reachable: true },
     });
   });
+  // Ask answers with AI (the e2e server has no provider).
+  await page.route(/\/api\/ai\/help\/info$/, (route) =>
+    route.fulfill({
+      json: {
+        model: null,
+        tier: "medium",
+        provider_label: "a test provider",
+        local: true,
+        available: true,
+      },
+    })
+  );
   const off = await page.request.patch("/api/settings", {
     headers: CSRF_HEADERS,
     data: { ai: { ai_chat: false } },
@@ -187,16 +199,19 @@ test("an AI setting saved in Settings shows on the Watch page without another re
   await chat.click();
   await saved;
 
-  // The answer is in the cache: opening a video must show chat, with no read.
+  // The answer is in the cache: on a video, Ask answers from it, with no read.
   let reads = 0;
   page.on("request", (r) => {
     if (r.method() === "GET" && /\/api\/settings$/.test(r.url())) reads += 1;
   });
   await openNav(page, "Home");
   await videoCard(page, "Aurora Drift").first().click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Chat", exact: true })
-  ).toBeVisible();
+    page
+      .getByRole("dialog", { name: "Ask", exact: true })
+      .getByRole("textbox", { name: "Your question" })
+  ).toHaveAttribute("placeholder", "Ask this video or Horde…");
   expect(reads).toBe(0);
   // An AI status poll may still be inside the route when the test ends.
   await page.unrouteAll({ behavior: "ignoreErrors" });

@@ -33,6 +33,9 @@ All notable changes to Horde are documented here. The format follows
   that moment instead of leaving it paused.
 - **The stream download button is a regular outlined button**, not an
   accent-filled one.
+- **No Chat button under a video.** Ask already answers from the video on
+  its watch page, so the Summary section's **Chat ↗** is gone; open **Ask**
+  in the top bar instead.
 - **Docs lead with Ask and no-code customization.** The home page, README
   and feature list introduce Ask earlier and say plainly that Horde can be
   restyled without coding: through Settings, and by asking Ask to write the

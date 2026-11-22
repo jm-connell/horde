@@ -42,7 +42,7 @@ async function enableAi(page: Page) {
   expect(saved.ok()).toBe(true);
 }
 
-test("the Summary section generates a summary and Chat opens Ask on the video", async ({
+test("the Summary section generates a summary, with no Chat button beside it", async ({
   page,
 }) => {
   const id = await videoId(page, "Aurora Drift");
@@ -62,47 +62,6 @@ test("the Summary section generates a summary and Chat opens Ask on the video", 
       },
     })
   );
-  // Ask answers with AI (the e2e server has no provider).
-  await page.route(/\/api\/ai\/help\/info$/, (route) =>
-    route.fulfill({
-      json: {
-        model: null,
-        tier: "medium",
-        provider_label: "a test provider",
-        local: true,
-        available: true,
-      },
-    })
-  );
-  const bodies: { video: { library_id: number | null } | null }[] = [];
-  const video = {
-    library_id: id,
-    youtube_id: null,
-    url: null,
-    title: "Aurora Drift",
-  };
-  await page.route(/\/api\/ask\/chat$/, (route) => {
-    bodies.push(route.request().postDataJSON() as (typeof bodies)[number]);
-    const events = [
-      { type: "thread", id: 4, title: "What is it about?" },
-      { type: "scope", channels: [], video },
-      { type: "token", text: "It is " },
-      { type: "token", text: "about auroras." },
-      {
-        type: "done",
-        message: {
-          id: 2,
-          role: "assistant",
-          content: "It is about auroras.",
-        },
-      },
-    ];
-    return route.fulfill({
-      status: 200,
-      contentType: "text/event-stream",
-      body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(""),
-    });
-  });
 
   await page.goto(`/watch/${id}`);
   await expect(
@@ -114,29 +73,10 @@ test("the Summary section generates a summary and Chat opens Ask on the video", 
   await page.getByRole("button", { name: "Generate summary" }).click();
   await expect(page.getByText(summary)).toBeVisible();
   await expect(page.getByRole("button", { name: "Regenerate" })).toBeVisible();
-
-  // Chat opens Ask on this video.
-  await page.getByRole("button", { name: "Chat", exact: true }).click();
-  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
-  await expect(panel.locator('[data-horde="ask-focus"]')).toHaveText(
-    "Aurora Drift"
-  );
-  const input = panel.getByRole("textbox", { name: "Your question" });
-  await expect(input).toBeFocused();
-  await expect(input).toHaveAttribute("placeholder", "Ask about Aurora Drift…");
-  await input.fill("What is it about?");
-  await input.press("Enter");
-  await expect(panel.getByText("It is about auroras.")).toBeVisible();
-  await expect(panel.locator('[data-horde="ask-byline"]').last()).toHaveText(
-    "Aurora Drift"
-  );
-  expect(bodies[0].video).toEqual({ library_id: id, url: null });
-
-  // Chat again on the same video carries the conversation on.
-  await input.press("Escape");
-  await expect(panel).toHaveCount(0);
-  await page.getByRole("button", { name: "Chat", exact: true }).click();
-  await expect(panel.getByText("It is about auroras.")).toBeVisible();
+  // Questions about the video go to Ask (in the nav), not a button here.
+  await expect(
+    page.getByRole("button", { name: "Chat", exact: true })
+  ).toHaveCount(0);
 });
 
 test("a saved summary still shows when it cannot be generated again", async ({
@@ -156,9 +96,6 @@ test("a saved summary still shows when it cannot be generated again", async ({
   if (!(await text.isVisible())) await toggle.click();
   await expect(text).toBeVisible();
   await expect(page.getByRole("button", { name: "Regenerate" })).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Chat", exact: true })
-  ).toBeVisible();
 });
 
 test("with nothing picked, Ask on the watch page answers from its video", async ({
