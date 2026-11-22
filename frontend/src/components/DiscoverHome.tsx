@@ -665,13 +665,14 @@ export default function DiscoverHome({
               <div className="pointer-events-none sticky top-20 z-20 h-0">
                 <div
                   role="status"
-                  className="ui-panel mx-auto mt-2 flex w-fit items-center gap-2 rounded-full border border-ink-700 bg-ink-900/95 py-0.5 pl-2 pr-3.5 text-sm text-gray-200 shadow-lg"
+                  className="ui-panel mx-auto mt-2 flex w-fit flex-col items-center gap-1 rounded-xl border border-ink-700 bg-ink-900/95 px-4 pb-2.5 pt-2 text-sm text-gray-200 shadow-lg"
                 >
+                  {/* The animation on its own line, the words under it. */}
                   <LoadingMark
                     style={normalizeLoadingStyle(settings.loadingStyle)}
                     compact
                   />
-                  Loading new picks…
+                  <span>Loading new picks…</span>
                 </div>
               </div>
             )}
