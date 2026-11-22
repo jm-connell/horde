@@ -300,7 +300,8 @@ export default function ChannelFeedCard({
   progress?: number;
   entry: ChannelFeedEntry;
   channelName: string;
-  layout: "grid" | "list";
+  /** `grid` drops the card chrome on small screens (the feed); `card` keeps it. */
+  layout: "grid" | "list" | "card";
   inLibrary: boolean;
   videoId?: number;
   onDownload: () => void;
@@ -512,9 +513,17 @@ export default function ChannelFeedCard({
       </div>
     ) : (
       <div
-        className={`ui-card video-card--feed group flex h-full flex-col overflow-hidden max-sm:rounded-none max-sm:bg-transparent max-sm:ring-0 sm:rounded-xl sm:bg-ink-900 ${
-          isLive ? "sm:ring-2 sm:ring-red-500/70" : "sm:ring-1 sm:ring-ink-700"
-        }`}
+        className={
+          layout === "card"
+            ? `ui-card group flex h-full flex-col overflow-hidden rounded-xl bg-ink-900 ${
+                isLive ? "ring-2 ring-red-500/70" : "ring-1 ring-ink-700"
+              }`
+            : `ui-card video-card--feed group flex h-full flex-col overflow-hidden max-sm:rounded-none max-sm:bg-transparent max-sm:ring-0 sm:rounded-xl sm:bg-ink-900 ${
+                isLive
+                  ? "sm:ring-2 sm:ring-red-500/70"
+                  : "sm:ring-1 sm:ring-ink-700"
+              }`
+        }
       >
         <FeedThumbnail
           thumbSrc={thumbSrc}
@@ -565,7 +574,9 @@ export default function ChannelFeedCard({
       className={
         layout === "grid"
           ? "ui-card-enter h-full max-sm:border-b max-sm:border-ink-700 max-sm:last:border-b-0"
-          : "ui-card-enter"
+          : layout === "card"
+            ? "ui-card-enter h-full"
+            : "ui-card-enter"
       }
     >
       {href ? (

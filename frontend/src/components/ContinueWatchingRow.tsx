@@ -173,7 +173,7 @@ export default function ContinueWatchingRow({
                 <ChannelFeedCard
                   entry={e}
                   channelName={e.channel || "Unknown channel"}
-                  layout="grid"
+                  layout="card"
                   inLibrary={false}
                   onDownload={() => onDownloadYoutube?.(e)}
                   skipRemotePreview
@@ -202,7 +202,7 @@ export default function ContinueWatchingRow({
                 <ChannelFeedCard
                   entry={e}
                   channelName={e.channel || "Unknown channel"}
-                  layout="grid"
+                  layout="card"
                   inLibrary={false}
                   onDownload={() => onDownloadYoutube?.(e)}
                   skipRemotePreview
