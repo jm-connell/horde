@@ -38,3 +38,42 @@ test("an original the browser cannot decode shows the compat gate", async ({
   await expect(page.getByText(/This device couldn.t play/)).toBeVisible();
   await expect(page.getByText("This video could not be played")).toHaveCount(0);
 });
+
+// A phone can lose its decoder for a moment (a call, the app in the background)
+// part-way through a file it was playing fine. That says nothing about the codec.
+test("a decode error after the original has played reloads it at the playhead", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await videoCard(page, "Paper Kites").first().click();
+  const video = page.locator("video").first();
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.duration))
+    .toBeGreaterThan(16);
+  await video.evaluate((v: HTMLVideoElement) => {
+    v.pause();
+    v.currentTime = 8;
+  });
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime))
+    .toBe(8);
+
+  await video.evaluate((v: HTMLVideoElement) => {
+    v.addEventListener("loadedmetadata", () => (v.dataset.reloaded = "1"), {
+      once: true,
+    });
+    Object.defineProperty(v, "error", {
+      configurable: true,
+      get: () => ({ code: MediaError.MEDIA_ERR_DECODE }),
+    });
+    v.dispatchEvent(new Event("error"));
+    delete (v as { error?: unknown }).error;
+  });
+
+  await expect(video).toHaveAttribute("data-reloaded", "1");
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime))
+    .toBeGreaterThanOrEqual(8);
+  await expect(page.getByText(/This device couldn.t play/)).toHaveCount(0);
+  await expect(page.getByText("This video could not be played")).toHaveCount(0);
+});
