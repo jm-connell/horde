@@ -344,3 +344,42 @@ test("opening a result keeps its search, and the list scrolls past four", async 
   await again.focus();
   await expect(recent.getByRole("listitem").first()).toHaveText("Paper");
 });
+
+test("the recent searches stay on a narrow phone's screen", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  const saved = await page.request.patch("/api/settings", {
+    headers: CSRF_HEADERS,
+    data: { ui: { search_history: ["cedar strip canoe build", "aurora"] } },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.goto("/");
+  await expect(videoCard(page, "Cedar Notes").first()).toBeVisible();
+  const box = await openSearchBox(page);
+  await box.focus();
+  const panel = page.locator("[data-horde='search-history']");
+  await expect(panel).toBeVisible();
+  const r = (await panel.boundingBox())!;
+  expect(r.x).toBeGreaterThanOrEqual(0);
+  expect(r.x + r.width).toBeLessThanOrEqual(360);
+});
+
+test("going Back to a video does not keep a half-typed search", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  const heading = page.getByRole("heading", { name: "Aurora Drift", level: 1 });
+  await expect(heading).toBeVisible();
+  // Typing takes the search home; Back returns to the video with it typed.
+  const box = await openSearchBox(page);
+  await box.fill("aur");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goBack();
+  await expect(heading).toBeVisible();
+  // Give a (debounced) save the time it would take.
+  await page.waitForTimeout(1500);
+  const settings = await (await page.request.get("/api/settings")).json();
+  expect(settings.ui?.search_history ?? []).not.toContain("aur");
+});

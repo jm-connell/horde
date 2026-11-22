@@ -1,6 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import {
+  NavLink,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+} from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDownloads } from "../context/DownloadContext";
 import {
@@ -317,12 +322,19 @@ export default function TopNav() {
       searchHistory: removeSearch(loadSettings().searchHistory, query),
     });
 
-  // A result opened from the home page's search keeps that search.
+  // A result opened from the home page's search keeps that search (not Back
+  // to a video, which leaves a half-typed search in the box).
+  const navigationType = useNavigationType();
   const lastPathname = useRef(location.pathname);
   useEffect(() => {
     const from = lastPathname.current;
     lastPathname.current = location.pathname;
-    if (from === "/" && location.pathname.startsWith("/watch") && search.trim())
+    if (
+      navigationType !== "POP" &&
+      from === "/" &&
+      location.pathname.startsWith("/watch") &&
+      search.trim()
+    )
       recordSearch(search);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on navigation only; the search is read as it stands then
   }, [location.pathname]);

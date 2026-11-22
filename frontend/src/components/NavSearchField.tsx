@@ -1,4 +1,10 @@
-import { useId, useRef, useState, type RefObject } from "react";
+import {
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { UI_MENU_SURFACE } from "../uiMenu";
 import { CloseIcon, HistoryIcon } from "./icons";
 import YoutubeSearchChip from "./YoutubeSearchChip";
@@ -36,9 +42,30 @@ export default function NavSearchField({
   onEscape?: (input: HTMLInputElement) => void;
 }) {
   const headingId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const [focused, setFocused] = useState(false);
   const open = focused && value.trim() === "" && history.length > 0;
+  // At least 16rem wide, but never past the window's left edge: the list
+  // hangs from the box's right end, which is near the middle of a phone.
+  const [room, setRoom] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      const right = rootRef.current?.getBoundingClientRect().right;
+      if (right !== undefined) setRoom(right - 12);
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open]);
+
+  const pick = (query: string) => {
+    // The list goes with the pick, taking a focused entry with it: no blur
+    // event says so.
+    setFocused(false);
+    onPick(query);
+  };
 
   /** The i-th recent search's button; below 0, the box. */
   const focusEntry = (i: number) => {
@@ -55,6 +82,7 @@ export default function NavSearchField({
 
   return (
     <div
+      ref={rootRef}
       data-horde={dataHorde}
       className={className}
       onFocus={() => setFocused(true)}
@@ -92,7 +120,8 @@ export default function NavSearchField({
           // the box when the list is clicked. The buttons in it do the work.
           role="presentation"
           onMouseDown={(e) => e.preventDefault()}
-          className={`${UI_MENU_SURFACE} absolute right-0 top-full z-50 mt-1.5 w-full min-w-64 overflow-hidden py-1`}
+          className={`${UI_MENU_SURFACE} absolute right-0 top-full z-50 mt-1.5 w-full overflow-hidden py-1`}
+          style={{ minWidth: Math.min(256, room ?? 256) }}
         >
           <p
             id={headingId}
@@ -111,15 +140,20 @@ export default function NavSearchField({
                 <button
                   type="button"
                   data-search-entry
-                  onClick={() => onPick(query)}
+                  onClick={() => pick(query)}
                   onKeyDown={(e) => {
+                    // These keys are the list's: not the player's volume or
+                    // seek, nor the phone layout's close-the-search Escape.
                     if (e.key === "ArrowDown") {
                       e.preventDefault();
+                      e.stopPropagation();
                       focusEntry(i + 1);
                     } else if (e.key === "ArrowUp") {
                       e.preventDefault();
+                      e.stopPropagation();
                       focusEntry(i - 1);
                     } else if (e.key === "Escape") {
+                      e.stopPropagation();
                       focusEntry(-1);
                     }
                   }}
