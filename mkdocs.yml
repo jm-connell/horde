@@ -148,6 +148,7 @@ nav:
       - 0033 Unnamed questions go to channels: adr/0033-ask-answers-unnamed-questions-from-channels.md
       - 0034 Ask skips sponsor reads: adr/0034-ask-skips-sponsor-reads.md
       - 0035 Ask indexes subscriptions up to a limit: adr/0035-ask-indexes-subscriptions-up-to-a-limit.md
+      - 0036 Chat replay read around the position: adr/0036-chat-replay-read-around-the-position.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md
