@@ -64,6 +64,8 @@ Downloads themselves stay limited by `MAX_DOWNLOAD_CONCURRENCY` (default **2**).
 
 `force=True` bypasses cache reads (used when refreshing CDN URLs for DASH/progressive preview).
 
+Resting the mouse on a not-downloaded video also asks for its stream preview ahead of the click (a **hover warm-up**, see [Watching](../guides/watching.md#starting-a-stream-sooner)). These are interactive lookups through the same gate: one at a time per browser tab, each video at most once every 3 minutes, and never on touch, so pointing at cards without opening them adds a lookup only where the pointer rests.
+
 ## Related
 
 - [Environment variables](environment.md)

@@ -11,6 +11,10 @@ Horde plays library videos and remote stream previews in the same player shell. 
 
 Library playback uses local files (progressive). Stream preview uses adaptive **DASH** when available (see [Player](player.md)).
 
+## Starting a stream sooner
+
+Rest the mouse on a video that isn't downloaded (a feed card, a related video, a playlist entry), or tab to it with the keyboard, and Horde starts loading it: its details and its stream are ready by the time you click, so it plays sooner. It loads one video at a time, the one you last pointed at, and the same video at most once every 3 minutes. Phones and tablets don't do this, because touching a card also starts a scroll.
+
 ## Resume position
 
 Your playback position belongs to your account, not to the device: it is

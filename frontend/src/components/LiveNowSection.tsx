@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSettings } from "../hooks/useSettings";
+import { useStreamWarmup } from "../hooks/useStreamWarmup";
 import ChannelAvatar from "./ChannelAvatar";
 import { useLiveNow } from "../queries/follows";
 import { formatViewers } from "../utils/followUrl";
@@ -17,6 +18,7 @@ export default function LiveNowSection() {
   const navigate = useNavigate();
   const [expanded, setExpanded] = useState(false);
   const { live } = useLiveNow({ enabled: settings.showLiveStreams });
+  const warmup = useStreamWarmup();
   if (!settings.showLiveStreams || live.length === 0) return null;
   const rows = expanded ? live : live.slice(0, VISIBLE_ROWS);
   return (
@@ -36,16 +38,14 @@ export default function LiveNowSection() {
             item.game,
             formatViewers(item.viewers),
           ]);
+          const href = `/watch?url=${encodeURIComponent(item.watch_url)}&channel=${encodeURIComponent(item.channel_name ?? "")}`;
           return (
             <li key={item.video_id}>
               <button
                 type="button"
                 title={[item.title, item.game].filter(Boolean).join(" · ")}
-                onClick={() =>
-                  navigate(
-                    `/watch?url=${encodeURIComponent(item.watch_url)}&channel=${encodeURIComponent(item.channel_name ?? "")}`
-                  )
-                }
+                onClick={() => navigate(href)}
+                {...warmup(href)}
                 className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-2 py-1 text-left hover:bg-ink-800"
               >
                 <ChannelAvatar

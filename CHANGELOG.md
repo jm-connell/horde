@@ -9,6 +9,11 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Streams start sooner.** Rest the mouse on a video that isn't
+  downloaded (a feed card, a related video, a playlist entry), or tab to it,
+  and Horde starts loading it, so it plays sooner when you click. It loads
+  one video at a time and never on phones or tablets, where touching a card
+  also starts a scroll.
 - **Recent searches.** Click into the empty search box and your recent
   searches open under it (four at a time, scrolling for more): pick one to
   search again, or remove it with ×. They are saved with your account, so
