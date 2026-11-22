@@ -233,7 +233,7 @@ Legacy `translucentPanels` (bool) is still read: `false` → both sliders 0%; `t
 
 On a wider screen, the bar at the top of every page links to Home, Playlists, Subscriptions, History, Offline, Download, Import and Settings. **Top bar** chooses which of these it shows and in what order: move a page earlier or later, remove it, or add it back from the list below. **Reset** puts back every page in the default order. The choice is saved with your account, so it is the same on every device you sign in on.
 
-**Settings** cannot be removed (nothing else in a wide bar leads to it); the **HORDE** logo goes home whether or not **Home** is shown. A page this account cannot use (Download and Import need the download permission), or one that needs the server while Horde is offline, is left out, and **Offline** shows only when this device has offline downloads or is offline. On a phone, or a window too narrow for the links, the **☰** menu lists every page whatever is chosen here.
+**Settings** cannot be removed (nothing else in a wide bar leads to it); the **HORDE** logo goes home whether or not **Home** is shown. A page this account cannot use (Download and Import need the download permission), or one that needs the server while Horde is offline, is left out, and **Offline** shows only when this device has offline downloads or is offline. Whether the bar or the **☰** menu shows is decided by whether *every* page's link would fit, not just the chosen ones, so a phone (in either orientation) and a narrow window always get the menu, which lists every page whatever is chosen here.
 
 ## Tab bar (`tabBarItems`)
 

@@ -418,3 +418,31 @@ test("Settings chooses the top bar's pages and order, for the account", async ({
     await other.close();
   }
 });
+
+test("a short top bar still gives way to the menu on a landscape phone", async ({
+  page,
+}) => {
+  const saved = await page.request.patch("/api/settings", {
+    headers: { "X-Horde-Request": "1" },
+    data: { ui: { nav_bar_items: ["home", "settings"] } },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.setViewportSize({ width: 915, height: 412 });
+  await page.goto("/");
+  // Two links would fit, but every page would not: the menu lists them all.
+  const menu = page.getByRole("button", { name: "Toggle navigation menu" });
+  await expect(menu).toBeVisible();
+  await menu.click();
+  await expect(
+    page
+      .locator("[data-horde='nav-menu']")
+      .getByRole("link", { name: "History" })
+  ).toBeVisible();
+
+  // A wide window shows just the chosen two.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect(menu).toHaveCount(0);
+  await expect(
+    page.getByRole("banner").getByRole("link", { name: "History" })
+  ).toHaveCount(0);
+});

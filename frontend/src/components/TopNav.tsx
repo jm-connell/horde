@@ -89,7 +89,9 @@ export default function TopNav() {
     offlineSnap.liveBytes
   ).progress;
   // The menu (phones, narrow windows) lists every page; the bar on a wider
-  // screen shows the ones this account chose, in its order.
+  // screen shows the ones this account chose, in its order. The bar gives
+  // way to the menu where every page would not fit (measured below), so a
+  // short bar never leaves a phone without a way to the rest.
   const NAV_LINKS = useNavLinks();
   const BAR_LINKS = useNavLinks(settings.navBarItems);
   // Matches Watch.tsx's `isWide` so the nav breaks out full-bleed with the player.
@@ -217,7 +219,7 @@ export default function TopNav() {
     activeCount,
     net.status,
     net.offerOffline,
-    BAR_LINKS.length,
+    NAV_LINKS.length,
   ]);
 
   useLayoutEffect(() => {
@@ -496,7 +498,7 @@ export default function TopNav() {
             className="pointer-events-none invisible absolute left-0 top-0 -z-10 flex w-max items-center gap-1"
             aria-hidden
           >
-            {BAR_LINKS.map((link) => (
+            {NAV_LINKS.map((link) => (
               <span
                 key={link.to}
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium whitespace-nowrap"
