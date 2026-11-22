@@ -336,3 +336,41 @@ test("the limit is set for one channel or for every channel", async ({
   expect(channelPatches).toEqual([{ max_videos: 1200 }, { max_videos: null }]);
   await expect(sheet.getByLabel("Newest videos to index")).toHaveValue("200");
 });
+
+test("raising its own limit to a lower one for every channel still asks first", async ({
+  page,
+}) => {
+  // Kiln has its own 80; every other channel follows 500. Saving 300 for
+  // every channel lowers theirs, so it must confirm, and nothing is saved
+  // when that is cancelled.
+  await giveKilnAYoutubeUrl(page);
+  const row = askKiln({ max_videos: 80, limit: 80, videos: 80 });
+  await page.route(/\/api\/ask\/channels$/, (route) =>
+    route.fulfill({ json: { items: [row], available: true } })
+  );
+  const patches: unknown[] = [];
+  await page.route(/\/api\/ask\/channels\/7$/, (route) => {
+    patches.push(route.request().postDataJSON());
+    return route.fulfill({ json: row });
+  });
+  await page.route(/\/api\/settings$/, async (route) => {
+    if (route.request().method() === "PATCH") {
+      patches.push(route.request().postDataJSON());
+      return route.fulfill({ status: 500, json: { detail: "unexpected" } });
+    }
+    const response = await route.fetch();
+    const json = await response.json();
+    return route.fulfill({ response, json: { ...json, ask_max_videos: 500 } });
+  });
+  await page.goto("/?channel=Kiln&settings=ask");
+  const sheet = page.getByRole("dialog", { name: "Channel settings" });
+  await sheet.getByLabel("Newest videos to index").fill("300");
+  await sheet.getByLabel("Every channel").check();
+  await sheet.getByRole("button", { name: "Save", exact: true }).click();
+  const confirm = page.getByRole("dialog").filter({ hasText: "every channel" });
+  await expect(
+    confirm.getByRole("button", { name: "Lower the limit" })
+  ).toBeVisible();
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  expect(patches).toEqual([]);
+});

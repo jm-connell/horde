@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { button } from "../../../components/buttons";
 import { describeError } from "../../../apiErrors";
 import { useAuth } from "../../../context/AuthContext";
 import { useConfirm } from "../../../context/ConfirmContext";
 import { useToast } from "../../../context/ToastContext";
-import { useUpdateAppSettings } from "../../../queries/app";
+import { appSettingsQuery, useUpdateAppSettings } from "../../../queries/app";
 import { useAskChannelActions } from "../../../queries/ask";
 import type { AskChannel } from "../../../types";
 import { fieldLabel, numberInput } from "./SettingsSection";
@@ -24,6 +25,9 @@ export default function AskLimit({ channel }: { channel: AskChannel }) {
   const { showError } = useToast();
   const { setLimit } = useAskChannelActions();
   const saveAppSettings = useUpdateAppSettings();
+  // Only read for "Every channel", which only administrators see.
+  const appWide = useQuery({ ...appSettingsQuery(), enabled: isAdmin }).data
+    ?.ask_max_videos;
   const [value, setValue] = useState(String(channel.limit));
   const [scope, setScope] = useState<Scope>("channel");
   const [saving, setSaving] = useState(false);
@@ -40,7 +44,13 @@ export default function AskLimit({ channel }: { channel: AskChannel }) {
 
   const save = async () => {
     if (!changed) return;
-    if (parsed < channel.limit) {
+    // Every channel: those following the app-wide limit, and this one, which
+    // drops its own limit for it.
+    const lowers =
+      scope === "all"
+        ? (appWide != null && parsed < appWide) || parsed < channel.limit
+        : parsed < channel.limit;
+    if (lowers) {
       const ok = await confirm({
         title:
           scope === "all"
@@ -48,7 +58,7 @@ export default function AskLimit({ channel }: { channel: AskChannel }) {
             : `Index only the newest ${parsed.toLocaleString()} videos?`,
         body:
           scope === "all"
-            ? "Older videos are removed from Ask for every channel without a limit of its own. Raising the limit later fetches their captions again."
+            ? `Older videos are removed from Ask for every channel without a limit of its own${own ? `, and from ${name}` : ""}. Raising the limit later fetches their captions again.`
             : `Older videos of ${name} are removed from Ask. Raising the limit later fetches their captions again.`,
         confirmLabel: "Lower the limit",
         danger: true,
