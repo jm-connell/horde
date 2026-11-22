@@ -37,6 +37,10 @@ All notable changes to Horde are documented here. The format follows
   desktops, and the choice is kept from video to video like the description's.
   Comments that are turned off, hidden by YouTube, or not there yet start
   folded instead of open on a "nothing here" line; opening it says why.
+- **Recommended shows that new picks are loading.** After **Refresh** (or
+  pulling down, picking a category or changing the algorithm) the cards dim
+  as before, and now **Loading new picks…** sits over them and the ↻ on
+  Refresh turns until the new set arrives.
 - **No Comments section on a live broadcast.** YouTube keeps viewers' talk
   in the live chat while it is on air, so the section only ever said the
   comments were off. It is gone while the stream is live, and Horde no longer

@@ -34,11 +34,12 @@ import { useHideLive } from "./discover/useHideLive";
 import SuggestedChannels from "./discover/SuggestedChannels";
 import WhyDialog from "./discover/WhyDialog";
 import { CloseIcon, RefreshIcon, SlidersIcon } from "./icons";
-import LoadingIndicator from "./LoadingIndicator";
+import LoadingIndicator, { LoadingMark } from "./LoadingIndicator";
 import { PULL_REFRESH_EVENT } from "./PullToRefresh";
 import VideoCard from "./VideoCard";
 import { useSettings } from "../hooks/useSettings";
 import { getJson, setJson } from "../storage";
+import { normalizeLoadingStyle } from "../loadingStyles";
 import { videoGridClassName } from "../pages/library/videoGridClassName";
 
 /**
@@ -482,6 +483,8 @@ export default function DiscoverHome({
     setOffNoticeClosed(true);
   };
 
+  /** A new set of picks is on its way (first load or reshuffle). */
+  const reloading = loading || updating;
   const actions = (
     <>
       <button
@@ -498,14 +501,18 @@ export default function DiscoverHome({
       <button
         type="button"
         onClick={refresh}
-        className={`${button("secondary", "sm")} ${ACTION_BTN}`}
+        className={`${button("secondary", "sm")} ${ACTION_BTN} md:inline-flex md:items-center md:gap-1.5`}
         title={
           status?.enabled === false
             ? "Reshuffle the less certain picks"
             : "Reshuffle, and look for new videos on YouTube"
         }
+        aria-busy={reloading || undefined}
       >
-        <RefreshIcon className="text-base md:hidden" />
+        {/* Turns while new picks load, beside the name on wider screens too. */}
+        <RefreshIcon
+          className={`text-base ${reloading ? "motion-safe:animate-spin" : "md:hidden"}`}
+        />
         <span className="max-md:sr-only">Refresh</span>
       </button>
     </>
@@ -651,21 +658,39 @@ export default function DiscoverHome({
         </div>
       ) : (
         <>
-          <div
-            ref={gridRef}
-            className={`${gridClass} transition-opacity duration-200 ${updating ? "opacity-60" : ""}`}
-            aria-busy={updating || undefined}
-          >
-            {items.slice(0, splitAt).map(card)}
-            <SuggestedChannels
-              channels={category === null ? channels : []}
-              onSubscribe={
-                can("manage_subscriptions") ? subscribeChannel : undefined
-              }
-              onDismiss={dismissChannel}
-              onOpen={(ch) => onChannelClick({ name: ch.name, url: ch.url })}
-            />
-            {items.slice(splitAt).map(card)}
+          <div className="relative">
+            {updating && (
+              // No height of its own, so the cards do not move; it rides
+              // below the top bar while the dimmed cards scroll under it.
+              <div className="pointer-events-none sticky top-20 z-20 h-0">
+                <div
+                  role="status"
+                  className="ui-panel mx-auto mt-2 flex w-fit items-center gap-2 rounded-full border border-ink-700 bg-ink-900/95 py-0.5 pl-2 pr-3.5 text-sm text-gray-200 shadow-lg"
+                >
+                  <LoadingMark
+                    style={normalizeLoadingStyle(settings.loadingStyle)}
+                    compact
+                  />
+                  Loading new picks…
+                </div>
+              </div>
+            )}
+            <div
+              ref={gridRef}
+              className={`${gridClass} transition-opacity duration-200 ${updating ? "opacity-60" : ""}`}
+              aria-busy={updating || undefined}
+            >
+              {items.slice(0, splitAt).map(card)}
+              <SuggestedChannels
+                channels={category === null ? channels : []}
+                onSubscribe={
+                  can("manage_subscriptions") ? subscribeChannel : undefined
+                }
+                onDismiss={dismissChannel}
+                onOpen={(ch) => onChannelClick({ name: ch.name, url: ch.url })}
+              />
+              {items.slice(splitAt).map(card)}
+            </div>
           </div>
           <div ref={sentinelRef} className="h-4" />
           {loadingMore && <LoadingIndicator />}
