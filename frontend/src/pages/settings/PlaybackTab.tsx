@@ -80,8 +80,8 @@ export default function PlaybackTab() {
             }
           />
           <SettingRow
-            title="Show live chat on past streams"
-            description="Replay a past livestream's chat beside the video, in step with playback. Read from YouTube while you watch, never saved."
+            title="Show live chat"
+            description="A livestream's chat beside the video: live now, or replayed in step with a past stream. Read from YouTube while you watch, never saved."
             hidden={!!q && !match("live chat", "chat replay", "stream")}
             control={
               <Toggle

@@ -25,6 +25,7 @@ import ChatReplayPanel, {
 } from "./watch/chatReplay/ChatReplayPanel";
 import { chatPlacement, chatTarget } from "./watch/chatReplay/model";
 import { useChatReplay } from "./watch/chatReplay/useChatReplay";
+import { useLiveChat } from "./watch/chatReplay/useLiveChat";
 import RedownloadDialog from "./watch/RedownloadDialog";
 import StreamActions from "./watch/StreamActions";
 import WatchActions from "./watch/WatchActions";
@@ -144,13 +145,21 @@ export default function Watch() {
   );
 
   // A past stream's live chat replay, read from YouTube as playback goes.
-  const { getCurrentPosition, getStreamPosition } = usePlaybackActions();
+  const { getCurrentPosition, getStreamPosition, getStreamBehindLive } =
+    usePlaybackActions();
   const { fullscreenAside } = usePlaybackLayout();
   const chatFor = source ? chatTarget(source) : null;
-  const chat = useChatReplay(
-    settings.showChatReplay && chatFor ? chatFor.youtubeId : null,
+  const chatId = settings.showChatReplay && chatFor ? chatFor.youtubeId : null;
+  const replayChat = useChatReplay(
+    chatFor?.live ? null : chatId,
     source?.kind === "library" ? getCurrentPosition : getStreamPosition
   );
+  // A broadcast that is live now: its live chat, at the moment being watched.
+  const liveChat = useLiveChat(
+    chatFor?.live ? chatId : null,
+    getStreamBehindLive
+  );
+  const chat = chatFor?.live ? liveChat : replayChat;
   const landscape = useMediaQuery("(orientation: landscape)");
   const wideScreen = useMediaQuery("(min-width: 1280px)");
   const largeScreen = useMediaQuery("(min-width: 1024px)");

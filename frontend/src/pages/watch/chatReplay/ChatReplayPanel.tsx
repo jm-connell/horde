@@ -163,7 +163,7 @@ export default function ChatReplayPanel({
   variant,
   onHide,
 }: {
-  chat: ChatReplayState;
+  chat: ChatReplayState & { note?: string | null };
   variant: ChatPanelVariant;
   onHide: () => void;
 }) {
@@ -246,6 +246,11 @@ export default function ChatReplayPanel({
           Hide
         </button>
       </div>
+      {chat.note && (
+        <p className="border-b border-ink-700 px-4 py-1.5 text-xs text-muted">
+          {chat.note}
+        </p>
+      )}
       <div className="relative min-h-0 flex-1">
         {status === "error" ? (
           <div className="px-4 py-3 text-sm" role="status">

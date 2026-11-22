@@ -71,6 +71,7 @@ export type LiveComments = S["LiveCommentsRead"];
 export type ChatReplayPage = S["ChatReplayRead"];
 export type ChatReplayItem = S["ChatReplayItem"];
 export type ChatReplayRun = S["ChatReplayRun"];
+export type LiveChatPage = S["LiveChatRead"];
 export type CommentsStorage = S["CommentsStorage"];
 export type AskThreadSummary = S["AskThreadSummary"];
 export type AskThread = S["AskThreadRead"];

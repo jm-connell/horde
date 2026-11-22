@@ -1,4 +1,4 @@
-import type { ChatReplayPage } from "../types";
+import type { ChatReplayPage, LiveChatPage } from "../types";
 import { type ReadOptions, request } from "./client";
 
 const base = (youtubeId: string) =>
@@ -25,6 +25,19 @@ export const chatReplayApi = {
   ): Promise<ChatReplayPage> {
     return request<ChatReplayPage>(
       `${base(youtubeId)}?cursor=${encodeURIComponent(cursor)}`,
+      opts
+    );
+  },
+
+  /** A live broadcast's chat at the moment being watched, after `after`. */
+  liveChat(
+    videoId: string,
+    behindMs: number,
+    after: number,
+    opts?: ReadOptions
+  ): Promise<LiveChatPage> {
+    return request<LiveChatPage>(
+      `/api/live/${encodeURIComponent(videoId)}/chat?behind_ms=${Math.max(0, Math.floor(behindMs))}&after=${after}`,
       opts
     );
   },

@@ -114,25 +114,28 @@ export function needsReload(
 }
 
 /**
- * The YouTube video whose chat replay the page should read, if any. `known` is
+ * The YouTube video whose chat the page should read, if any: live chat for a
+ * broadcast that is live now (`live`), chat replay for a past stream. `known` is
  * false for a library video not yet known to be a stream: the server finds out.
  * Never a stream YouTube is still processing (`post_live`), whose timeline does
  * not match the chat's, nor another site's past stream.
  */
 export function chatTarget(
   source: WatchSource
-): { youtubeId: string; known: boolean } | null {
+): { youtubeId: string; known: boolean; live: boolean } | null {
   if (source.kind === "stream") {
     const id = youtubeVideoIdFromUrl(source.url);
-    return id && source.meta.live_status === "was_live"
-      ? { youtubeId: id, known: true }
+    if (!id) return null;
+    if (source.meta.is_live) return { youtubeId: id, known: true, live: true };
+    return source.meta.live_status === "was_live"
+      ? { youtubeId: id, known: true, live: false }
       : null;
   }
   const id = youtubeVideoIdFromUrl(source.video.source_url);
   const status = source.video.live_status;
   if (!id) return null;
-  if (status === "was_live") return { youtubeId: id, known: true };
-  if (status == null) return { youtubeId: id, known: false };
+  if (status === "was_live") return { youtubeId: id, known: true, live: false };
+  if (status == null) return { youtubeId: id, known: false, live: false };
   return null;
 }
 

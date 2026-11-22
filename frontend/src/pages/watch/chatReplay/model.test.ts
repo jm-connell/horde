@@ -140,6 +140,7 @@ describe("chatTarget", () => {
     expect(chatTarget(stream(YT_URL, { live_status: "was_live" }))).toEqual({
       youtubeId: "abcdefghijk",
       known: true,
+      live: false,
     });
     expect(
       chatTarget(stream(YT_URL, { live_status: "post_live", was_live: true }))
@@ -154,12 +155,14 @@ describe("chatTarget", () => {
     ).toEqual({
       youtubeId: "abcdefghijk",
       known: true,
+      live: false,
     });
     expect(
       chatTarget(library({ source_url: YT_URL, live_status: null }))
     ).toEqual({
       youtubeId: "abcdefghijk",
       known: false,
+      live: false,
     });
     expect(
       chatTarget(library({ source_url: YT_URL, live_status: "not_live" }))

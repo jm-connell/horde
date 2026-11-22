@@ -280,10 +280,10 @@ test("hide is remembered and the bar brings it back", async ({ page }) => {
   // The same switch is in Settings → Playback.
   await chatRegion(page).getByRole("button", { name: "Hide" }).click();
   await page.goto("/settings?tab=playback");
-  const row = page.getByText("Show live chat on past streams");
+  const row = page.getByText("Show live chat", { exact: true });
   await expect(row).toBeVisible();
   await page
-    .getByRole("switch", { name: "Show live chat on past streams" })
+    .getByRole("switch", { name: "Show live chat", exact: true })
     .click();
   await page.goto(`/watch/${id}`);
   await expect(chatRegion(page)).toBeVisible();
