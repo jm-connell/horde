@@ -79,7 +79,7 @@ def test_upsert_skips_age_restricted_and_keeps_public(session):
     assert skipped_yt_ids(session, catalog.id) == {"age11111111"}
     assert catalog.last_error
     assert "Age-restricted / private" in catalog.last_error
-    assert "continued indexing" in catalog.last_error
+    assert "continued listing" in catalog.last_error
     titles = session.exec(
         select(ChannelCatalogVideo.title).where(
             ChannelCatalogVideo.catalog_id == catalog.id
@@ -175,7 +175,7 @@ def test_description_pass_skips_cookies_error_and_continues(session, monkeypatch
     assert skip.yt_id == "age11111111"
     assert skip.reason == "cookies"
     assert catalog.last_error
-    assert "continued indexing" in catalog.last_error
+    assert "continued listing" in catalog.last_error
     public = session.exec(
         select(ChannelCatalogVideo).where(ChannelCatalogVideo.yt_id == "ok111111111")
     ).first()
@@ -218,7 +218,7 @@ def test_index_catalog_continues_after_age_restricted_page(session, monkeypatch)
 
     assert catalog.status == ChannelCatalogStatus.ready
     assert catalog.last_error
-    assert "continued indexing" in catalog.last_error
+    assert "continued listing" in catalog.last_error
     videos = session.exec(
         select(ChannelCatalogVideo).where(ChannelCatalogVideo.catalog_id == catalog.id)
     ).all()

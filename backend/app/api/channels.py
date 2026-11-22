@@ -273,7 +273,7 @@ def channel_catalog_index(
     return ChannelCatalogIndexResult(
         queued=1,
         catalog_id=catalog_id,
-        detail=f"Queued indexing for {channel_name or channel_url}",
+        detail=f"Queued listing for {channel_name or channel_url}",
     )
 
 

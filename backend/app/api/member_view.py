@@ -18,13 +18,13 @@ from typing import Any
 from ..schemas import CompatState, VideoRead
 
 #: Shown instead of the embedding error (which quotes the provider URL).
-EMBED_ERROR = "AI indexing failed"
+EMBED_ERROR = "Embedding failed"
 #: Shown instead of the ffmpeg / yt-dlp text when an H.264 copy fails.
 COMPAT_ERROR = "the server could not convert this video"
 #: Shown instead of the yt-dlp message of the last failed extract.
 EXTRACT_ERROR = "Extraction failed"
 #: Shown instead of the last error of a channel catalog (raw yt-dlp text).
-CATALOG_ERROR = "Indexing failed"
+CATALOG_ERROR = "Listing failed"
 #: Shown instead of the storage warning, which names the data directory and mount.
 STORAGE_WARNING = (
     "Storage is on a network filesystem, where the library database can be "

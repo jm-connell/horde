@@ -487,9 +487,9 @@ export default function SearchResults({
       <SearchResultSection
         id="search-stream"
         title="Available to stream"
-        source="From channels Horde has indexed"
+        source="From channel video lists"
         count={global.streamResults.length}
-        emptyText="No matches in indexed channels."
+        emptyText="No matches in channel video lists."
         loading={global.streamLoading}
       >
         <RemoteEntryGrid
