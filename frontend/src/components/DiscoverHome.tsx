@@ -574,7 +574,7 @@ export default function DiscoverHome({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       {actionsSlot && createPortal(actions, actionsSlot)}
       {statusLine && (
         <p className="text-sm text-muted" aria-live="polite">
