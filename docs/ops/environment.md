@@ -116,6 +116,8 @@ These are **Compose / host** variables used when mounting volumes — not read b
 !!! warning "Permissions"
     Set `PUID`/`PGID` to the user that owns your media dataset (common on TrueNAS). Wrong IDs cause downloads that the host cannot read, or a scanner that cannot write. See [Troubleshooting](troubleshooting.md).
 
+`PUID`/`PGID` apply when the container starts as root, the default. Started as a non-root user (`user: "568:568"` in Compose, `docker run --user`, TrueNAS Apps), the entrypoint skips the user switch and the chown and runs Horde as that user; both folders must already belong to it. See [Troubleshooting](troubleshooting.md#permissions-puid-pgid).
+
 ## GPU { #gpu }
 
 Settings → System → Resources shows a **GPU** card from what the **`horde` container** can see (`nvidia-smi`, ROCm, or `/dev/dri`). **None detected** means that process has no card — usually no GPU has been [passed in](#pass-the-gpu-into-horde) yet (the default), TrueNAS isolated the device to another app, or the host has no GPU. Horde still runs.

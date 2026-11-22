@@ -16,57 +16,87 @@ log() {
   echo "horde-entrypoint: $*"
 }
 
-if ! [[ "$PUID" =~ ^[0-9]+$ && "$PGID" =~ ^[0-9]+$ ]]; then
-  log "PUID and PGID must be numeric (got PUID='$PUID' PGID='$PGID')." >&2
-  exit 1
+# Started as a non-root user (`docker run --user`, TrueNAS Apps): there is no
+# privilege to create accounts, chown or switch users, so the app runs as the
+# user the container was started as and PUID/PGID are ignored. Whoever started
+# it (the host, or TrueNAS's permissions step) owns the folders.
+if [[ "$(id -u)" -ne 0 ]]; then
+  root_start=0
+  if [[ "$PUID:$PGID" != "$(id -u):$(id -g)" ]]; then
+    log "started as $(id -u):$(id -g), not root: running as that user, PUID/PGID ($PUID:$PGID) do not apply."
+  fi
+  PUID="$(id -u)"
+  PGID="$(id -g)"
+  as_app() { "$@"; }
+else
+  root_start=1
+  as_app() { gosu "$PUID:$PGID" "$@"; }
 fi
 
-# Running the app as root makes every downloaded file root-owned on the host
-# and removes a layer of containment. Allow it only when explicitly requested.
-if [[ "$PUID" -eq 0 || "$PGID" -eq 0 ]]; then
-  if [[ "${HORDE_ALLOW_ROOT:-}" != "1" ]]; then
-    log "refusing to run as root (PUID=$PUID PGID=$PGID)." >&2
-    log "Set PUID/PGID to the owner of your media dataset (see .env.example)," >&2
-    log "or set HORDE_ALLOW_ROOT=1 if you really want the app to run as root." >&2
+if [[ "$root_start" -eq 1 ]]; then
+  if ! [[ "$PUID" =~ ^[0-9]+$ && "$PGID" =~ ^[0-9]+$ ]]; then
+    log "PUID and PGID must be numeric (got PUID='$PUID' PGID='$PGID')." >&2
     exit 1
   fi
-  log "WARNING: HORDE_ALLOW_ROOT=1, running the app as root."
-fi
 
-# Create the runtime group/user if they do not already exist.
-if ! getent group "$PGID" >/dev/null 2>&1; then
-  groupadd -g "$PGID" horde
-fi
-if ! getent passwd "$PUID" >/dev/null 2>&1; then
-  useradd -u "$PUID" -g "$PGID" -M -s /usr/sbin/nologin horde
-fi
-
-mkdir -p "$DATA_DIR" "$DOWNLOADS_DIR"
-
-# Own the persistent data dir, but only walk it when something is wrong: the
-# top-level owner differs (first start, or PUID/PGID changed) or a cheap probe
-# finds any file inside with a different owner or group (for example a horde.db
-# restored as root by a rollback, which would leave the app with a read-only
-# database). A recursive chown on every start is slow on large thumbnail
-# caches. Downloads are left alone: the host owns that mount.
-current_owner="$(stat -c '%u:%g' "$DATA_DIR")"
-# `|| true`: a file vanishing mid-walk makes find exit non-zero; an empty result
-# then simply means "nothing found" and must not abort the start.
-stray="$(find "$DATA_DIR" -xdev \( ! -user "$PUID" -o ! -group "$PGID" \) -print -quit 2>/dev/null || true)"
-if [[ "$current_owner" != "$PUID:$PGID" || -n "$stray" ]]; then
-  log "chown -R $PUID:$PGID $DATA_DIR (top level was $current_owner${stray:+, e.g. $stray})"
-  if ! chown -R "$PUID:$PGID" "$DATA_DIR"; then
-    log "WARNING: could not chown $DATA_DIR; the app may be unable to write there." >&2
+  # Running the app as root makes every downloaded file root-owned on the host
+  # and removes a layer of containment. Allow it only when explicitly requested.
+  if [[ "$PUID" -eq 0 || "$PGID" -eq 0 ]]; then
+    if [[ "${HORDE_ALLOW_ROOT:-}" != "1" ]]; then
+      log "refusing to run as root (PUID=$PUID PGID=$PGID)." >&2
+      log "Set PUID/PGID to the owner of your media dataset (see .env.example)," >&2
+      log "or set HORDE_ALLOW_ROOT=1 if you really want the app to run as root." >&2
+      exit 1
+    fi
+    log "WARNING: HORDE_ALLOW_ROOT=1, running the app as root."
   fi
+
+  # Create the runtime group/user if they do not already exist.
+  if ! getent group "$PGID" >/dev/null 2>&1; then
+    groupadd -g "$PGID" horde
+  fi
+  if ! getent passwd "$PUID" >/dev/null 2>&1; then
+    useradd -u "$PUID" -g "$PGID" -M -s /usr/sbin/nologin horde
+  fi
+
+  mkdir -p "$DATA_DIR" "$DOWNLOADS_DIR"
+
+  # Own the persistent data dir, but only walk it when something is wrong: the
+  # top-level owner differs (first start, or PUID/PGID changed) or a cheap probe
+  # finds any file inside with a different owner or group (for example a horde.db
+  # restored as root by a rollback, which would leave the app with a read-only
+  # database). A recursive chown on every start is slow on large thumbnail
+  # caches. Downloads are left alone: the host owns that mount.
+  current_owner="$(stat -c '%u:%g' "$DATA_DIR")"
+  # `|| true`: a file vanishing mid-walk makes find exit non-zero; an empty result
+  # then simply means "nothing found" and must not abort the start.
+  stray="$(find "$DATA_DIR" -xdev \( ! -user "$PUID" -o ! -group "$PGID" \) -print -quit 2>/dev/null || true)"
+  if [[ "$current_owner" != "$PUID:$PGID" || -n "$stray" ]]; then
+    log "chown -R $PUID:$PGID $DATA_DIR (top level was $current_owner${stray:+, e.g. $stray})"
+    if ! chown -R "$PUID:$PGID" "$DATA_DIR"; then
+      log "WARNING: could not chown $DATA_DIR; the app may be unable to write there." >&2
+    fi
+  fi
+  fix_hint="sudo chown -R $PUID:$PGID <DOWNLOADS_PATH>, or set PUID/PGID in .env to the folder's owner"
+else
+  # Nothing here can repair ownership, and the app cannot run without its
+  # database, so an unwritable data folder stops the start with the fix.
+  if ! mkdir -p "$DATA_DIR" 2>/dev/null || ! test -w "$DATA_DIR"; then
+    log "$DATA_DIR (the data folder) is not writable by $PUID:$PGID, so Horde cannot start." >&2
+    log "Fix it on the host: sudo chown -R $PUID:$PGID <data folder>, or start the container as the folder's owner." >&2
+    exit 1
+  fi
+  mkdir -p "$DOWNLOADS_DIR" 2>/dev/null || true
+  fix_hint="sudo chown -R $PUID:$PGID <DOWNLOADS_PATH>, or start the container as the folder's owner"
 fi
 # The media folder is the host's to own, so it is only checked: an unwritable
 # one is the usual first-run mistake, and downloads would fail only later.
-if ! gosu "$PUID:$PGID" test -w "$DOWNLOADS_DIR"; then
+if ! as_app test -w "$DOWNLOADS_DIR"; then
   log "WARNING: $DOWNLOADS_DIR (DOWNLOADS_PATH on the host) is not writable by $PUID:$PGID, so downloads will fail." >&2
-  log "Fix it on the host: sudo chown -R $PUID:$PGID <DOWNLOADS_PATH>, or set PUID/PGID in .env to the folder's owner." >&2
+  log "Fix it on the host: $fix_hint." >&2
 fi
 # Subdirectories are created as the runtime user so they never end up root-owned.
-if ! gosu "$PUID:$PGID" mkdir -p "$DATA_DIR/thumbnails"; then
+if ! as_app mkdir -p "$DATA_DIR/thumbnails"; then
   log "WARNING: could not create $DATA_DIR/thumbnails as $PUID:$PGID." >&2
 fi
 
@@ -97,7 +127,7 @@ update_ytdlp() {
   log "YTDLP_AUTO_UPDATE=1: checking for a newer yt-dlp (baked: ${baked:-unknown}, ${limit}s limit)"
   # The limit is part of the start-up time `update.sh` waits for, so it stays
   # well under HORDE_HEALTH_TIMEOUT_SEC. Wheels only: never run a build script.
-  if gosu "$PUID:$PGID" env HOME=/tmp timeout "$limit" \
+  if as_app env HOME=/tmp timeout "$limit" \
        pip install --quiet --disable-pip-version-check --upgrade --no-deps \
        --only-binary=:all: --retries 1 --timeout 15 \
        --target "$staging" yt-dlp; then
@@ -140,4 +170,7 @@ if [[ -r "$BUILD_INFO" ]]; then
   done < "$BUILD_INFO"
 fi
 
-exec gosu "$PUID:$PGID" "$@"
+if [[ "$root_start" -eq 1 ]]; then
+  exec gosu "$PUID:$PGID" "$@"
+fi
+exec "$@"

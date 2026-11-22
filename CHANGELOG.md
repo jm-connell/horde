@@ -18,6 +18,10 @@ All notable changes to Horde are documented here. The format follows
   in order, like **Tab bar** does for the installed app on a phone. The
   choice is saved with your account, so it follows you to other devices.
   Settings always stays, and the ☰ menu on a phone still lists every page.
+- **Runs as a non-root user.** The container now also starts when it is
+  started as a non-root user (`user:` in Compose, `docker run --user`),
+  as TrueNAS Apps does: Horde then runs as that user and `PUID`/`PGID`
+  do not apply. The default root start with `PUID`/`PGID` is unchanged.
 
 ### Changed
 
