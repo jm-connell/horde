@@ -85,6 +85,10 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- **A video that isn't downloaded no longer stops with errors when it was
+  opened twice at once** (in two tabs, say). Each opening prepared the video
+  separately, and the second threw away what the first was playing from.
+  It is now prepared once and shared.
 - **A card's preview on a phone stops when it leaves the middle of the
   screen.** It kept playing until another card's preview started, and it
   counted as centred while only its title was in the middle. A preview now

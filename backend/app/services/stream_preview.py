@@ -65,6 +65,10 @@ _PREVIEW_REFRESH_MAX_ATTEMPTS = 3
 #: the player gives up on a request well before a minute, and a waiting request
 #: holds a worker thread.
 _PREVIEW_REFRESH_FOLLOW_WAIT_SEC = 20.0
+#: How long a request waits for the manifest build another request started (a
+#: hover warm-up, a second tab). Longer than a normal extract plus probes, shorter
+#: than the extract gate's queue timeout (``EXTRACT_QUEUE_TIMEOUT_SEC``, 180 s).
+_PREVIEW_BUILD_FOLLOW_WAIT_SEC = 90.0
 _preview_stream_cache: dict[str, dict[str, Any]] = {}
 _preview_manifest_by_url: dict[str, dict[str, Any]] = {}
 _preview_manifest_by_token: dict[str, dict[str, Any]] = {}
@@ -892,14 +896,54 @@ def _do_resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, 
     return dict(entry)
 
 
+def _resolve_shared_manifest(url: str) -> dict[str, Any]:
+    """The cached manifest session, else one build per URL at a time.
+
+    Two builds of the same URL at once would each store a new token, and the
+    second evicts the first: a player holding that one gets 404s from the media
+    proxy. So a request that finds a build (or a refresh) under way waits for it
+    and reads the cache. When the build it waited for failed, it tries once
+    itself, still one build at a time.
+    """
+    for _ in range(2):
+        now = time.time()
+        with _preview_stream_lock:
+            cached = _preview_manifest_by_url.get(url)
+            if cached and cached.get("expires_at", 0) > now + 60:
+                return dict(cached)
+            inflight = _preview_refresh_inflight.get(url)
+            leader = inflight is None
+            if inflight is None:
+                inflight = threading.Event()
+                _preview_refresh_inflight[url] = inflight
+        if leader:
+            try:
+                return _do_resolve_preview_manifest(url, force=False)
+            finally:
+                with _preview_stream_lock:
+                    done = _preview_refresh_inflight.pop(url, None)
+                if done is not None:
+                    done.set()
+        if not inflight.wait(timeout=_PREVIEW_BUILD_FOLLOW_WAIT_SEC):
+            raise PreviewRefreshError(
+                "Preview manifest is still being built", retry_after=5
+            )
+    with _preview_stream_lock:
+        cached = _preview_manifest_by_url.get(url)
+    if cached:
+        return dict(cached)
+    raise PreviewRefreshError("Preview manifest build failed", retry_after=15)
+
+
 def resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, Any]:
     """Resolve adaptive formats and return a cached manifest session.
 
     Concurrent force refreshes for the same URL collapse into one extraction
     (single-flight) with a short debounce so 403 storms do not queue N extracts.
+    Builds share the same per-URL slot (see ``_resolve_shared_manifest``).
     """
     if not force:
-        return _do_resolve_preview_manifest(url, force=False)
+        return _resolve_shared_manifest(url)
 
     now = time.time()
     with _preview_stream_lock:
@@ -968,7 +1012,7 @@ def resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, Any]
 
 
 def media_refresh_in_flight(token: str) -> bool:
-    """Whether another request is already refreshing this session's addresses.
+    """Whether another request is already building or refreshing this session's addresses.
 
     A request that then asks for a refresh only waits for that one: it runs no
     yt-dlp work of its own.
