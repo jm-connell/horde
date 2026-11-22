@@ -189,8 +189,11 @@ Probed with yt-dlp 2026.10.26's helpers against real past streams:
 - Asks for the next chunk before the position reaches the end of what is
   loaded. A seek outside the loaded stretch clears the list and reads from the
   new position; a seek inside it just re-renders.
-- Stays on the newest message; scrolling up stops that and shows a **Jump to
-  latest** button.
+- Stays on the newest message. When the viewer scrolls up to read while chat
+  is moving, autoscroll pauses and the list stays put under them while new
+  messages keep arriving below. A down-arrow **Jump to latest** button appears;
+  pressing it (or scrolling back to the bottom) resumes autoscroll (asked for by
+  the user).
 - No avatars *(proposal: a busy chat would load hundreds of images from
   Google, and the list stays compact)*. Owner and moderator names are marked
   the way comments mark the uploader. Super Chats stand out with the amount;
