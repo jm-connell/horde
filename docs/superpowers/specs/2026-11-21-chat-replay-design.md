@@ -37,6 +37,10 @@ now is a later phase.
 - Posting messages, polls, banners, the ticker, author avatars.
 - Searching chat, or using it in AI features.
 - Chat in offline playback (it needs the server and YouTube).
+- Chat on clips, for now. A clip is saved as its own library video with no
+  YouTube id, and its start is kept only on the download job
+  (`downloads/clips.py`), so clips show no chat. Adding it later needs the
+  source stream's id and the clip's start on `videos` (decided 2026-11-21).
 
 ## Anti-goals
 
@@ -117,10 +121,18 @@ Probed with yt-dlp 2026.10.26's helpers against real past streams:
   - the comments fetcher's extract, which already reads the video's page
     (`live_status` is in its unprocessed info) — set when it differs;
   - the chat replay check below, when a library video's value is unknown.
-- `VideoRead` exposes `live_status`.
-- The watch page asks for chat when the video has a YouTube id and is a past
-  stream (`was_live` / `post_live`, or `StreamPreviewMeta.was_live` for a
-  streamed video), or is a library video whose `live_status` is still null.
+- `VideoRead` exposes `live_status`, and `StreamPreviewMeta` gains `live_status`
+  (its `was_live` is also true for `post_live`, so it cannot tell them apart).
+- The watch page asks for chat when the video has a YouTube id and its
+  `live_status` is `was_live`, or it is a library video whose `live_status` is
+  still null.
+- **Only `was_live`, never `post_live`** *(builder's call)*. While YouTube is
+  still processing a recording (`post_live`) it serves only the last hours, on
+  a timeline of their own (`downloads/runner.py`), but chat offsets count from
+  the start of the broadcast, so chat would play out of step. A library file
+  downloaded during `post_live` keeps that value for good: the file itself is
+  the partial window, so it never shows chat. A streamed `post_live` video gets
+  chat once YouTube reports it as `was_live`.
   The server's answer `none` (no chat replay) hides chat and the page keeps its
   usual layout. *(proposal: a column instead of asking YouTube on every library
   video open, which would also shift the layout on every past stream.)*
@@ -133,7 +145,7 @@ Probed with yt-dlp 2026.10.26's helpers against real past streams:
   cache of fetched chunks *(builder's call: TTL and size)*. One lock per video
   so viewers of the same video share fetches. A `none` / `unavailable` answer
   is remembered for a while so reopening a stream without chat does not ask
-  again *(builder's call: how long; shorter for `post_live`)*.
+  again *(builder's call: how long)*.
 - **Opening** reads the watch page and the chat page with yt-dlp's
   `YoutubeBaseInfoExtractor` helpers (`_download_webpage`,
   `extract_yt_initial_data`, `extract_ytcfg`, `generate_api_headers`), with the
