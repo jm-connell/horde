@@ -44,11 +44,11 @@ Changing your subscriptions needs the **Manage subscriptions** permission (on by
 
 What a finished download does when you do not subscribe to its channel is the administrator's choice (**Settings → Library → Subscriptions → New channels from downloads**):
 
-- **Subscribe** (the default): you are subscribed to it, and Ask indexing is turned on for it as if you had subscribed by hand (by itself up to 500 uploads, when your account may turn Ask on; a bigger channel is left for someone to turn on in its settings).
+- **Subscribe** (the default): you are subscribed to it, and Ask indexing is turned on for it as if you had subscribed by hand (when your account may turn Ask on; Ask indexes the channel's newest videos up to [its limit](ask.md#how-much-of-a-channel-is-indexed)).
 - **Ask on the download**: the download's card in **Recent downloads** shows a **New channel** tag with **Subscribe** and **No thanks**. No thanks is remembered, so that channel is not offered again.
 - **Never**: nothing happens.
 
-A channel you unsubscribed from is never subscribed again by a download. When the server has member accounts, **Include new channels from members** says whether their downloads count too; while it is on, a member's subscriptions may also turn Ask on for channels up to 500 uploads, even without **Manage channel indexing**.
+A channel you unsubscribed from is never subscribed again by a download. When the server has member accounts, **Include new channels from members** says whether their downloads count too; while it is on, a member's subscriptions may also turn Ask on for channels, even without **Manage channel indexing**.
 
 ## Channel pages
 
@@ -59,7 +59,7 @@ Open a channel from the sidebar to see its **feed**:
 
 ### Header and channel settings
 
-The header shows who the channel is (its YouTube profile picture, its `@handle`, how many of its videos are downloaded and its subscriber count), the search index state (**Not indexed**, **Fully indexed (1000)**; click it to open **Manage**) and three actions:
+The header shows who the channel is (its YouTube profile picture, its `@handle`, how many of its videos are downloaded and its subscriber count), how much of the channel [Ask](ask.md) has indexed (**Not indexed**, **500 of 2,310 indexed**: the second number is every video the channel has uploaded; click it to open the **Ask** section and its limit) and three actions:
 
 - **Subscribe** / **Subscribed** (YouTube channels): see [Subscriptions](#subscriptions).
 - **Download…** (YouTube channels, needs the `download` permission): opens the [Download](downloads.md) page with the channel's link filled in, so you can pick which of its videos to download.
@@ -71,11 +71,11 @@ Above the feed, one toolbar holds the quick view controls: the channel search bo
 
 ### Feed search
 
-The channel header search box looks across **indexed uploads** (titles, and descriptions for the newest ~200) and **downloaded videos** for that channel.
+The channel header search box looks across the channel's **listed uploads** (titles, and descriptions for the newest ~200) and **downloaded videos** for that channel.
 
 - Multi-word queries require **all keywords** as whole words (stopwords like *the* / *to* / *his* are ignored). `paint fix` matches *I painted his House to Fix his WiFi*; `car` does not match *graphics card*. Home library search uses the same matcher.
 - Natural-language phrasing also uses catalog and library search indexes when those embeddings are ready (including captions on downloads).
-- While a query runs, the feed shows **Searching indexed catalog…** then **Finding related matches…**. If indexing is still in progress, results may be incomplete.
+- While a query runs, the feed shows **Searching the video list…** then **Finding related matches…**. If the list is still being built, results may be incomplete.
 - With the **YT** control in the channel search box on (default from Settings → Library **YouTube results in channel search**; **Channel settings → Search** sets it per channel or back to the server default), Horde also queries YouTube for extra matches from that channel. Local and YouTube cards are then sorted together by **Recent / Popular** (and the ↑/↓ direction) at the top of the page. A quiet **Loading YouTube results…** line appears until that call finishes.
 
 See [Search](search.md).
@@ -101,12 +101,12 @@ On a YouTube channel, **Channel settings → Automatic downloads** turns automat
 | Setting | Behavior |
 |---------|----------|
 | **Older videos: None, only new uploads** | New uploads discovered after you enable autodownload |
-| **Older videos: The latest N** | Also queue the newest **N** indexed uploads that are not already in the library (N is 1–500) |
-| **Older videos: All indexed videos** | Queue every indexed upload still missing from the library, then keep downloading new ones |
+| **Older videos: The latest N** | Also queue the newest **N** listed uploads that are not already in the library (N is 1–500) |
+| **Older videos: All listed videos** | Queue every listed upload still missing from the library, then keep downloading new ones |
 | **Resolution** | Quality preset used for autodownloaded jobs (default **1080p**) |
 | **Include finished livestreams** | Off by default. Livestreams are **never** downloaded while live or upcoming. When on, finished stream recordings are included |
 
-The section always warns that this can use a lot of storage. **All indexed videos** is limited by the [catalog max videos](#max-videos-per-channel) cap (default 1000) and says so.
+The section always warns that this can use a lot of storage. **All listed videos** is limited by the [catalog max videos](#max-videos-per-channel) cap (default 1000) and says so.
 
 While autodownload is on, the header shows an **Auto-download on · 1080p** chip that opens this section. Switching it off and saving does **not** cancel jobs already in the download queue.
 
@@ -159,7 +159,7 @@ Leave a live stream (lock the screen, switch apps) and come back a minute or mor
 
 Catalog indexing is **YouTube only**. When you open a YouTube channel feed or download from a YouTube channel, Horde indexes that channel’s uploads in the background so feed search and “Available to stream” work without paging YouTube live every time. Non-YouTube sources skip catalog indexing.
 
-Progress shows as a chip in the channel header (for example **Fully indexed (1000)**) and under **Channel settings → Manage → Search index**. **Index channel** there appears only when this catalog is missing, incomplete, or failed — a complete catalog does not need a manual re-walk. Age-restricted, members-only, and private uploads are skipped so the rest of the channel can still index; the channel page shows a toast when that happens.
+Progress shows under **Channel settings → Manage → Video list** (for example **All 1000 listed**). **List videos** there appears only when this catalog is missing, incomplete, or failed — a complete catalog does not need a manual re-walk. Age-restricted, members-only, and private uploads are skipped so the rest of the channel can still be listed; the channel page shows a toast when that happens.
 
 ### Phases
 
@@ -182,11 +182,11 @@ Progress appears in status UI / AI queue breakdown as catalog indexing jobs.
 |---------|-------|---------|
 | `channel_catalog_max_videos` | **100–5000** | **1000** |
 
-Shown as **Max indexed videos per channel** under [Settings → Library](../settings/library.md). It caps the index (feed search and auto-download backfill), not how many videos you can download. Values above 1000 take longer and can slow other YouTube work while indexing.
+Shown as **Max listed videos per channel** under [Settings → Library](../settings/library.md). It caps the video list (feed search and auto-download backfill), not how many videos you can download or how many Ask indexes. Values above 1000 take longer and can slow other YouTube work while listing.
 
 ### Maintenance
 
-[Settings → System](../settings/system.md) (and related library tools) can **refresh catalogs** (catch new channels / uploads) or **full reindex** (re-walk every channel). Details also appear in the catalog tips in the settings UI.
+[Settings → System](../settings/system.md) (and related library tools) can **refresh catalogs** (catch new channels / uploads) or **full relist** (re-walk every channel). Details also appear in the catalog tips in the settings UI.
 
 ## Related
 

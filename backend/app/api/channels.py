@@ -237,9 +237,7 @@ def channel_catalog_index(
 ):
     """Manually queue catalog indexing for one channel (or all library channels)."""
     if not app_settings_svc.load().get("channel_catalog_enabled", True):
-        raise HTTPException(
-            status_code=400, detail="The channel catalog is turned off"
-        )
+        raise HTTPException(status_code=400, detail="The channel catalog is turned off")
 
     channel_url = _checked_url(payload.url)
     channel_name = (payload.channel or "").strip() or None

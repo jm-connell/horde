@@ -76,17 +76,17 @@ The **GPU** card is always shown. **None detected** means the `horde` container 
 
 ## Background activity
 
-Live and recent jobs (ffmpeg, downloads, AI, catalog indexing, folder scans). **Recent activity** keeps about eight rows visible and scrolls through the last 50 finished jobs.
+Live and recent jobs (ffmpeg, downloads, AI, channel video lists, folder scans). **Recent activity** keeps about eight rows visible and scrolls through the last 50 finished jobs.
 
 Also shown:
 
-1. **Channel catalog** — queue depth, current channel/phase, errors. Actions:
+1. **Channel catalog** — each channel's list of uploads (not what [Ask](../guides/ask.md) has indexed: that is under [Library → Ask](library.md#channels-ask-can-answer-from)): queue depth, current channel/phase, errors, and how many lists are ready. Actions:
     - **Refresh catalogs** — incremental: new channels + new uploads on ready catalogs
-    - **Full reindex…** — re-walk every channel up to `channel_catalog_max_videos` (can take a long time)
+    - **Full relist…** — re-walk every channel up to `channel_catalog_max_videos` (can take a long time)
 2. **AI** — compact queue status with pause/resume (`ai.paused`). **Index missing** appears when search-index coverage is incomplete and the queue is idle. **Provider** shows the provider kind and chat model. **Ollama GPU** (and host GPU util/temp) only appear when an Ollama server is in use. **Spend** (24h / 7-day totals, weekly budget if set, 24h call count) appears when the provider reports cost (OpenRouter).
 3. **Metadata sync** — shown while a Library resync is running (done/failed/total + current title)
 
-Catalog indexing only appears when `channel_catalog_enabled` is on ([Library](library.md#channel-catalog)).
+The channel catalog only appears when `channel_catalog_enabled` is on ([Library](library.md#channel-catalog)).
 
 ## Reset Horde
 

@@ -697,7 +697,7 @@ export default function ChannelFeed({
         <LoadingIndicator
           label={
             searchBusy
-              ? searchStatusLabel || "Searching indexed catalog…"
+              ? searchStatusLabel || "Searching the video list…"
               : YOUTUBE_SEARCH_LOADING_LABEL
           }
           labelVisible

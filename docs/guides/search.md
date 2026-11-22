@@ -56,7 +56,7 @@ The channel header search:
 3. Then looks for **related** catalog embeddings so natural-language phrasing can surface uploads that don’t share the same words.
 4. If the channel search **YT** control is on, queries YouTube’s in-channel search and adds videos that are not already on screen. Empty dates/views on local cards are filled from those hits when known. Approximate YouTube ages (`3 years ago`) stay as that wording instead of a made-up calendar day; **Recent** sort still uses the approximate timestamp under the hood. The combined list is then sorted by **Recent** (publish date) or **Popular** (view count) using the controls at the top of the page. While that call is in flight, the feed shows a quiet **Loading YouTube results…** line.
 
-Status copy shows **Searching indexed catalog…**, then **Finding related matches…** while embeddings run, plus a match count when local results settle. If the catalog is still indexing, the feed notes that results may be incomplete.
+Status copy shows **Searching the video list…**, then **Finding related matches…** while embeddings run, plus a match count when local results settle. If the catalog is still indexing, the feed notes that results may be incomplete.
 
 When a hit is **not** obvious from the title, a **?** appears on the thumbnail. Hover (or tap) the **?** for a short explanation: a description/tags/notes snippet, a caption quote on downloaded videos, a YouTube comment, “related by search index,” or “Found on YouTube” for extras from YouTube results in channel search.
 
