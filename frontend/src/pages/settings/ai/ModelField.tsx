@@ -69,7 +69,9 @@ export default function ModelField({
           }}
           placeholder={placeholder}
           aria-label={label}
-          className={INPUT}
+          // A block, like the list it replaces: inline, the button after it
+          // shared its line with no gap.
+          className={`${INPUT} block`}
         />
       )}
       {models.length > 0 && (
