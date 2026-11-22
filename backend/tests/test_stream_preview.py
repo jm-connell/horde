@@ -139,3 +139,21 @@ def test_waiting_for_a_stuck_build_gives_up(builds, monkeypatch):
         stream_preview.resolve_preview_manifest(URL)
 
     assert caught.value.retry_after == 5
+
+
+def test_browsing_does_not_evict_the_stream_being_played(builds):
+    """Warm-ups add manifests; the cache must not drop the one a player uses."""
+
+    def entry(url: str, token: str) -> dict:
+        return {**_entry(token), "source_url": url}
+
+    playing = "https://youtu.be/playing"
+    stream_preview._store_manifest_entry(playing, entry(playing, "playing"))
+    for i in range(60):
+        hovered = f"https://youtu.be/hovered-{i}"
+        stream_preview._store_manifest_entry(hovered, entry(hovered, f"tok-{i}"))
+        # The player keeps fetching segments of the stream it plays.
+        stream_preview.lookup_preview_media("playing", "299")
+
+    media = stream_preview.lookup_preview_media("playing", "299")
+    assert media["direct_url"] == "https://cdn.example/playing.mp4"

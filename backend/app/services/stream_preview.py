@@ -780,11 +780,17 @@ def resolve_preview_stream(url: str, *, force: bool = False) -> dict[str, Any]:
 
 
 def _trim_manifest_cache_locked() -> None:
+    """Drop the least recently used sessions once there are too many.
+
+    Least recently used, not soonest to expire: hover warm-ups build manifests
+    while a stream plays, and the playing one (built first, but touched by every
+    media request) must not be the one that goes.
+    """
     if len(_preview_manifest_by_url) <= 48:
         return
     oldest = sorted(
         _preview_manifest_by_url.items(),
-        key=lambda item: item[1].get("expires_at", 0),
+        key=lambda item: item[1].get("used_at", 0),
     )[:16]
     for key, entry in oldest:
         _preview_manifest_by_url.pop(key, None)
@@ -794,6 +800,7 @@ def _trim_manifest_cache_locked() -> None:
 
 
 def _store_manifest_entry(url: str, entry: dict[str, Any]) -> None:
+    entry["used_at"] = time.time()
     with _preview_stream_lock:
         old = _preview_manifest_by_url.get(url)
         if old and old.get("token") and old["token"] != entry.get("token"):
@@ -910,6 +917,7 @@ def _resolve_shared_manifest(url: str) -> dict[str, Any]:
         with _preview_stream_lock:
             cached = _preview_manifest_by_url.get(url)
             if cached and cached.get("expires_at", 0) > now + 60:
+                cached["used_at"] = now
                 return dict(cached)
             inflight = _preview_refresh_inflight.get(url)
             leader = inflight is None
@@ -1164,6 +1172,8 @@ def lookup_preview_media(
     """
     with _preview_stream_lock:
         session = _preview_manifest_by_token.get(token)
+        if session is not None:
+            session["used_at"] = time.time()
         attempts = _preview_refresh_attempts.get(
             str(session.get("source_url") or "") if session else "", 0
         )
