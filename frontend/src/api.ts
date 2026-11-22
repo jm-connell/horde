@@ -29,6 +29,7 @@ export * from "./api/urls";
 import { aiApi } from "./api/ai";
 import { authApi } from "./api/auth";
 import { channelsApi } from "./api/channels";
+import { chatReplayApi } from "./api/chatReplay";
 import { commentsApi } from "./api/comments";
 import { compatApi } from "./api/compat";
 import { discoverApi } from "./api/discover";
@@ -53,6 +54,7 @@ export const api = {
   ...aiApi,
   ...askApi,
   ...commentsApi,
+  ...chatReplayApi,
   ...discoverApi,
   ...compatApi,
   ...systemApi,
