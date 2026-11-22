@@ -545,3 +545,81 @@ test("a busy chat is not read aloud over the video", async ({ page }) => {
   await openCedar(page);
   await expect(chatLog(page)).toHaveAttribute("aria-live", "off");
 });
+
+test("switching between two past streams shows only the new one's chat", async ({
+  page,
+}) => {
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const { id: cedar } = await openCedar(page, { hold });
+  const aurora = await libraryId(page, "Aurora Drift");
+  await page.route(new RegExp(`/api/videos/${aurora}$`), async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      json: {
+        ...(await response.json()),
+        source_url: "https://www.youtube.com/watch?v=auroradrft1",
+        live_status: "was_live",
+      },
+    });
+  });
+  await page.route(/\/api\/chat-replay\/youtube\/auroradrft1\?/, (route) =>
+    route.fulfill({
+      json: {
+        status: "ok",
+        items: [
+          { ...message(0), id: "aurora", runs: [{ text: "aurora chat" }] },
+        ],
+        next_cursor: null,
+      },
+    })
+  );
+  expect(cedar).not.toBe(aurora);
+  await expect(chatRegion(page)).toBeVisible(); // Cedar's chat, still loading
+  await page
+    .locator("aside")
+    .getByRole("link", { name: "Aurora Drift" })
+    .first()
+    .click();
+  await expect(chatLog(page)).toContainText("aurora chat");
+  release();
+  await page.waitForTimeout(1000);
+  await expect(chatLog(page)).toContainText("aurora chat");
+  await expect(page.getByText("message at 0.0s")).toHaveCount(0);
+});
+
+test.describe("phone turned sideways, with a dialog over it", () => {
+  test.use({
+    viewport: { width: 844, height: 390 },
+    isMobile: true,
+    hasTouch: true,
+  });
+
+  test("leaving the sideways view never leaves the page stuck unscrollable", async ({
+    page,
+  }) => {
+    await openCedar(page);
+    await expect(page.locator("[data-horde='watch-sideways']")).toBeVisible();
+    // Another scroll lock (a dialog) opens over it, saving what it found...
+    await page.evaluate(() => {
+      const w = window as unknown as { saved: string };
+      w.saved = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    });
+    // ...the phone turns upright, then the dialog closes and restores.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(page.locator("[data-horde='watch-sideways']")).toHaveCount(0);
+    await page.evaluate(() => {
+      document.body.style.overflow = (
+        window as unknown as { saved: string }
+      ).saved;
+    });
+    expect(
+      await page.evaluate(() => getComputedStyle(document.body).overflow)
+    ).not.toBe("hidden");
+  });
+});

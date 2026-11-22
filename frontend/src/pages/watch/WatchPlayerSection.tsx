@@ -42,16 +42,11 @@ export default function WatchPlayerSection({
   // Nothing behind the full-screen layout scrolls, and the nav bars step aside.
   useEffect(() => {
     if (!isSideways) return;
-    const { body, documentElement } = document;
-    const previous = [body.style.overflow, documentElement.style.overflow];
-    body.style.overflow = "hidden";
-    documentElement.style.overflow = "hidden";
-    body.classList.add("watch-sideways");
+    // A class, not inline styles: dialogs save and restore inline overflow,
+    // and restoring out of order would leave the page stuck unscrollable.
+    document.body.classList.add("watch-sideways");
     window.scrollTo(0, 0);
-    return () => {
-      [body.style.overflow, documentElement.style.overflow] = previous;
-      body.classList.remove("watch-sideways");
-    };
+    return () => document.body.classList.remove("watch-sideways");
   }, [isSideways]);
 
   const playerOuterClass = isMobile

@@ -835,6 +835,10 @@ body.watch-sideways header,
 body.watch-sideways [data-horde="tab-bar"] {
   display: none;
 }
+html:has(body.watch-sideways),
+body.watch-sideways {
+  overflow: hidden;
+}
 
 /* ─── UI motion (driven by data-* on <html>) ─── */
 

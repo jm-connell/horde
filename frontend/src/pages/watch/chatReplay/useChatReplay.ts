@@ -47,12 +47,15 @@ export function useChatReplay(
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const getPosition = useRef(getPositionSec);
+  // The video the state below was read for.
+  const stateFor = useRef<string | null>(null);
 
   useEffect(() => {
     getPosition.current = getPositionSec;
   }, [getPositionSec]);
 
   useEffect(() => {
+    stateFor.current = youtubeId;
     setItems([]);
     setErrorCode(null);
     if (!youtubeId) {
@@ -159,5 +162,15 @@ export function useChatReplay(
   }, [youtubeId, attempt, queryClient]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  // State belongs to the video it was read for: right after a switch, before
+  // the effect has reset it, the previous video's messages are not shown.
+  if (stateFor.current !== youtubeId) {
+    return {
+      status: youtubeId ? "loading" : "idle",
+      items: [],
+      errorCode: null,
+      retry,
+    };
+  }
   return { status, items, errorCode, retry };
 }
