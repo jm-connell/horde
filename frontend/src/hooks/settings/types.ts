@@ -226,6 +226,8 @@ export interface Settings {
   descriptionExpanded: boolean;
   /** Watch-page AI panel open/closed (persists across videos and restarts). */
   aiExpanded: boolean;
+  /** Watch-page comments box open/closed (one with nothing to show starts closed). */
+  commentsExpanded: boolean;
   /** History page stats band showing its details (charts) or only the tiles. */
   historyStatsExpanded: boolean;
   /** History stats also count the imported YouTube history (views, never time). */

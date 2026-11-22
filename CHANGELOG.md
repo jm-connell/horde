@@ -33,6 +33,10 @@ All notable changes to Horde are documented here. The format follows
   that moment instead of leaving it paused.
 - **The stream download button is a regular outlined button**, not an
   accent-filled one.
+- **The comments box folds away.** Its heading has an arrow, on phones and
+  desktops, and the choice is kept from video to video like the description's.
+  Comments that are turned off, hidden by YouTube, or not there yet start
+  folded instead of open on a "nothing here" line; opening it says why.
 - **No Chat button under a video.** Ask already answers from the video on
   its watch page, so the Summary section's **Chat ↗** is gone; open **Ask**
   in the top bar instead.

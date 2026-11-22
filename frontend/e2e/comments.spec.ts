@@ -138,6 +138,56 @@ test("a library video with nothing saved yet loads its top comments at once", as
   await expect(panel.getByRole("button", { name: /Load/ })).toHaveCount(0);
 });
 
+test("the comments box folds away with its arrow and stays folded", async ({
+  page,
+}) => {
+  await page.goto(`/watch/${await videoId(page, "Cedar Notes")}`);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  const toggle = panel.getByRole("button", { name: "Comments 2.4K" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const threads = threadsOf(panel);
+  await expect(threads.first()).toBeVisible();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  // Folded to no height: still in the page, but nowhere on screen.
+  await expect(threads.first()).not.toBeInViewport();
+
+  // Like the description and the summary, the choice is kept.
+  await page.reload();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(threads.first()).not.toBeInViewport();
+  await toggle.click();
+  await expect(threads.first()).toBeInViewport();
+});
+
+test("comments turned off start folded and say so when opened", async ({
+  page,
+}) => {
+  const id = await videoId(page, "Cedar Notes");
+  await page.route(new RegExp(`/api/videos/${id}/comments$`), async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      json: {
+        ...(await response.json()),
+        status: "disabled",
+        items: [],
+        total_count: null,
+        next_limit: null,
+      },
+    });
+  });
+  await page.goto(`/watch/${id}`);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  const toggle = panel.getByRole("button", { name: "Comments", exact: true });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  const note = panel.getByText("Comments are turned off for this video.");
+  await expect(note).not.toBeInViewport();
+  await toggle.click();
+  await expect(note).toBeInViewport();
+});
+
 test("a video without a YouTube id has no comments section", async ({
   page,
 }) => {

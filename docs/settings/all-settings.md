@@ -176,6 +176,7 @@ These are updated from the shell/player rather than dedicated Settings rows, but
 | `chaptersExpanded` | `true` | bool | Watch chapters panel | UI blob |
 | `descriptionExpanded` | `true` | bool | Watch description panel | UI blob |
 | `aiExpanded` | `true` | bool | Watch AI panel open/closed | UI blob |
+| `commentsExpanded` | `true` | bool | Watch comments box open/closed (comments that are off or empty start closed) | UI blob |
 | `helpChatData` | `"off"` | string | `off` \| `local` \| `cloud`: what Ask may read of this user's data (**Use my data**); `local` covers only a provider on the local network | UI blob |
 
 ---

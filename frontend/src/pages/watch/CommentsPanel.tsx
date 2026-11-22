@@ -1,10 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ApiError } from "../../api";
 import { button } from "../../components/buttons";
-import { HeartIcon, RefreshIcon } from "../../components/icons";
+import Collapse from "../../components/Collapse";
+import { ChevronIcon, HeartIcon, RefreshIcon } from "../../components/icons";
 import LinkifiedText from "../../components/LinkifiedText";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { useAuth } from "../../context/AuthContext";
+import { useSettings } from "../../hooks/useSettings";
 import {
   useLiveCommentSteps,
   useRefreshVideoComments,
@@ -43,6 +45,7 @@ function youtubeUrl(youtubeId: string, commentId?: string): string {
 
 const UNAVAILABLE_NOTE =
   "YouTube does not show this video's comments (it may be private, removed, members-only or age-restricted).";
+const NONE_NOTE = "No comments yet.";
 
 /** Why the panel has no (or only older) comments, from the saved status. */
 function savedNote(data: VideoComments, empty: boolean): string | null {
@@ -63,7 +66,7 @@ function savedNote(data: VideoComments, empty: boolean): string | null {
         ? UNAVAILABLE_NOTE
         : `YouTube no longer shows this video's comments; these were saved ${saved}.`;
     default:
-      return empty ? "No comments yet." : null;
+      return empty ? NONE_NOTE : null;
   }
 }
 
@@ -181,7 +184,8 @@ function Comment({
  * Comments under the video, in a box that scrolls on its own: the ones saved
  * with a library video, then more read from YouTube as the box nears its end
  * (past the saved ones). A streamed video has none saved, so its top comments
- * load from YouTube right away.
+ * load from YouTube right away. The heading folds the box away (kept, like the
+ * description's); comments that are off, or none at all, start folded.
  */
 export default function CommentsPanel({
   videoId,
@@ -193,6 +197,10 @@ export default function CommentsPanel({
   streamYoutubeId: string | null;
 }) {
   const headingId = useId();
+  const bodyId = useId();
+  const [settings, updateSettings] = useSettings();
+  // Opened by hand while there is nothing to show (see `nothing` below).
+  const [openedEmpty, setOpenedEmpty] = useState(false);
   const saved = useVideoComments(videoId);
   const youtubeId =
     videoId !== null ? (saved.data?.youtube_id ?? null) : streamYoutubeId;
@@ -256,15 +264,32 @@ export default function CommentsPanel({
   const liveFailed = !loadingLive && current?.isError === true;
 
   let note: string | null = null;
+  // Settled with nothing to show: off on YouTube, hidden there, or none yet
+  // (not while loading, and not a failure, which says what went wrong).
+  let nothing = false;
   const refused = liveSteps.find((q) => q.data && q.data.status !== "ok")?.data;
   if (refused && items.length === 0) {
     note =
       refused.status === "disabled"
         ? "Comments are turned off for this video."
         : UNAVAILABLE_NOTE;
+    nothing = true;
   } else if (saved.data && latestOk === null && !loadingLive) {
     note = savedNote(saved.data, items.length === 0);
+    nothing =
+      items.length === 0 &&
+      saved.data.status !== "pending" &&
+      saved.data.status !== "failed";
+  } else if (latestOk && items.length === 0 && !loadingLive) {
+    note = NONE_NOTE;
+    nothing = true;
   }
+  nothing = nothing && !refresh.isPending;
+  const expanded = nothing ? openedEmpty : settings.commentsExpanded;
+  const toggle = () => {
+    if (nothing) setOpenedEmpty((v) => !v);
+    else updateSettings({ commentsExpanded: !expanded });
+  };
   // Fetching and saving again (Edit details): the saved list replaces what a
   // live read showed, so scrolling for more starts again from the saved ones.
   const canRefresh =
@@ -290,17 +315,35 @@ export default function CommentsPanel({
       data-horde="comments"
       className="ui-panel rounded-xl border border-ink-700 bg-ink-900 px-4 py-3 ring-1 ring-ink-700"
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id={headingId} className="text-sm font-semibold text-gray-100">
-          Comments
-          {total !== null && total > 0 && (
-            <>
-              {" "}
-              <span className="font-normal text-muted">
-                {formatCompactCount(total)}
+      <div className="flex items-center justify-between gap-3">
+        <h2
+          id={headingId}
+          className="min-w-0 flex-1 text-sm font-semibold text-gray-100"
+        >
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={expanded}
+            aria-controls={bodyId}
+            className="ui-panel-toggle ui-interactive flex w-full items-center text-left hover:text-accent"
+          >
+            <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
+              <span>
+                Comments
+                {total !== null && total > 0 && (
+                  <>
+                    {" "}
+                    <span className="font-normal text-muted">
+                      {formatCompactCount(total)}
+                    </span>
+                  </>
+                )}
               </span>
-            </>
-          )}
+              <ChevronIcon
+                className={`text-muted transition-transform duration-200 ease-fluid ${expanded ? "rotate-180" : ""}`}
+              />
+            </span>
+          </button>
         </h2>
         <div className="flex items-center gap-3">
           {canRefresh && (
@@ -324,63 +367,74 @@ export default function CommentsPanel({
         </div>
       </div>
 
-      {saved.isError && (
-        <p className="mt-2 text-sm text-muted">Could not load the comments.</p>
-      )}
-      {note && <p className="mt-2 text-sm text-muted">{note}</p>}
+      {/* Room at the sides for the box's focus ring, which the fold clips. */}
+      <Collapse open={expanded} className="-mx-1">
+        <div id={bodyId} className="px-1 pb-1">
+          {saved.isError && (
+            <p className="mt-2 text-sm text-muted">
+              Could not load the comments.
+            </p>
+          )}
+          {note && <p className="mt-2 text-sm text-muted">{note}</p>}
 
-      {items.length > 0 && youtubeId && (
-        <div
-          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)
-          tabIndex={0}
-          aria-label="Comment threads"
-          className="horde-scrollbar mt-3 max-h-[min(36rem,70vh)] overflow-y-auto rounded-md pr-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <ol data-horde="comment-threads" className="space-y-4">
-            {items.slice(0, shown).map((c) => (
-              <Comment key={c.id} comment={c} youtubeId={youtubeId} />
-            ))}
-          </ol>
-          {(canShowMore || canReadMore) &&
-            !loadingLive &&
-            !liveFailed &&
-            !refresh.isPending && (
-              <MoreOnScroll
-                onMore={more}
-                armKey={`${shown}:${items.length}:${limits.length}`}
-              />
-            )}
-          {loadingLive && (
-            <LoadingIndicator label="Loading more comments" className="py-3" />
+          {items.length > 0 && youtubeId && (
+            <div
+              // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)
+              tabIndex={0}
+              aria-label="Comment threads"
+              className="horde-scrollbar mt-3 max-h-[min(36rem,70vh)] overflow-y-auto rounded-md pr-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              <ol data-horde="comment-threads" className="space-y-4">
+                {items.slice(0, shown).map((c) => (
+                  <Comment key={c.id} comment={c} youtubeId={youtubeId} />
+                ))}
+              </ol>
+              {expanded &&
+                (canShowMore || canReadMore) &&
+                !loadingLive &&
+                !liveFailed &&
+                !refresh.isPending && (
+                  <MoreOnScroll
+                    onMore={more}
+                    armKey={`${shown}:${items.length}:${limits.length}`}
+                  />
+                )}
+              {loadingLive && (
+                <LoadingIndicator
+                  label="Loading more comments"
+                  className="py-3"
+                />
+              )}
+            </div>
+          )}
+
+          {refresh.isError && (
+            <p className="mt-3 text-sm text-warning" role="status">
+              {liveError(refresh.error)}
+            </p>
+          )}
+          {liveFailed && current && (
+            <p className="mt-3 text-sm text-warning" role="status">
+              {liveError(current.error)}
+            </p>
+          )}
+          {(loadingLive || refresh.isPending) && items.length === 0 && (
+            <LoadingIndicator className="py-3" />
+          )}
+
+          {liveFailed && current && items.length > 0 && (
+            <div className="mt-3">
+              <button
+                type="button"
+                className={button("secondary", "xs")}
+                onClick={() => void current.refetch()}
+              >
+                Try again
+              </button>
+            </div>
           )}
         </div>
-      )}
-
-      {refresh.isError && (
-        <p className="mt-3 text-sm text-warning" role="status">
-          {liveError(refresh.error)}
-        </p>
-      )}
-      {liveFailed && current && (
-        <p className="mt-3 text-sm text-warning" role="status">
-          {liveError(current.error)}
-        </p>
-      )}
-      {(loadingLive || refresh.isPending) && items.length === 0 && (
-        <LoadingIndicator className="py-3" />
-      )}
-
-      {liveFailed && current && items.length > 0 && (
-        <div className="mt-3">
-          <button
-            type="button"
-            className={button("secondary", "xs")}
-            onClick={() => void current.refetch()}
-          >
-            Try again
-          </button>
-        </div>
-      )}
+      </Collapse>
     </section>
   );
 }
