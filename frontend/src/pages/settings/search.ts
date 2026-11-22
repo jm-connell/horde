@@ -190,7 +190,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "ai",
     pane: "jobs",
     keywords:
-      "when to run schedule process run all recent full embeds embeddings rebuild re-embed tags categories timer automatic catch up run now queue pause resume individual steps whole library gpu jobs embedded idle embed missing",
+      "when to run schedule process run all recent full embeds embeddings rebuild re-embed tags categories timer automatic catch up run now queue pause resume individual steps whole library gpu jobs embedded idle embed missing index missing reindex rebuild indexes",
   },
   {
     tab: "ai",
