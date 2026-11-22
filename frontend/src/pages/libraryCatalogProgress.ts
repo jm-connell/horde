@@ -71,7 +71,7 @@ export function formatMatchReasonTip(
     return quoted ? `In a YouTube comment: ${quoted}` : "In a YouTube comment.";
   }
   if (reason.source === "related") {
-    return "Related by search index from the title and description.";
+    return "Similar in meaning to the title and description.";
   }
   if (reason.source === "youtube") {
     return "Found on YouTube (not in the local catalog).";

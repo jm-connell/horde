@@ -47,7 +47,7 @@ export function useAiPanes(core: AiCore, paneState: AiPaneState) {
       refreshAiStatus();
       if (result.embed_model_changed) {
         setReindexPrompt(
-          "Embedding model changed with this workload. Rebuild search indexes so semantic search and categories use the new model? Categories refresh automatically when indexing finishes."
+          "Embedding model changed with this workload. Re-embed the library so semantic search and categories use the new model? Categories refresh automatically when it finishes."
         );
       } else {
         setReindexPrompt(null);
@@ -61,7 +61,7 @@ export function useAiPanes(core: AiCore, paneState: AiPaneState) {
     }
   };
 
-  /** Save a model choice; a new embedding model offers to rebuild the indexes. */
+  /** Save a model choice; a new embedding model offers to re-embed the library. */
   const saveModels = async (patch: {
     chat_model?: string;
     help_model?: string;
@@ -74,7 +74,7 @@ export function useAiPanes(core: AiCore, paneState: AiPaneState) {
     await saveAi(patch);
     if (embedChanged && prevEmbed) {
       setReindexPrompt(
-        "Embedding model changed. Rebuild search indexes so semantic search, related videos, and category shelves use the new model? Categories refresh automatically when indexing finishes."
+        "Embedding model changed. Re-embed the library so semantic search, related videos, and category shelves use the new model? Categories refresh automatically when it finishes."
       );
       refreshAiStatus();
       return;

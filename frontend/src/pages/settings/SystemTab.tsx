@@ -94,15 +94,14 @@ export default function SystemTab() {
             "yt-dlp",
             "activity",
             "channel catalog",
-            "index",
+            "video list",
             "queue",
             "ai process",
             "metadata sync",
             "refresh catalogs",
-            "full reindex",
             "full relist",
             "gpu jobs",
-            "index missing"
+            "embed missing"
           )
         }
       >

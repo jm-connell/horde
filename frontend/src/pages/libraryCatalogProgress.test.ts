@@ -178,7 +178,7 @@ describe("formatMatchReasonTip", () => {
       )
     ).toBe("In a YouTube comment: “the wifi trick at 3:10”");
     expect(formatMatchReasonTip({ source: "related" }, "wifi")).toBe(
-      "Related by search index from the title and description."
+      "Similar in meaning to the title and description."
     );
     expect(formatMatchReasonTip({ source: "youtube" }, "paint")).toBe(
       "Found on YouTube (not in the local catalog)."
