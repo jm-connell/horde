@@ -177,9 +177,12 @@ def _open(yt_id: str, url: str, with_cookies: bool) -> Opened:
         headers["content-type"] = "application/json"
         chat_page = ie._download_webpage(CHAT_PAGE_URL.format(token), yt_id, note=False)
         data = _dict(ie.extract_yt_initial_data(yt_id, chat_page, fatal=False))
-        first = chunk_from(
-            _dict(_dict(data.get("continuationContents")).get("liveChatContinuation"))
-        )
+        lcc = _dict(data.get("continuationContents")).get("liveChatContinuation")
+        if not isinstance(lcc, dict):
+            # YouTube changed the page (or served a consent page): an error the
+            # viewer can retry, not a chat that stays empty.
+            raise ChatReplayError(FAILED, "The chat replay page holds no chat")
+        first = chunk_from(lcc)
     handle = ChatHandle(
         yt_id=yt_id,
         api_key=api_key,
@@ -202,6 +205,7 @@ def open_chat(yt_id: str) -> Opened:
     except Exception as exc:
         if with_cookies or not should_retry_with_cookies({}, exc):
             raise _classified(exc, url) from exc
+        logger.debug("Chat replay for %s: retrying with cookies", url, exc_info=True)
     try:
         opened = _open(yt_id, url, True)
     except ChatReplayError:

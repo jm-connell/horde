@@ -126,3 +126,69 @@ def test_preview_meta_api_passes_live_status(client, monkeypatch):
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["live_status"] == "was_live"
+
+
+def test_a_refresh_never_moves_a_file_off_post_live(monkeypatch, session, add_video):
+    """A file downloaded while YouTube was still processing the stream is only
+    its last hours: it stays post_live (no chat) whatever YouTube says later."""
+    from app.services import metadata_sync
+
+    partial = add_video(
+        source_url="https://www.youtube.com/watch?v=pppppppppp1",
+        live_status="post_live",
+    )
+    upcoming = add_video(
+        source_url="https://www.youtube.com/watch?v=pppppppppp2",
+        live_status="is_upcoming",
+    )
+    ids = {partial.id: "post_live", upcoming.id: "was_live"}
+    monkeypatch.setattr(
+        metadata_sync,
+        "_extract_metadata",
+        lambda url: {"title": "t", "live_status": "was_live"},
+    )
+    for video_id in ids:
+        metadata_sync.refresh_video_metadata(video_id, fields=["thumbnails"])
+    with Session(session.get_bind()) as fresh:
+        assert {i: fresh.get(Video, i).live_status for i in ids} == ids
+
+
+def test_backfill_copies_only_settled_values(tmp_dirs):
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+    from tests.test_database_migrate import _insert_video
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0035_kb_keep_indexed_videos")
+    statuses = {
+        "aaaaaaaaaa1": "post_live",
+        "aaaaaaaaaa2": "is_upcoming",
+        "aaaaaaaaaa3": "not_live",
+    }
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO channel_catalogs (id, channel_url, status, indexed_count, "
+                "complete, max_videos, updated_at) VALUES "
+                "(1, 'https://www.youtube.com/@a', 'idle', 1, 0, 1000, "
+                "'2024-01-01 00:00:00')"
+            )
+        )
+        for n, (yt, status) in enumerate(statuses.items(), start=1):
+            _insert_video(conn, n, yt, "[]", f"a/{yt}.mp4", None, youtube_id=yt)
+            conn.execute(
+                text(
+                    "INSERT INTO channel_catalog_videos (catalog_id, yt_id, url, "
+                    "live_status, position, indexed_at) VALUES (1, :id, 'u', :s, 0, "
+                    "'2024-01-01 00:00:00')"
+                ),
+                {"id": yt, "s": status},
+            )
+    init_db()
+    with engine.connect() as conn:
+        rows = dict(
+            conn.execute(text("SELECT youtube_id, live_status FROM videos")).fetchall()
+        )
+    assert rows == {"aaaaaaaaaa1": None, "aaaaaaaaaa2": None, "aaaaaaaaaa3": "not_live"}

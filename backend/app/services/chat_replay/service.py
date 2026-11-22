@@ -21,14 +21,14 @@ from sqlmodel import Session, col
 
 from ...context import current, get_engine
 from ...models import Video
-from ..comments.fetch import RETRY, UNAVAILABLE
+from ..comments.fetch import FAILED, RETRY, UNAVAILABLE
 from . import youtube
 from .parse import ChatItem
 from .runtime import PAUSE_ON_LIMIT_SEC
 from .youtube import ChatHandle, ChatReplayError, Chunk, Opened
 
 #: ``<end_ms>~<YouTube replay token>``.
-CURSOR_RE = re.compile(r"\d{1,9}~[A-Za-z0-9_%=-]{1,4096}")
+CURSOR_RE = re.compile(r"\d{1,9}~[A-Za-z0-9_%=+/-]{1,4096}")
 #: Jumps within this many milliseconds of each other share a cached chunk.
 AT_BUCKET_MS = 5000
 #: A continuation asks for a little before the last message, as YouTube's own
@@ -78,18 +78,27 @@ def _opened(yt_id: str) -> Opened:
 def _guarded(
     yt_id: str, read: Callable[[ChatHandle, Chunk | None], ChatPage]
 ) -> ChatPage:
-    runtime = current().chat_replay
+    ctx = current()
+    if ctx.e2e:
+        # The browser suite mocks this route; the server never reaches YouTube.
+        return ChatPage("none", [], None)
+    runtime = ctx.chat_replay
     if runtime.seconds_paused() > 0:
         raise ChatReplayError(RETRY)
     try:
         with runtime.video_lock(yt_id):
             opened = _opened(yt_id)
-            if opened.handle is None:
+            # Only a finished stream: while YouTube is still processing one
+            # (post_live) its video runs on a timeline the chat does not match.
+            if opened.handle is None or opened.live_status not in (None, "was_live"):
                 return ChatPage("none", [], None)
             return read(opened.handle, opened.first)
     except ChatReplayError as exc:
         if exc.status == UNAVAILABLE:
             return ChatPage("unavailable", [], None)
+        if exc.status in (RETRY, FAILED):
+            # Open afresh next time: the tokens may be what failed.
+            runtime.opened_drop(yt_id)
         if exc.status == RETRY:
             runtime.pause(PAUSE_ON_LIMIT_SEC)
         raise
@@ -100,12 +109,12 @@ def read_at(yt_id: str, at_ms: int) -> ChatPage:
 
     def read(handle: ChatHandle, first: Chunk | None) -> ChatPage:
         seek = handle.seek_token
-        if first is not None and (
-            first.end_ms is None or at_ms <= first.end_ms or seek is None
-        ):
+        if first is not None and first.end_ms is not None and at_ms <= first.end_ms:
             return _page(first)
         if seek is None:
-            # No way to jump (YouTube sent no seek token): nothing to show here.
+            # No way to jump (YouTube sent no seek token): show nothing here
+            # rather than the start of the chat, which the page would then
+            # read chunk by chunk up to this position.
             return ChatPage("ok", [], None)
         runtime = current().chat_replay
         key = (yt_id, f"at:{at_ms // AT_BUCKET_MS}")

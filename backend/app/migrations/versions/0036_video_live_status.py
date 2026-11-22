@@ -4,7 +4,9 @@
 ``post_live``, ...), or NULL until known. A past stream (``was_live``) gets
 chat replay on the watch page. Filled from the download's info, the metadata
 refresh and the chat replay check; here, from the channel video lists
-(``channel_catalog_videos``) where they already know the video. A plain
+(``channel_catalog_videos``) where they already know the video as a finished
+stream or not a stream (what they recorded while a stream was upcoming, live
+or still processing says nothing about the library file). A plain
 ``ADD COLUMN``: ``videos`` is not rebuilt, so its triggers and ``videos_fts``
 are untouched.
 
@@ -28,7 +30,8 @@ def upgrade() -> None:
     op.execute(
         "UPDATE videos SET live_status = ("
         "SELECT c.live_status FROM channel_catalog_videos c "
-        "WHERE c.yt_id = videos.youtube_id AND c.live_status IS NOT NULL LIMIT 1"
+        "WHERE c.yt_id = videos.youtube_id "
+        "AND c.live_status IN ('was_live', 'not_live') LIMIT 1"
         ") WHERE youtube_id IS NOT NULL AND live_status IS NULL"
     )
 

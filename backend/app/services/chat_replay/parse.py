@@ -19,6 +19,12 @@ from urllib.parse import urlsplit
 MAX_TEXT = 2000
 #: Characters of an author name.
 MAX_AUTHOR = 200
+#: Characters of any other short field (amount, header, alt text, emoji).
+MAX_FIELD = 200
+#: Characters of an item id.
+MAX_ID = 200
+#: Pieces (text and emoji) kept per message.
+MAX_RUNS = 200
 #: Hosts custom emoji, sticker and badge images may come from.
 IMAGE_HOSTS = frozenset({"yt3.ggpht.com", "yt3.googleusercontent.com"})
 
@@ -88,12 +94,28 @@ def _plain(text: Any) -> str | None:
     return joined.strip() or None
 
 
+def _short(text: str | None, limit: int = MAX_FIELD) -> str | None:
+    return text[:limit] if text else None
+
+
 def _safe_image(raw: Any) -> str | None:
-    if not isinstance(raw, str) or not raw:
+    # A backslash is a path separator to browsers but not to urlsplit, so
+    # "https://evil.example\\@yt3.ggpht.com" would pass a host check here and
+    # load from evil.example there: refuse it, and any user or port part.
+    if not isinstance(raw, str) or not raw or "\\" in raw:
         return None
     url: str = "https:" + raw if raw.startswith("//") else raw
-    parts = urlsplit(url)
-    if parts.scheme != "https" or parts.hostname not in IMAGE_HOSTS:
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return None
+    if (
+        parts.scheme != "https"
+        or parts.hostname not in IMAGE_HOSTS
+        or "@" in parts.netloc
+        or port is not None
+    ):
         return None
     return url
 
@@ -130,6 +152,8 @@ def _runs(message: Any) -> list[ChatRun]:
     runs: list[ChatRun] = []
     budget = MAX_TEXT
     for raw in _list(_dict(message).get("runs")):
+        if len(runs) >= MAX_RUNS:
+            break
         run = _dict(raw)
         text = run.get("text")
         if isinstance(text, str):
@@ -141,15 +165,16 @@ def _runs(message: Any) -> list[ChatRun]:
         if not emoji:
             continue
         shortcuts = [s for s in _list(emoji.get("shortcuts")) if isinstance(s, str)]
-        emoji_id = emoji.get("emojiId") if isinstance(emoji.get("emojiId"), str) else ""
+        raw_id = emoji.get("emojiId")
+        emoji_id: str = raw_id if isinstance(raw_id, str) else ""
         if emoji.get("isCustomEmoji") is True:
-            alt = shortcuts[0] if shortcuts else emoji_id
+            alt = (shortcuts[0] if shortcuts else emoji_id)[:MAX_FIELD]
             url = _largest_image(emoji.get("image"))
             runs.append(
                 ChatRun(emoji_url=url, emoji_alt=alt) if url else ChatRun(text=alt)
             )
         elif emoji_id:
-            runs.append(ChatRun(text=emoji_id))
+            runs.append(ChatRun(text=emoji_id[:MAX_FIELD]))
     return runs
 
 
@@ -162,9 +187,10 @@ def _item(
     renderer_key: str, renderer: dict[str, Any], offset_ms: int
 ) -> ChatItem | None:
     kind = _KINDS.get(renderer_key)
-    item_id = renderer.get("id")
-    if kind is None or not isinstance(item_id, str) or not item_id:
+    raw_id = renderer.get("id")
+    if kind is None or not isinstance(raw_id, str) or not raw_id:
         return None
+    item_id = raw_id[:MAX_ID]
     if kind == "gift":
         header = _dict(
             _dict(renderer.get("header")).get("liveChatSponsorshipsHeaderRenderer")
@@ -175,7 +201,7 @@ def _item(
             kind=kind,
             author=_author(header),
             badges=_badges(header),
-            header=_plain(header.get("primaryText")),
+            header=_short(_plain(header.get("primaryText"))),
         )
     item = ChatItem(
         id=item_id,
@@ -186,7 +212,7 @@ def _item(
         runs=_runs(renderer.get("message")),
     )
     if kind in ("paid", "sticker"):
-        item.amount = _plain(renderer.get("purchaseAmountText"))
+        item.amount = _short(_plain(renderer.get("purchaseAmountText")))
     if kind == "paid":
         item.color = _color(renderer.get("bodyBackgroundColor"))
     elif kind == "sticker":
@@ -194,14 +220,15 @@ def _item(
         item.sticker_url = _largest_image(sticker)
         label = _dict(_dict(sticker.get("accessibility")).get("accessibilityData"))
         item.sticker_alt = (
-            label.get("label") if isinstance(label.get("label"), str) else None
+            _short(label["label"]) if isinstance(label.get("label"), str) else None
         )
         item.color = _color(
             renderer.get("moneyChipBackgroundColor", renderer.get("backgroundColor"))
         )
     elif kind == "membership":
-        item.header = _plain(renderer.get("headerPrimaryText")) or _plain(
-            renderer.get("headerSubtext")
+        item.header = _short(
+            _plain(renderer.get("headerPrimaryText"))
+            or _plain(renderer.get("headerSubtext"))
         )
     return item
 

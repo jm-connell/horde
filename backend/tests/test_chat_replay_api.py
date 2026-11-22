@@ -163,3 +163,8 @@ def test_a_restricted_member_gets_only_allowed_channels(
 
 def test_requires_sign_in(anon_client):
     assert anon_client.get(URL).status_code == 401
+
+
+def test_a_cursor_with_any_base64_token_is_accepted(client, reads):
+    resp = client.get(URL, params={"cursor": "65000~ab+cd/ef=="})
+    assert resp.status_code == 200, resp.text

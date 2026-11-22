@@ -74,6 +74,10 @@ class ChatReplayRuntime:
                 oldest = min(self._opened, key=lambda k: self._opened[k][0])
                 del self._opened[oldest]
 
+    def opened_drop(self, yt_id: str) -> None:
+        with self._lock:
+            self._opened.pop(yt_id, None)
+
     def chunk_get(self, key: tuple[str, str]) -> Chunk | None:
         with self._lock:
             hit = self._chunks.get(key)

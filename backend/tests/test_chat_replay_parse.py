@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from app.services.chat_replay.parse import (
     MAX_AUTHOR,
     MAX_TEXT,
@@ -156,3 +158,64 @@ def test_tokens_continuation_and_live_status():
         == "not_live"
     )
     assert live_status_from_player_response({}) is None
+
+
+def _renderer(action: dict) -> dict:
+    item = action["replayChatItemAction"]["actions"][0]["addChatItemAction"]["item"]
+    return item[next(iter(item))]
+
+
+def test_every_text_field_is_capped():
+    from app.services.chat_replay.parse import MAX_FIELD, MAX_ID, MAX_RUNS
+
+    action = text_action("x", cid="i" * 5000)
+    renderer = _renderer(action)
+    renderer["message"]["runs"] = [
+        {"emoji": {"emojiId": "e" * 5000, "shortcuts": [":" + "s" * 5000 + ":"]}}
+    ] * 2000
+    paid = {
+        "replayChatItemAction": {
+            "videoOffsetTimeMsec": "1",
+            "actions": [
+                {
+                    "addChatItemAction": {
+                        "item": {
+                            "liveChatMembershipItemRenderer": {
+                                "id": "m",
+                                "headerPrimaryText": {"simpleText": "h" * 50_000},
+                            }
+                        }
+                    }
+                }
+            ],
+        }
+    }
+    text_item, member = parse_actions([action, paid])
+    assert len(text_item.id) == MAX_ID
+    assert len(text_item.runs) == MAX_RUNS
+    assert all(len(r.text or "") <= MAX_FIELD for r in text_item.runs)
+    assert member.header is not None and len(member.header) == MAX_FIELD
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://evil.example\\@yt3.ggpht.com/x",
+        "https://user@yt3.ggpht.com/x",
+        "https://yt3.ggpht.com:8443/x",
+        "https://yt3.ggpht.com\\x",
+    ],
+)
+def test_image_urls_that_could_point_elsewhere_are_dropped(url):
+    action = text_action("x")
+    _renderer(action)["message"]["runs"] = [
+        {
+            "emoji": {
+                "emojiId": "UC/a",
+                "isCustomEmoji": True,
+                "shortcuts": [":a:"],
+                "image": {"thumbnails": [{"url": url}]},
+            }
+        }
+    ]
+    assert parse_actions([action])[0].runs == [ChatRun(text=":a:")]

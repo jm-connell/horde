@@ -235,3 +235,150 @@ def test_chunk_end_counts_dropped_messages():
     }
     chunk = youtube.chunk_from(lcc)
     assert (chunk.items, chunk.end_ms, chunk.replay_token) == ([], 5000, "R")
+
+
+# --- Review fixes ----------------------------------------------------------------
+
+
+def test_no_seek_token_past_the_first_chunk_reads_nothing(monkeypatch, calls):
+    """Without a way to jump, never hand back the start of the chat for a later
+    position: the client would then read every chunk up to it."""
+
+    def open_without_seek(yt_id: str) -> Opened:
+        handle = _handle(yt_id)
+        handle.seek_token = None
+        return Opened("was_live", handle, FIRST)
+
+    monkeypatch.setattr(youtube, "open_chat", open_without_seek)
+    page = service.read_at(YT, 7_200_000)
+    assert (page.status, page.items, page.next_cursor) == ("ok", [], None)
+    assert calls.fetches == []
+    assert [i.id for i in service.read_at(YT, 10_000).items] == ["a", "b"]
+
+
+def test_an_empty_first_chunk_still_jumps(monkeypatch, calls):
+    empty_first = Chunk(items=[], replay_token=None, seek_token="SEEK", end_ms=None)
+    monkeypatch.setattr(
+        youtube,
+        "open_chat",
+        lambda yt_id: Opened("was_live", _handle(yt_id), empty_first),
+    )
+    service.read_at(YT, 7_200_000)
+    assert calls.fetches == [("SEEK", 7_200_000)]
+
+
+@pytest.mark.parametrize("status", ["post_live", "not_live", "is_live"])
+def test_only_a_finished_stream_has_chat(monkeypatch, calls, status):
+    monkeypatch.setattr(
+        youtube, "open_chat", lambda yt_id: Opened(status, _handle(yt_id), FIRST)
+    )
+    assert service.read_at(YT, 0).status == "none"
+
+
+def test_a_failed_read_opens_afresh_on_retry(monkeypatch, calls):
+    failures = iter([ChatReplayError(FAILED)])
+
+    def flaky(handle, token, offset_ms):
+        error = next(failures, None)
+        if error:
+            raise error
+        return Chunk(items=[], replay_token=None, seek_token=None, end_ms=None)
+
+    monkeypatch.setattr(youtube, "fetch_chunk", flaky)
+    with pytest.raises(ChatReplayError):
+        service.read_at(YT, 7_200_000)
+    service.read_at(YT, 7_200_000)
+    assert calls.opens == [YT, YT]
+
+
+def test_the_browser_suite_never_reaches_youtube(monkeypatch, calls, init_db):
+    monkeypatch.setattr(init_db["ctx"], "e2e", True)
+    assert service.read_at(YT, 0).status == "none"
+    assert calls.opens == []
+
+
+class _FakeIE:
+    """Just enough of yt-dlp's YoutubeBaseInfoExtractor for ``youtube._open``."""
+
+    _YT_INITIAL_PLAYER_RESPONSE_RE = "x"
+
+    def __init__(self, chat_data: dict) -> None:
+        self.chat_data = chat_data
+
+    def _download_webpage(self, url, video_id, note=None):
+        return "chat" if "live_chat_replay" in url else "watch"
+
+    def extract_yt_initial_data(self, video_id, page, fatal=True):
+        if page == "chat":
+            return self.chat_data
+        return {
+            "contents": {
+                "twoColumnWatchNextResults": {
+                    "conversationBar": {
+                        "liveChatRenderer": {
+                            "continuations": [
+                                {"reloadContinuationData": {"continuation": "R"}}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+
+    def _search_json(self, *args, **kwargs):
+        return {"videoDetails": {"isLiveContent": True}}
+
+    def extract_ytcfg(self, video_id, page):
+        return {"INNERTUBE_API_KEY": "k", "INNERTUBE_CONTEXT": {"client": {}}}
+
+    def generate_api_headers(self, **kwargs):
+        return {}
+
+
+def _fake_extractor(monkeypatch, chat_data: dict) -> None:
+    from contextlib import contextmanager
+
+    @contextmanager
+    def extractor(with_cookies):
+        yield _FakeIE(chat_data)
+
+    monkeypatch.setattr(youtube, "_extractor", extractor)
+
+
+def test_a_chat_page_youtube_no_longer_lays_out_is_a_failure(monkeypatch):
+    _fake_extractor(monkeypatch, {"something": "else"})
+    with pytest.raises(ChatReplayError) as err:
+        youtube.open_chat(YT)
+    assert err.value.status == FAILED
+
+
+def test_a_readable_chat_page_opens(monkeypatch):
+    _fake_extractor(
+        monkeypatch,
+        {"continuationContents": {"liveChatContinuation": {"actions": []}}},
+    )
+    opened = youtube.open_chat(YT)
+    assert opened.live_status == "was_live"
+    assert opened.handle is not None
+
+
+def test_the_first_failure_before_retrying_with_cookies_is_logged(monkeypatch, caplog):
+    attempts: list[bool] = []
+
+    def open_once(yt_id, url, with_cookies):
+        attempts.append(with_cookies)
+        if not with_cookies:
+            raise RuntimeError("Sign in to confirm your age")
+        return Opened("was_live", None, None)
+
+    monkeypatch.setattr(youtube, "_open", open_once)
+    monkeypatch.setattr(youtube, "should_retry_with_cookies", lambda opts, exc: True)
+    monkeypatch.setattr(youtube, "remember_cookie_required", lambda url: None)
+    with caplog.at_level("DEBUG", logger="app.services.chat_replay.youtube"):
+        youtube.open_chat(YT)
+    assert attempts == [False, True]
+    assert any(r.exc_info for r in caplog.records)
+
+
+def test_cursors_take_any_base64_token():
+    assert service.CURSOR_RE.fullmatch("65000~op2w0wR+bA/c=_-%3D")

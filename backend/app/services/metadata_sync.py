@@ -173,9 +173,15 @@ def refresh_video_metadata(
 
         apply_source_chapters(video, info, replace_empty=False)
 
-        # Whether it was a livestream (chat replay), whatever fields were asked for.
+        # Whether it was a livestream (chat replay), whatever fields were asked
+        # for. A file downloaded while YouTube was still processing the stream
+        # (post_live) holds only its last hours: it keeps that value for good.
         live_status = entry_live_status(info)
-        if live_status is not None and live_status != video.live_status:
+        if (
+            live_status is not None
+            and video.live_status != "post_live"
+            and live_status != video.live_status
+        ):
             video.live_status = live_status
 
         video.metadata_synced_at = datetime.now(UTC)
