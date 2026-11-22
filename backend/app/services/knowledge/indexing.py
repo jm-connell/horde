@@ -10,7 +10,7 @@ from sqlmodel import Session, col, func, select
 from ...models import KbChannel, KbChannelStatus, KbChunk, KbVideo, require_id, utcnow
 from ..subtitle_retry import backoff_seconds
 from . import captions, chunking
-from .listing import Listing
+from .listing import MAX_PER_TAB, Listing
 
 # Failures other than rate limits: retry this many times, an hour apart and growing.
 MAX_ATTEMPTS = 3
@@ -35,8 +35,10 @@ def apply_listing(
     session: Session, channel: KbChannel, listing: Listing, limit: int
 ) -> int:
     """Upsert the listed uploads; returns how many are new. Rows that left the
-    listing are kept (a video YouTube no longer lists) unless they sit beyond
-    ``limit``: those are older than what the channel indexes now, and go."""
+    listing go when they are older than what the channel indexes now: their
+    tab (uploads or streams) listed the whole limit, so new uploads pushed them
+    out, or they sat beyond a lowered limit. Otherwise they are kept (a video
+    YouTube no longer lists, or a listing that ended early)."""
     channel_id = require_id(channel)
     existing = {
         v.yt_id: v
@@ -74,12 +76,18 @@ def apply_listing(
     )
     session.commit()
     listed = {upload.yt_id for upload in listing.uploads}
+    cap = min(limit, MAX_PER_TAB)
+    full = {
+        is_stream
+        for is_stream in (False, True)
+        if sum(1 for u in listing.uploads if u.is_stream == is_stream) >= cap
+    }
     delete_videos(
         session,
         [
             require_id(row)
             for yt_id, row in existing.items()
-            if yt_id not in listed and row.position >= limit
+            if yt_id not in listed and (row.is_stream in full or row.position >= limit)
         ],
     )
     return added

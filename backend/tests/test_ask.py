@@ -724,6 +724,38 @@ def test_a_video_youtube_stopped_listing_is_kept_within_the_limit(session):
     assert len(session.exec(select(KbVideo)).all()) == 3
 
 
+def test_new_uploads_push_the_oldest_past_the_limit(session):
+    """A listing that fills the limit leaves out what new uploads pushed past
+    it: those go, though their last position was inside the limit."""
+    channel = _channel(session)
+    indexing.apply_listing(session, channel, listing.Listing(uploads=_uploads(5)), 5)
+    newer = [
+        listing.Upload(f"n{i:010d}", f"New {i}", None, None, False, i) for i in range(3)
+    ]
+    kept = [
+        listing.Upload(u.yt_id, u.title, None, None, False, 3 + i)
+        for i, u in enumerate(_uploads(2))
+    ]
+    indexing.apply_listing(session, channel, listing.Listing(uploads=newer + kept), 5)
+    rows = session.exec(select(KbVideo)).all()
+    assert sorted(r.yt_id for r in rows) == sorted(u.yt_id for u in newer + kept)
+    assert sorted(r.position for r in rows) == [0, 1, 2, 3, 4]
+
+
+def test_a_full_streams_tab_does_not_trim_uploads(session):
+    channel = _channel(session)
+    indexing.apply_listing(session, channel, listing.Listing(uploads=_uploads(3)), 3)
+    streams = [
+        listing.Upload(f"s{i:010d}", f"Stream {i}", None, None, True, i)
+        for i in range(3)
+    ]
+    # Uploads came back short of the limit: the unlisted one is kept.
+    indexing.apply_listing(
+        session, channel, listing.Listing(uploads=_uploads(2) + streams), 3
+    )
+    assert len(session.exec(select(KbVideo)).all()) == 6
+
+
 def test_limit_is_validated_and_needs_the_permission(client, member_client, session):
     channel = _channel(session)
     url = f"/api/ask/channels/{channel.id}"
