@@ -1,6 +1,7 @@
 import BackgroundSection from "./appearance/BackgroundSection";
 import FontSection from "./appearance/FontSection";
 import MotionSection from "./appearance/MotionSection";
+import NavBarSection from "./appearance/NavBarSection";
 import PanelsSection from "./appearance/PanelsSection";
 import TabBarSection from "./appearance/TabBarSection";
 import ThemeSection from "./appearance/ThemeSection";
@@ -16,6 +17,7 @@ const SECTIONS = [
   { anchor: "background", label: "Background" },
   { anchor: "motion", label: "Motion" },
   { anchor: "panels", label: "Panels" },
+  { anchor: "nav-bar", label: "Top bar" },
   { anchor: "tab-bar", label: "Tab bar" },
   { anchor: "custom-css", label: "Custom CSS" },
 ] as const;
@@ -68,6 +70,7 @@ export default function AppearanceTab() {
       <BackgroundSection appearance={appearance} />
       <MotionSection appearance={appearance} />
       <PanelsSection />
+      <NavBarSection />
       <TabBarSection />
       <CustomCssSection />
     </>

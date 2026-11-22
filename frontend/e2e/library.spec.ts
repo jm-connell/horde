@@ -422,6 +422,45 @@ test("on a phone a feed card does not reserve a second title line", async ({
   expect(title!.height).toBeLessThan(30);
 });
 
+test("on a phone every Continue watching card keeps its outline", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.route(/\/api\/history\/continue-streams$/, (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: "streamleft1",
+            url: "https://www.youtube.com/watch?v=streamleft1",
+            title: "Streamed halfway last night",
+            channel: "Stream Channel",
+            duration: 3600,
+            position_sec: 1800,
+          },
+        ],
+        next_cursor: null,
+      },
+    })
+  );
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
+  const row = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Continue watching" }),
+  });
+  const libraryCard = row.locator("[data-horde='video-card']").first();
+  const streamCard = row
+    .locator("[data-continue-stream='streamleft1'] .ui-card")
+    .first();
+  await expect(libraryCard).toBeVisible();
+  await expect(streamCard).toBeVisible();
+  const outline = (el: Element) => getComputedStyle(el).boxShadow;
+  const libraryOutline = await libraryCard.evaluate(outline);
+  expect(libraryOutline).not.toBe("none");
+  // A streamed video's card is boxed like the library's, not a bare feed row.
+  expect(await streamCard.evaluate(outline)).toBe(libraryOutline);
+});
+
 test("search keeps YouTube's places while it loads", async ({ page }) => {
   // Force YouTube search on and answer it only when the test says so.
   await page.route("**/api/settings", async (route) => {
@@ -535,3 +574,39 @@ const YOUTUBE_HARBOR = {
   has_more: false,
   youtube_video_search_effective: true,
 };
+
+test.describe("on a touch phone", () => {
+  test.use({
+    viewport: { width: 412, height: 839 },
+    isMobile: true,
+    hasTouch: true,
+  });
+
+  test("a card's preview stops once its picture scrolls off the middle", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("tab", { name: "Library", exact: true }).click();
+    const card = videoCard(page, "Paper Kites").first();
+    await expect(card).toBeVisible();
+    /** Scroll so the picture's top sits `offset` px from the screen's middle. */
+    const placePicture = (offset: number) =>
+      card.evaluate((el, at) => {
+        const frame = el.querySelector("[data-preview-frame]")!;
+        const top = frame.getBoundingClientRect().top;
+        window.scrollBy(0, top - (window.innerHeight / 2 + at));
+      }, offset);
+
+    // The picture over the middle of the screen plays.
+    const height = await card
+      .locator("[data-preview-frame]")
+      .evaluate((el) => el.getBoundingClientRect().height);
+    await placePicture(-height / 2);
+    await expect(card).toHaveAttribute("data-preview-active", "true");
+
+    // Its title still covers the middle, but the picture has gone past it.
+    await placePicture(-height - 20);
+    await expect(card).not.toHaveAttribute("data-preview-active", "true");
+    await expect(page.locator("[data-preview-active='true']")).toHaveCount(0);
+  });
+});

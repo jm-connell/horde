@@ -34,8 +34,6 @@ interface HelpChatValue {
   clearDetail: (detail: PageDetail) => void;
   /** Open the panel on a new conversation about this Ask channel. */
   askChannel: (channel: AskScopeChannel) => void;
-  /** Open the panel on a new conversation about this video ("Chat" on Watch). */
-  askVideo: (video: AskVideo) => void;
   /** Set by a page about one channel (see `useAskPageChannel`). */
   setPageChannel: (page: PageChannel | null) => void;
   /** Set by the watch page (see `useAskPageVideo`). */
@@ -78,7 +76,7 @@ interface HostValue {
   pageDetail: () => PageDetail | null;
   /** True once the user opened it in this page load (not restored on reload). */
   openedHere: boolean;
-  /** The latest "Ask <channel>" or "Chat" request; a new one starts a new conversation. */
+  /** The latest "Ask <channel>" request; a new one starts a new conversation. */
   sourceRequest: SourceRequest | null;
   /** The channel the current page is about, if any. */
   pageChannel: PageChannel | null;
@@ -90,13 +88,9 @@ interface HostValue {
   consumeSourceRequest: (seq: number) => void;
 }
 
-/**
- * A request to start a conversation about a channel or a video (one of the
- * two; `seq` tells repeats apart).
- */
+/** A request to start a conversation about a channel (`seq` tells repeats apart). */
 export interface SourceRequest {
-  channel?: AskScopeChannel;
-  video?: AskVideo;
+  channel: AskScopeChannel;
   seq: number;
 }
 
@@ -236,13 +230,6 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     },
     [setOpen]
   );
-  const askVideo = useCallback(
-    (video: AskVideo) => {
-      setSourceRequest((prev) => ({ video, seq: (prev?.seq ?? 0) + 1 }));
-      setOpen(true);
-    },
-    [setOpen]
-  );
   const setFrame = useCallback(
     (frame: HelpFrame) => setState((s) => ({ ...s, frame })),
     []
@@ -268,7 +255,6 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setDetail,
       clearDetail,
       askChannel,
-      askVideo,
       setPageChannel,
       setPageVideo,
       algorithmOpen: !!state.algorithm,
@@ -283,7 +269,6 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setDetail,
       clearDetail,
       askChannel,
-      askVideo,
       state.algorithm,
       setAlgorithmOpen,
     ]

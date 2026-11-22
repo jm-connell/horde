@@ -122,6 +122,8 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `uiFont` | `"oxanium"` | string | Builtin id or saved custom id | UI blob |
 | `customFonts` | `[]` | array | Saved URL/file fonts | UI blob |
 | `tabBarItems` | `["home","search","download","chat"]` | array | Up to 5 of `home` \| `search` \| `download` \| `chat` \| `playlists` \| `history` \| `offline` \| `settings`, in order | UI blob |
+| `searchHistory` | `[]` | array | The account's recent searches in the top bar's box, newest first, up to 20 (each up to 200 characters) | UI blob |
+| `navBarItems` | every page | array | `home` \| `playlists` \| `subscriptions` \| `history` \| `offline` \| `download` \| `import` \| `settings`, in order; `settings` is always kept | UI blob |
 
 ### Library / downloads (UI)
 
@@ -176,6 +178,7 @@ These are updated from the shell/player rather than dedicated Settings rows, but
 | `chaptersExpanded` | `true` | bool | Watch chapters panel | UI blob |
 | `descriptionExpanded` | `true` | bool | Watch description panel | UI blob |
 | `aiExpanded` | `true` | bool | Watch AI panel open/closed | UI blob |
+| `commentsExpanded` | `true` | bool | Watch comments box open/closed (comments that are off or empty start closed) | UI blob |
 | `helpChatData` | `"off"` | string | `off` \| `local` \| `cloud`: what Ask may read of this user's data (**Use my data**); `local` covers only a provider on the local network | UI blob |
 
 ---

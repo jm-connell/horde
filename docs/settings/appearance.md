@@ -229,6 +229,12 @@ Sliders are always visible. First install defaults to **50%** transparency and *
 
 Legacy `translucentPanels` (bool) is still read: `false` → both sliders 0%; `true` keeps the saved strength and converts the old coupled blur.
 
+## Top bar (`navBarItems`)
+
+On a wider screen, the bar at the top of every page links to Home, Playlists, Subscriptions, History, Offline, Download, Import and Settings. **Top bar** chooses which of these it shows and in what order: move a page earlier or later, remove it, or add it back from the list below. **Reset** puts back every page in the default order. The choice is saved with your account, so it is the same on every device you sign in on.
+
+**Settings** cannot be removed (nothing else in a wide bar leads to it); the **HORDE** logo goes home whether or not **Home** is shown. A page this account cannot use (Download and Import need the download permission), or one that needs the server while Horde is offline, is left out, and **Offline** shows only when this device has offline downloads or is offline. Whether the bar or the **☰** menu shows is decided by whether *every* page's link would fit, not just the chosen ones, so a phone (in either orientation) and a narrow window always get the menu, which lists every page whatever is chosen here.
+
 ## Tab bar (`tabBarItems`)
 
 On a phone, the installed app (added to the Home Screen) shows a floating bar of tabs at the bottom of the screen. **Tab bar** chooses which tabs it shows and in what order (up to 5): move a tab earlier or later, remove it, or add one from the list below. **Reset** puts back the default.

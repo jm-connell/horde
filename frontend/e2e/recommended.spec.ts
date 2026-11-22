@@ -395,6 +395,42 @@ test("Recommended can be browsed by AI category", async ({ page }) => {
   await expect(shelf).toBeVisible();
 });
 
+test("Refresh shows that new picks are loading until they arrive", async ({
+  page,
+}) => {
+  // A phone, where the feed runs well past one screen.
+  await page.setViewportSize({ width: 412, height: 839 });
+  await openRecommended(page);
+  // Hold the reshuffled page (it carries a seed) until the test lets it go.
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/api\/discover\/feed\?.*seed=/, async (route) => {
+    await held;
+    try {
+      await route.continue();
+    } catch {
+      // the page closed while the answer was held
+    }
+  });
+  const refresh = page.getByRole("button", { name: "Refresh" });
+  await refresh.click();
+  const loading = page.getByRole("status").filter({
+    hasText: "Loading new picks",
+  });
+  await expect(loading).toBeVisible();
+  await expect(refresh).toHaveAttribute("aria-busy", "true");
+  // The old picks stay on screen meanwhile.
+  await expect(page.getByText(FOUND)).toBeVisible();
+
+  // Scrolled down the dimmed cards, the note is still in sight.
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(loading).toBeInViewport();
+
+  release();
+  await expect(loading).toHaveCount(0);
+  await expect(refresh).not.toHaveAttribute("aria-busy", "true");
+});
+
 test("a thumbnail that fails to load leaves the card's plain placeholder", async ({
   page,
 }) => {

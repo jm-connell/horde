@@ -7,6 +7,18 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Recent searches.** Click into the empty search box and your recent
+  searches open under it (four at a time, scrolling for more): pick one to
+  search again, or remove it with ×. They are saved with your account, so
+  they follow you to other devices and stay private to you.
+- **Choose the top bar's pages.** Settings → Appearance → **Top bar** picks
+  which pages the bar at the top links to on a wider screen and puts them
+  in order, like **Tab bar** does for the installed app on a phone. The
+  choice is saved with your account, so it follows you to other devices.
+  Settings always stays, and the ☰ menu on a phone still lists every page.
+
 ### Changed
 
 - **Ask indexes every subscription, up to a limit.** Subscribing turns Ask
@@ -47,12 +59,32 @@ All notable changes to Horde are documented here. The format follows
   that moment instead of leaving it paused.
 - **The stream download button is a regular outlined button**, not an
   accent-filled one.
+- **The comments box folds away.** Its heading has an arrow, on phones and
+  desktops, and the choice is kept from video to video like the description's.
+  Comments that are turned off, hidden by YouTube, or not there yet start
+  folded instead of open on a "nothing here" line; opening it says why.
+- **Recommended shows that new picks are loading.** After **Refresh** (or
+  pulling down, picking a category or changing the algorithm) the cards dim
+  as before, and now **Loading new picks…** sits over them and the ↻ on
+  Refresh turns until the new set arrives.
+- **No Comments section on a live broadcast.** YouTube keeps viewers' talk
+  in the live chat while it is on air, so the section only ever said the
+  comments were off. It is gone while the stream is live, and Horde no longer
+  asks YouTube for its comments.
+- **No Chat button under a video.** Ask already answers from the video on
+  its watch page, so the Summary section's **Chat ↗** is gone; open **Ask**
+  in the top bar instead.
 - **Docs lead with Ask and no-code customization.** The home page, README
   and feature list introduce Ask earlier and say plainly that Horde can be
   restyled without coding: through Settings, and by asking Ask to write the
   custom CSS.
 
 ### Fixed
+
+- **A card's preview on a phone stops when it leaves the middle of the
+  screen.** It kept playing until another card's preview started, and it
+  counted as centred while only its title was in the middle. A preview now
+  plays only while the card's picture covers the middle of the screen.
 
 - **A video no longer stops with "This device couldn't play the AV1
   video" part-way through.** A playback error in a downloaded video that

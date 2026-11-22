@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { expect, test, videoCard } from "./fixtures";
+import { CSRF_HEADERS, expect, test, videoCard } from "./fixtures";
 
 const insideDialog = (page: Page) =>
   page.evaluate(() => {
@@ -179,4 +179,48 @@ test("a rebound hotkey drives the player and focuses search", async ({
   expect(await paused()).toBe(true);
   await page.keyboard.press("j");
   await expect.poll(paused).toBe(false);
+});
+
+test("arrow keys in the recent searches move through them, not the player", async ({
+  page,
+}) => {
+  const saved = await page.request.patch("/api/settings", {
+    headers: CSRF_HEADERS,
+    data: { ui: { search_history: ["one", "two", "three"] } },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(
+    page.getByRole("heading", { name: "Aurora Drift", level: 1 })
+  ).toBeVisible();
+  const volume = () =>
+    page
+      .locator("video")
+      .first()
+      .evaluate((v: HTMLVideoElement) => v.volume);
+  const before = await volume();
+
+  const box = page.getByPlaceholder("Search", { exact: true });
+  await box.focus();
+  const recent = page.getByRole("list", { name: "Recent searches" });
+  const entry = (name: string) =>
+    recent.getByRole("button", { name, exact: true });
+  await box.press("ArrowDown");
+  await expect(entry("one")).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(entry("two")).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowUp");
+  await expect(entry("two")).toBeFocused();
+  expect(await volume()).toBe(before);
+
+  // Enter runs it; the list goes, and does not come back once the box is
+  // cleared without being focused.
+  await page.keyboard.press("Enter");
+  await expect(box).toHaveValue("two");
+  await expect(recent).toHaveCount(0);
+  await page.getByRole("link", { name: "HORDE" }).click();
+  await expect(box).toHaveValue("");
+  await expect(recent).toHaveCount(0);
 });

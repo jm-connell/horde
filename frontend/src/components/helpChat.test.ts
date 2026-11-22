@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   type HelpMessage,
-  askVideoKey,
   isAskState,
   parseAskVideo,
   isHelpThread,
@@ -93,7 +92,6 @@ describe("videos Ask answers from", () => {
     expect(parseAskVideo(stream)).toEqual(stream);
     expect(parseAskVideo({ title: "No id" })).toBeNull();
     expect(parseAskVideo("video")).toBeNull();
-    expect(askVideoKey(library)).not.toBe(askVideoKey(stream));
   });
 
   it("keeps a saved answer's video and a picked one", () => {

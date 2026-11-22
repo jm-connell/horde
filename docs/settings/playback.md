@@ -27,7 +27,7 @@ You can still change quality in the player for the current session.
 
 ## Autoplay previews on hover
 
-`previewOnHover` (default `true`) plays a muted preview on video cards: on hover with a mouse or trackpad, and on the card centered on screen on phones and tablets. One setting covers both. It does not affect the watch page player.
+`previewOnHover` (default `true`) plays a muted preview on video cards: on hover with a mouse or trackpad, and on phones and tablets on the card whose picture covers the middle of the screen, which stops as soon as the picture scrolls off the middle. One setting covers both. It does not affect the watch page player.
 
 ## Subtitle size
 

@@ -116,6 +116,41 @@ test("a pasted server address or API key is recognised and saved", async ({
   await expect(page.getByLabel("Embeddings provider URL")).toBeVisible();
 });
 
+test("typing a model name keeps the list button below the box", async ({
+  page,
+}) => {
+  await page.route("**/api/ai/test", (route) =>
+    route.fulfill({
+      json: {
+        ok: true,
+        models: [
+          { id: "llama3.2:3b", name: "llama3.2:3b" },
+          { id: "qwen3:8b", name: "qwen3:8b" },
+        ],
+      },
+    })
+  );
+  await page.goto("/settings?tab=ai");
+  await page
+    .getByLabel("AI provider URL or API key")
+    .fill("host.docker.internal:11434");
+  await page.getByRole("button", { name: "Save without testing" }).click();
+
+  // Every model field lists the models; switch the background one to a box.
+  const typeButtons = page.getByRole("button", { name: "Type a model name" });
+  await expect(typeButtons).toHaveCount(3);
+  await typeButtons.nth(1).click();
+  const box = page.getByRole("textbox", { name: "Background model" });
+  await expect(box).toBeVisible();
+  const pick = page.getByRole("button", { name: "Pick from the list" });
+  const boxRect = await box.boundingBox();
+  const pickRect = await pick.boundingBox();
+  expect(boxRect).not.toBeNull();
+  expect(pickRect).not.toBeNull();
+  // On its own line under the box, not jammed against its right edge.
+  expect(pickRect!.y).toBeGreaterThanOrEqual(boxRect!.y + boxRect!.height);
+});
+
 test("a closed settings tab stops polling its status", async ({ page }) => {
   let polls = 0;
   page.on("request", (r) => {

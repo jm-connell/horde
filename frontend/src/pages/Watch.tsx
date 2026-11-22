@@ -121,7 +121,7 @@ export default function Watch() {
       }
     : undefined;
   const ai = useWatchAi(source, setVideo);
-  // Ask answers questions on this page from this video (Summary's "Chat").
+  // Ask answers questions on this page from this video.
   useAskPageVideo(location.pathname, ai.askVideo);
   const related = useRelatedFeed(video?.id);
   const streamRelated = useStreamRelated(

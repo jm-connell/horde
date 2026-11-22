@@ -121,10 +121,10 @@ async function mockStream(page: Page, related: unknown[] = []) {
     expect(route.request().headers()["x-horde-request"]).toBe("1");
     const body = route.request().postDataJSON() as {
       message: string;
-      video: { library_id: number | null; url: string | null } | null;
+      page_video: { library_id: number | null; url: string | null } | null;
     };
     expect(body.message).toBe("What is it about?");
-    expect(body.video).toEqual({ library_id: null, url: STREAM_URL });
+    expect(body.page_video).toEqual({ library_id: null, url: STREAM_URL });
     const events = [
       { type: "thread", id: 6, title: "What is it about?" },
       {
@@ -160,7 +160,7 @@ async function mockStream(page: Page, related: unknown[] = []) {
   return state;
 }
 
-test("a streamed video gets an AI summary with a retention note, and Chat opens Ask", async ({
+test("a streamed video gets an AI summary with a retention note, and Ask answers from it", async ({
   page,
 }) => {
   await enableAi(page);
@@ -182,12 +182,14 @@ test("a streamed video gets an AI summary with a retention note, and Chat opens 
   await expect(page.getByText(/Saved until Nov 16, 2026/)).toBeVisible();
   await expect(page.getByText(/downloading the video keeps it/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Chat", exact: true }).click();
+  // Nothing picked in Ask: its questions go to the stream on this page.
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "Ask", exact: true });
-  await expect(panel.locator('[data-horde="ask-focus"]')).toHaveText(
-    "Ridge at dusk"
-  );
   const input = panel.getByRole("textbox", { name: "Your question" });
+  await expect(input).toHaveAttribute(
+    "placeholder",
+    "Ask this video or Horde…"
+  );
   await input.fill("What is it about?");
   await input.press("Enter");
   await expect(panel.getByText("Mostly about a hike.")).toBeVisible();
@@ -542,10 +544,6 @@ test("without captions a stream offers neither a summary nor chapters", async ({
   await page.goto(WATCH);
   await expect(
     page.getByRole("heading", { name: "Ridge at dusk", level: 1 })
-  ).toBeVisible();
-  // Chat is still offered (it falls back to title and description).
-  await expect(
-    page.getByRole("button", { name: "Chat", exact: true })
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Summary", exact: true })

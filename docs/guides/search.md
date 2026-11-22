@@ -6,6 +6,10 @@ Horde uses a **single search box** in the top navigation bar, on every page, plu
 
 Type in the search field in the navigation bar, just left of your account button (on narrow screens, tap the search icon). Typing on any other page, or on a channel page, takes you to the [Library](library.md) home page with the results. Library and catalog results update as you type (debounced). A compact **YT** control inside the search box (and the same setting under [Settings → Library](../settings/library.md)) turns live YouTube results on or off. With it highlighted, YouTube itself is queried after you pause typing (or immediately if you press Enter). Search text is sent to YouTube.
 
+### Recent searches
+
+Click or tap into the empty search box and your **recent searches** drop down under it, newest first: four show, and the list scrolls for the rest (up to 20 are kept). Pick one to search for it again, or press **×** beside it to take it off the list; the arrow keys move through the list too. A search is remembered when you press Enter, pick it from the list, or open a video from its results, not for every word typed on the way. The list is saved with your account (`searchHistory`), so it is the same on every device you sign in on and nobody else signing in sees it.
+
 On a **channel page**, the box in the header searches that channel’s **video list** and **downloaded library videos**. A compact **YT** control inside that box (the same default as [YouTube results in channel search](../settings/library.md)) queries YouTube for extra matches from **that channel only**. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from **YouTube results in library search** in the main search bar.
 
 ## Mixed results

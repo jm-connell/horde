@@ -1,4 +1,5 @@
 import { DEFAULT_SPONSOR_BLOCK_CATEGORIES } from "../../sponsorBlock";
+import { DEFAULT_NAV_BAR } from "../../navBar";
 import { DEFAULT_TAB_BAR } from "../../tabBar";
 import type { CustomColors, FontSize, Settings } from "./types";
 
@@ -54,6 +55,8 @@ export const DEFAULTS: Settings = {
   showRecommendedSources: false,
   showDownloadNavBadge: true,
   tabBarItems: [...DEFAULT_TAB_BAR],
+  navBarItems: [...DEFAULT_NAV_BAR],
+  searchHistory: [],
   normalizeVolumeOnDownload: true,
   defaultDownloadPreset: "best",
   downloadVideoCodec: "av1",
@@ -74,6 +77,7 @@ export const DEFAULTS: Settings = {
   chaptersExpanded: true,
   descriptionExpanded: true,
   aiExpanded: true,
+  commentsExpanded: true,
   historyStatsExpanded: false,
   historyIncludeYoutube: false,
   memberWelcomeDone: false,
@@ -134,6 +138,8 @@ export const SERVER_UI_KEYS: (keyof Settings)[] = [
   "showRecommendedSources",
   "showDownloadNavBadge",
   "tabBarItems",
+  "navBarItems",
+  "searchHistory",
   "normalizeVolumeOnDownload",
   "defaultDownloadPreset",
   "downloadVideoCodec",
@@ -154,6 +160,7 @@ export const SERVER_UI_KEYS: (keyof Settings)[] = [
   "chaptersExpanded",
   "descriptionExpanded",
   "aiExpanded",
+  "commentsExpanded",
   "historyStatsExpanded",
   "historyIncludeYoutube",
   "memberWelcomeDone",

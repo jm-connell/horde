@@ -32,7 +32,6 @@ import {
   type AskScopeChannel,
   type AskSourceState,
   type AskVideo,
-  askVideoKey,
   HELP_CHAT_STORAGE_KEY,
   type HelpMessage,
   isAskState,
@@ -86,18 +85,7 @@ type Instead =
 
 /** The source a request starts a conversation on. */
 function requestedSource(req: SourceRequest): AskSourceState {
-  return req.video
-    ? { scope: [], video: req.video }
-    : { scope: req.channel ? [req.channel] : [], video: null };
-}
-
-/** "Chat" on the video the conversation is already about carries it on. */
-function resumes(req: SourceRequest | null, state: AskChatState): boolean {
-  return (
-    !!req?.video &&
-    !!state.video &&
-    askVideoKey(req.video) === askVideoKey(state.video)
-  );
+  return { scope: [req.channel], video: null };
 }
 
 /** A library video or a stream as Ask refers to it. */
@@ -144,7 +132,7 @@ interface Props {
   pageDetail: () => PageDetail | null;
   /** Focus the question box (false when restored open after a reload). */
   focusOnOpen: boolean;
-  /** "Ask <channel>" or the watch page's "Chat": a new conversation about it. */
+  /** "Ask <channel>": a new conversation about it. */
   sourceRequest?: SourceRequest | null;
   /** The channel (and video) the current page is about. */
   pageChannel?: PageChannel | null;
@@ -260,7 +248,7 @@ export default function HelpChatPanel({
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  // Opened by "Ask <channel>" or "Chat": start on a new conversation about
+  // Opened by "Ask <channel>": start on a new conversation about
   // it. (The panel mounts on open, so the request is already there; peeking,
   // not taking, keeps React's doubled initialisers harmless.)
   const [opening] = useState(() => pendingSourceRequest());
@@ -274,7 +262,7 @@ export default function HelpChatPanel({
       "session"
     )
   );
-  const [fresh] = useState(() => !!opening && !resumes(opening, saved));
+  const [fresh] = useState(() => !!opening);
   const [messages, setMessages] = useState<HelpMessage[]>(() =>
     fresh ? [] : getJson(HELP_CHAT_STORAGE_KEY, isHelpThread, [], "session")
   );
@@ -329,16 +317,12 @@ export default function HelpChatPanel({
     setJson(ASK_CHAT_STORAGE_KEY, ask, "session");
   }, [ask]);
 
-  // "Ask <channel>" or "Chat" while the panel is open: a new conversation.
+  // "Ask <channel>" while the panel is open: a new conversation.
   useEffect(() => {
     const req = pendingSourceRequest();
     if (!req) return;
     consumeSourceRequest(req.seq);
     if (req.seq === opening?.seq) return; // started on it already
-    if (resumes(req, ask)) {
-      inputRef.current?.focus();
-      return;
-    }
     abortRef.current?.abort();
     setMessages([]);
     setError(null);
@@ -346,7 +330,7 @@ export default function HelpChatPanel({
     const source = requestedSource(req);
     setAsk({ threadId: null, ...source, picked: source });
     inputRef.current?.focus();
-  }, [sourceRequest, pendingSourceRequest, consumeSourceRequest, opening, ask]);
+  }, [sourceRequest, pendingSourceRequest, consumeSourceRequest, opening]);
 
   useEffect(() => {
     const el = listRef.current;

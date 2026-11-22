@@ -95,8 +95,8 @@ export default function ContinueWatchingRow({
   if (videos.length + streams.length + youtube.length === 0) return null;
 
   return (
-    <section className="mb-6">
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <section className="mb-4 sm:mb-6">
+      <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">
           Continue watching
         </h2>
@@ -137,7 +137,7 @@ export default function ContinueWatchingRow({
 
         <div
           ref={scrollRef}
-          className="overflow-x-auto scroll-smooth px-1 py-3 scrollbar-none [&::-webkit-scrollbar]:hidden"
+          className="overflow-x-auto scroll-smooth px-1 py-2 scrollbar-none sm:py-3 [&::-webkit-scrollbar]:hidden"
         >
           <div className="flex gap-4">
             {videos.map((v) => (
@@ -173,7 +173,7 @@ export default function ContinueWatchingRow({
                 <ChannelFeedCard
                   entry={e}
                   channelName={e.channel || "Unknown channel"}
-                  layout="grid"
+                  layout="card"
                   inLibrary={false}
                   onDownload={() => onDownloadYoutube?.(e)}
                   skipRemotePreview
@@ -202,7 +202,7 @@ export default function ContinueWatchingRow({
                 <ChannelFeedCard
                   entry={e}
                   channelName={e.channel || "Unknown channel"}
-                  layout="grid"
+                  layout="card"
                   inLibrary={false}
                   onDownload={() => onDownloadYoutube?.(e)}
                   skipRemotePreview
@@ -216,7 +216,7 @@ export default function ContinueWatchingRow({
         </div>
       </div>
 
-      <hr className="mt-8 border-ink-700/80" />
+      <hr className="mt-2 border-ink-700/80 sm:mt-8" />
     </section>
   );
 }

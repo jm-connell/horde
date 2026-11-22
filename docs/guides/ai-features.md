@@ -23,7 +23,7 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 | **Related videos** | Neighbors on the watch page | Embeddings |
 | **Summaries** | Generate a synopsis for a video | Chat LLM |
 | **Chapters** | Generate Watch markers from captions when the description has none | Chat LLM |
-| **[Ask](ask.md#asking-about-a-video), about a video** | Answers questions about one video from its details, captions and comments; **Chat** in its Summary section opens it | Chat LLM (or the Assistant model); needs **AI video chat** |
+| **[Ask](ask.md#asking-about-a-video), about a video** | Answers questions about one video from its details, captions and comments; open Ask on its watch page | Chat LLM (or the Assistant model); needs **AI video chat** |
 | **[Ask](ask.md), from Horde** | Answers how-to questions from the docs and source, links to and changes settings, answers about your own library, queues downloads, builds playlists and writes custom CSS | Chat LLM (or the Assistant model) |
 | **[Ask](ask.md), from channels** | Answers questions about what indexed YouTube channels said, citing each point to the moment, when you name a channel (or ask from its page) | Chat LLM (or the Assistant model); embeddings help |
 | **Enrich tags** | Suggest / apply topical tags | Chat LLM |
@@ -44,7 +44,7 @@ If the model finds a single part, the video gets no chapters ("No clear chapter 
 
 ## Chat about a video
 
-The watch page's **Summary** section has a **Chat ↗** button next to **Regenerate**: it opens [Ask](ask.md#asking-about-a-video) on that video. Answers are built from the video's metadata and captions when available, and from its saved [comments](comments.md) (labelled as viewers'), so you can ask how people reacted. A saved summary stays readable in the section even when it cannot be generated again (summaries switched off, or no captions). Requires a working chat provider and **AI video chat**.
+Questions about a video go to [Ask](ask.md#asking-about-a-video): open it on the watch page and it answers from that video. Answers are built from the video's metadata and captions when available, and from its saved [comments](comments.md) (labelled as viewers'), so you can ask how people reacted. A saved summary stays readable in the section even when it cannot be generated again (summaries switched off, or no captions). Requires a working chat provider and **AI video chat**.
 
 ## Ask
 
@@ -91,7 +91,7 @@ The assistant uses the background model unless the administrator sets an **Assis
 
 ## Streamed videos
 
-A video you stream without downloading (`/watch?url=…`) gets the same **Summary** section (with **Chat**, which opens Ask on it) and **Generate** chapters, from its title, description and English captions (fetched from the stream the first time you use AI on it; a stream without captions can still be asked about from its metadata). Only YouTube videos are supported.
+A video you stream without downloading (`/watch?url=…`) gets the same **Summary** section and **Generate** chapters (and Ask answers questions about it), from its title, description and English captions (fetched from the stream the first time you use AI on it; a stream without captions can still be asked about from its metadata). Only YouTube videos are supported.
 
 Nothing summarizes a stream on its own, so its Summary section starts collapsed while it has no summary; opening it writes one. If YouTube is slow to hand over the captions (it rate-limits them), the section keeps waiting and tries again for up to a minute before it reports an error. The captions are fetched once for the player and the AI features alike, and a rate limit makes background caption work (library retries, Ask indexing) hold off for two minutes so your next try gets through.
 

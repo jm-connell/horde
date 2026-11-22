@@ -163,7 +163,7 @@ Turn the archive into something you can actually ask questions of. Use any OpenA
 | Related videos on Watch | Embeddings |
 | Recommended category shelves | Embeddings + categories |
 | Recommended (mixed feed with channels new to you) | Works without AI; embeddings make it much sharper; a chat model writes better searches |
-| Summaries, chapters, tag enrich, Ask about a video (**Chat** under it) | Chat LLM |
+| Summaries, chapters, tag enrich, Ask about a video (Ask on its watch page) | Chat LLM |
 | Duplicate help on Import | Chat (optional embed similarity) |
 | [Ask](guides/ask.md): search what channels said, and ask them (or one video) questions with references to the moment | Search works without AI; asking needs a chat model; embeddings help it find meaning |
 | Ask about Horde itself: how-tos, finding and changing settings, your own library, custom CSS | Without AI it shows the matching documentation; with a chat model it answers and acts after you confirm |

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  CENTER_BAND_RATIO,
   CENTER_MARGIN_PX,
   MIN_WIDTH_RATIO,
   pickCenteredPreview,
@@ -126,23 +125,32 @@ describe("pickCenteredPreview", () => {
     ).toBeNull();
   });
 
-  it("ignores cards whose center is outside the mid-screen band", () => {
-    const band = phone.height * CENTER_BAND_RATIO;
+  it("ignores a picture that does not cover the middle of the screen", () => {
+    const cy = phone.height / 2;
+    const height = 200;
+    // Near the top, and just above the middle: once the picture has scrolled
+    // past the middle it stops, even with its title still below it.
+    for (const top of [8, cy - height - 10]) {
+      expect(
+        pickCenteredPreview(
+          [{ id: "above", top, left: 16, width: full, height }],
+          phone
+        )
+      ).toBeNull();
+    }
     expect(
       pickCenteredPreview(
-        [
-          {
-            id: "top",
-            top: 8,
-            left: 16,
-            width: full,
-            height: 200,
-          },
-        ],
+        [{ id: "below", top: cy + 10, left: 16, width: full, height }],
         phone
       )
     ).toBeNull();
-    expect(band).toBeGreaterThan(50);
+    // Still covering the middle by a little: it plays.
+    expect(
+      pickCenteredPreview(
+        [{ id: "edge", top: cy - height + 10, left: 16, width: full, height }],
+        phone
+      )
+    ).toBe("edge");
   });
 
   it("picks the uniquely closer of two stacked full-width cards", () => {
@@ -160,7 +168,7 @@ describe("pickCenteredPreview", () => {
     ).toBe("near");
   });
 
-  it("returns null when two in-band cards are not uniquely central", () => {
+  it("returns null when two cards over the middle are not uniquely central", () => {
     const height = 160;
     const cy = phone.height / 2;
     const aTop = cy - height / 2 - 8;

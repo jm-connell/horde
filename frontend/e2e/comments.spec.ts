@@ -138,6 +138,134 @@ test("a library video with nothing saved yet loads its top comments at once", as
   await expect(panel.getByRole("button", { name: /Load/ })).toHaveCount(0);
 });
 
+test("the comments box folds away with its arrow and stays folded", async ({
+  page,
+}) => {
+  await page.goto(`/watch/${await videoId(page, "Cedar Notes")}`);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  const toggle = panel.getByRole("button", { name: "Comments 2.4K" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const threads = threadsOf(panel);
+  await expect(threads.first()).toBeVisible();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  // Folded to no height: still in the page, but nowhere on screen.
+  await expect(threads.first()).not.toBeInViewport();
+
+  // Like the description and the summary, the choice is kept.
+  await page.reload();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(threads.first()).not.toBeInViewport();
+  await toggle.click();
+  await expect(threads.first()).toBeInViewport();
+});
+
+test("comments turned off start folded and say so when opened", async ({
+  page,
+}) => {
+  const id = await videoId(page, "Cedar Notes");
+  await page.route(new RegExp(`/api/videos/${id}/comments$`), async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      json: {
+        ...(await response.json()),
+        status: "disabled",
+        items: [],
+        total_count: null,
+        next_limit: null,
+      },
+    });
+  });
+  await page.goto(`/watch/${id}`);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  const toggle = panel.getByRole("button", { name: "Comments", exact: true });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  const note = panel.getByText("Comments are turned off for this video.");
+  await expect(note).not.toBeInViewport();
+
+  // Fetching them again keeps it folded while the fetch runs.
+  const before = await (
+    await page.request.get(`/api/videos/${id}/comments`)
+  ).json();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(
+    new RegExp(`/api/videos/${id}/comments/refresh$`),
+    async (route) => {
+      await held;
+      await route.fulfill({
+        json: {
+          ...before,
+          status: "disabled",
+          items: [],
+          total_count: null,
+          next_limit: null,
+        },
+      });
+    }
+  );
+  const refresh = panel.getByRole("button", { name: "Refresh comments" });
+  await refresh.click();
+  await expect(refresh).toBeDisabled();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  release();
+  await expect(refresh).toBeEnabled();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+  await toggle.click();
+  await expect(note).toBeInViewport();
+});
+
+test("a stream whose comments are off never opens on its loading spinner", async ({
+  page,
+}) => {
+  const url = "https://www.youtube.com/watch?v=strmoff0001";
+  await page.route(/\/api\/preview\/meta\?/, (route) =>
+    route.fulfill({
+      json: {
+        id: "strmoff0001",
+        title: "Quiet walk",
+        channel: "Test Channel",
+        channel_url: null,
+        description: "",
+        duration: 600,
+        thumbnail_url: null,
+        source_url: url,
+        library_video_id: null,
+        subtitles: [],
+        available_presets: [],
+        view_count: 10,
+      },
+    })
+  );
+  await page.route(/\/api\/preview\/(manifest|stream|subtitles)\?/, (route) =>
+    route.fulfill({ status: 404, json: { detail: "no media", code: "x" } })
+  );
+  await page.route(/\/api\/preview\/related\?/, (route) =>
+    route.fulfill({ json: { items: [], next_cursor: null } })
+  );
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/api\/comments\/youtube\/strmoff0001\?/, async (route) => {
+    await held;
+    await route.fulfill({
+      json: { status: "disabled", total_count: null, items: [] },
+    });
+  });
+  await page.goto(`/watch?url=${encodeURIComponent(url)}`);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  const toggle = panel.getByRole("button", { name: "Comments", exact: true });
+  // Still reading from YouTube: folded, not open on a spinner.
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  release();
+  await expect(
+    panel.getByText("Comments are turned off for this video.")
+  ).toBeAttached();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+});
+
 test("a video without a YouTube id has no comments section", async ({
   page,
 }) => {
@@ -314,6 +442,51 @@ test("a streamed video loads its comments right away and keeps replies on the ne
   // The longer list has no replies; the first read's stay with their thread.
   await threads.first().getByRole("button", { name: "1 reply" }).click();
   await expect(threads.first()).toContainText("Agreed!");
+});
+
+test("a live broadcast has no comments section and reads none", async ({
+  page,
+}) => {
+  const url = "https://www.youtube.com/watch?v=live0000001";
+  await page.route(/\/api\/preview\/meta\?/, (route) =>
+    route.fulfill({
+      json: {
+        id: "live0000001",
+        title: "Live from the ridge",
+        channel: "Test Channel",
+        channel_url: null,
+        description: "",
+        duration: null,
+        thumbnail_url: null,
+        source_url: url,
+        library_video_id: null,
+        subtitles: [],
+        available_presets: [],
+        view_count: 10,
+        is_live: true,
+      },
+    })
+  );
+  await page.route(/\/api\/preview\/(manifest|stream|subtitles)\?/, (route) =>
+    route.fulfill({ status: 404, json: { detail: "no media", code: "x" } })
+  );
+  await page.route(/\/api\/preview\/related\?/, (route) =>
+    route.fulfill({ json: { items: [], next_cursor: null } })
+  );
+  // YouTube keeps a broadcast's talk in its live chat, not in comments.
+  let commentReads = 0;
+  await page.route(/\/api\/comments\/youtube\//, (route) => {
+    commentReads += 1;
+    return route.fulfill({
+      json: { status: "disabled", total_count: null, items: [] },
+    });
+  });
+  await page.goto(`/watch?url=${encodeURIComponent(url)}`);
+  await expect(
+    page.getByRole("heading", { name: "Live from the ridge", level: 1 })
+  ).toBeVisible();
+  await expect(page.locator("[data-horde='comments']")).toHaveCount(0);
+  expect(commentReads).toBe(0);
 });
 
 test("the refresh button fetches and saves the comments again", async ({

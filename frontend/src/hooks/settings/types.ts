@@ -1,6 +1,7 @@
 import type { ViewMode } from "../../components/videoPlayerTypes";
 import type { SavedCustomFont, UiFont } from "../../fonts";
 import type { HotkeyOverrides } from "../../hotkeys";
+import type { NavBarItem } from "../../navBar";
 import type { TabBarItem } from "../../tabBar";
 import type { LoadingStyle } from "../../loadingStyles";
 import type {
@@ -202,6 +203,10 @@ export interface Settings {
   showDownloadNavBadge: boolean;
   /** Tabs on the installed app's bottom island on phones, in order. */
   tabBarItems: TabBarItem[];
+  /** Pages in the top bar on a wider screen, in order (Settings always). */
+  navBarItems: NavBarItem[];
+  /** The account's recent searches in the top bar's box, newest first. */
+  searchHistory: string[];
   normalizeVolumeOnDownload: boolean;
   /** Quality preselected on the Download page (a `PRESET_ORDER` value). */
   defaultDownloadPreset: string;
@@ -226,6 +231,8 @@ export interface Settings {
   descriptionExpanded: boolean;
   /** Watch-page AI panel open/closed (persists across videos and restarts). */
   aiExpanded: boolean;
+  /** Watch-page comments box open/closed (one with nothing to show starts closed). */
+  commentsExpanded: boolean;
   /** History page stats band showing its details (charts) or only the tiles. */
   historyStatsExpanded: boolean;
   /** History stats also count the imported YouTube history (views, never time). */

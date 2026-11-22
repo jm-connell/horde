@@ -39,7 +39,7 @@ Dock Ask at the side with the expand button (⤢) in its header to keep it open 
 
 A question that names no channel still reaches the channels that cover it: *"How much protein should I eat to build muscle?"* goes to a fitness channel you indexed, *"What's the latest on …?"* to a news channel. Ask checks which channels' videos would answer it and uses those (one or two); general questions, chit-chat and anything about Horde stay with Horde. The answer names its channels, and **Ask Horde instead** under it asks Horde.
 
-Horde knows which channels Ask can answer from: ask *"which channels are indexed?"* or *"is LTT indexed?"* and it lists each channel's progress. If you ask what a channel says and it is not indexed (or not ready yet), Horde says so and where to index it; with **Use my data** on, it also lists that channel's videos in your library, whose **Chat** answers from one video.
+Horde knows which channels Ask can answer from: ask *"which channels are indexed?"* or *"is LTT indexed?"* and it lists each channel's progress. If you ask what a channel says and it is not indexed (or not ready yet), Horde says so and where to index it; with **Use my data** on, it also lists that channel's videos in your library; on one's watch page, Ask answers from that video.
 
 If an answer about Horde comes from a channel you named (*"how do I stop indexing The Car Care Nut?"*), **Ask Horde instead** under it fixes that. **New chat** starts on what the chat was focused on, and that is kept while the browser tab is open.
 
@@ -55,16 +55,14 @@ The model never writes times itself. It only cites passages; Horde then finds th
 
 ## Asking about a video
 
-**Chat ↗** in a video's **Summary** section (under the player) opens Ask on that video (the chip reads **\<video\>**), and questions are answered from its title, description and captions (the passages that match, once it has embeddings) and its saved [comments](comments.md), so you can ask what it covers, what someone said in it or how viewers took it. A streamed video works the same way from its details and English captions, fetched the first time you ask.
-
-With Ask not focused on anything, a question on a watch page goes to that video too (the question box reads *Ask this video or Horde…*). Either way Ask still sends a question elsewhere when that fits better, without you switching:
+Open **Ask** on a watch page and a question goes to that video (the question box reads *Ask this video or Horde…*): it is answered from the video's title, description and captions (the passages that match, once it has embeddings) and its saved [comments](comments.md), so you can ask what it covers, what someone said in it or how viewers took it. A streamed video works the same way from its details and English captions, fetched the first time you ask. Ask still sends a question elsewhere when that fits better, without you switching:
 
 - naming Horde, or about your own library, downloads, history or playlists (*"what should I watch next?"*): Horde;
-- about Horde's features, such as its theme, downloads or storage (*"how do I change the theme?"*), or asking it to change one (*"make subtitles bigger"*, *"turn off autoplay"*, *"switch to dark mode"*): Horde, unless the question is about someone or something in the video (*"what backup tool does he use?"* stays on the video). Once Ask is focused on the video (from **Chat**, or **Ask “\<video\>” instead**), only a how-to or an instruction (*"how do I…"*, *"can I…"*, *"turn off…"*) leaves it this way;
+- about Horde's features, such as its theme, downloads or storage (*"how do I change the theme?"*), or asking it to change one (*"make subtitles bigger"*, *"turn off autoplay"*, *"switch to dark mode"*): Horde, unless the question is about someone or something in the video (*"what backup tool does he use?"* stays on the video). Once Ask is focused on the video (from **Ask “\<video\>” instead**), only a how-to or an instruction (*"how do I…"*, *"can I…"*, *"turn off…"*) leaves it this way;
 - naming a channel, or *"all my channels"*: those channels;
 - about the video's whole channel, when Ask indexes it (*"what does this channel say about…"*, *"in his other videos"*): that channel.
 
-Each answer's byline says where it came from, and a video Ask is focused on stays the focus, in History too. A conversation about a video is titled with it, and **Chat** on the video you are already asking about carries that conversation on. Answers about a video come from text anyone can write (its description, captions, comments), so like answers from channels they offer no setting changes, downloads or CSS, only text and links. While a video plays in the mini player on another page, questions do not go to it on their own, so a general question does not land on a video by accident; **Ask “\<video\>” instead** under an answer sends it there.
+Each answer's byline says where it came from, and a video Ask is focused on stays the focus, in History too. A conversation about a video is titled with it. Answers about a video come from text anyone can write (its description, captions, comments), so like answers from channels they offer no setting changes, downloads or CSS, only text and links. While a video plays in the mini player on another page, questions do not go to it on their own, so a general question does not land on a video by accident; **Ask “\<video\>” instead** under an answer sends it there.
 
 This needs **AI video chat** on (Settings → AI → Features); with it off, video questions are answered from Horde. Answers use the **Assistant model**, like the rest of Ask. Chats you had with a video before this moved into Ask are in **History**, one conversation per video, and can be continued.
 

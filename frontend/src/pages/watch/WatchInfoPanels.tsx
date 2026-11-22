@@ -19,7 +19,7 @@ import CommentsPanel from "./CommentsPanel";
 import type { WatchSource } from "./useWatchVideo";
 
 /**
- * Under the title: the AI panel (summary, chat), description, chapters, tags
+ * Under the title: the AI summary, description, chapters, tags
  * and notes, then the comments, with the playback queue beside them when the
  * sidebar is not shown.
  */
@@ -74,7 +74,6 @@ export default function WatchInfoPanels({
             <VideoAiPanel
               target={ai.target}
               canSummarize={ai.canAiSummarize}
-              canChat={ai.canAiChat}
               showToast={showToast}
             />
           </Suspense>
@@ -134,7 +133,9 @@ export default function WatchInfoPanels({
             streamYoutubeId={null}
           />
         ) : (
-          source.kind === "stream" && (
+          // A broadcast's talk is in YouTube's live chat, not its comments.
+          source.kind === "stream" &&
+          !source.meta.is_live && (
             <CommentsPanel
               key={`stream-${source.url}`}
               videoId={null}

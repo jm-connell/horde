@@ -5,8 +5,6 @@ export const PREVIEW_UNLOAD_DELAY_MS = 300;
 
 /** Ignore horizontal-row tiles (Continue Watching) that are not full-width. */
 export const MIN_WIDTH_RATIO = 0.72;
-/** Card center must sit within this fraction of viewport height from mid-screen. */
-export const CENTER_BAND_RATIO = 0.22;
 /** Winner must beat the runner-up by this many CSS pixels, or it is not unique. */
 export const CENTER_MARGIN_PX = 40;
 
@@ -80,8 +78,10 @@ export function previewResumeFor(videoId: number): number | null {
 }
 
 /**
- * Pick the card that is uniquely at the vertical (and horizontal) center
- * of the viewport. Returns null when no card is clearly the one in view.
+ * Pick the card whose picture covers the middle of the viewport (its rect
+ * spans the horizontal center line), uniquely nearest the center. Returns null
+ * when no card is clearly the one in view, so a preview stops as soon as its
+ * picture scrolls off the middle, even while the card's title is still there.
  */
 export function pickCenteredPreview(
   candidates: PreviewRect[],
@@ -92,16 +92,14 @@ export function pickCenteredPreview(
   }
   const cx = viewport.width / 2;
   const cy = viewport.height / 2;
-  const band = viewport.height * CENTER_BAND_RATIO;
   const minWidth = viewport.width * MIN_WIDTH_RATIO;
 
   const scored: { id: string; dist: number }[] = [];
   for (const card of candidates) {
     if (card.width < minWidth) continue;
+    if (card.top > cy || card.top + card.height < cy) continue;
     const cardCx = card.left + card.width / 2;
-    const cardCy = card.top + card.height / 2;
-    const dy = Math.abs(cardCy - cy);
-    if (dy > band) continue;
+    const dy = Math.abs(card.top + card.height / 2 - cy);
     const dx = Math.abs(cardCx - cx);
     scored.push({ id: card.id, dist: Math.hypot(dx, dy) });
   }
