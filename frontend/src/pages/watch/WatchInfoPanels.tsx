@@ -133,7 +133,9 @@ export default function WatchInfoPanels({
             streamYoutubeId={null}
           />
         ) : (
-          source.kind === "stream" && (
+          // A broadcast's talk is in YouTube's live chat, not its comments.
+          source.kind === "stream" &&
+          !source.meta.is_live && (
             <CommentsPanel
               key={`stream-${source.url}`}
               videoId={null}

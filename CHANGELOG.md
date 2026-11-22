@@ -37,6 +37,10 @@ All notable changes to Horde are documented here. The format follows
   desktops, and the choice is kept from video to video like the description's.
   Comments that are turned off, hidden by YouTube, or not there yet start
   folded instead of open on a "nothing here" line; opening it says why.
+- **No Comments section on a live broadcast.** YouTube keeps viewers' talk
+  in the live chat while it is on air, so the section only ever said the
+  comments were off. It is gone while the stream is live, and Horde no longer
+  asks YouTube for its comments.
 - **No Chat button under a video.** Ask already answers from the video on
   its watch page, so the Summary section's **Chat ↗** is gone; open **Ask**
   in the top bar instead.

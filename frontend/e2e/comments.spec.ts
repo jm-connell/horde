@@ -366,6 +366,51 @@ test("a streamed video loads its comments right away and keeps replies on the ne
   await expect(threads.first()).toContainText("Agreed!");
 });
 
+test("a live broadcast has no comments section and reads none", async ({
+  page,
+}) => {
+  const url = "https://www.youtube.com/watch?v=live0000001";
+  await page.route(/\/api\/preview\/meta\?/, (route) =>
+    route.fulfill({
+      json: {
+        id: "live0000001",
+        title: "Live from the ridge",
+        channel: "Test Channel",
+        channel_url: null,
+        description: "",
+        duration: null,
+        thumbnail_url: null,
+        source_url: url,
+        library_video_id: null,
+        subtitles: [],
+        available_presets: [],
+        view_count: 10,
+        is_live: true,
+      },
+    })
+  );
+  await page.route(/\/api\/preview\/(manifest|stream|subtitles)\?/, (route) =>
+    route.fulfill({ status: 404, json: { detail: "no media", code: "x" } })
+  );
+  await page.route(/\/api\/preview\/related\?/, (route) =>
+    route.fulfill({ json: { items: [], next_cursor: null } })
+  );
+  // YouTube keeps a broadcast's talk in its live chat, not in comments.
+  let commentReads = 0;
+  await page.route(/\/api\/comments\/youtube\//, (route) => {
+    commentReads += 1;
+    return route.fulfill({
+      json: { status: "disabled", total_count: null, items: [] },
+    });
+  });
+  await page.goto(`/watch?url=${encodeURIComponent(url)}`);
+  await expect(
+    page.getByRole("heading", { name: "Live from the ridge", level: 1 })
+  ).toBeVisible();
+  await expect(page.locator("[data-horde='comments']")).toHaveCount(0);
+  expect(commentReads).toBe(0);
+});
+
 test("the refresh button fetches and saves the comments again", async ({
   page,
 }) => {
