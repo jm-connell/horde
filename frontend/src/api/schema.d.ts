@@ -2311,6 +2311,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/live/{video_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Chat
+         * @description A live broadcast's chat at the moment being watched (``behind_ms`` behind
+         *     the player's live edge), after ``after``. Read from YouTube once per
+         *     broadcast for every viewer; kept in memory, never saved.
+         */
+        get: operations["live_chat_api_live__video_id__chat_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/live/{video_id}/master.m3u8": {
         parameters: {
             query?: never;
@@ -7603,6 +7625,43 @@ export interface components {
             viewers?: number | null;
             /** Watch Url */
             watch_url: string;
+        };
+        /**
+         * LiveChatRead
+         * @description A live broadcast's chat at the viewer's moment, read from Horde's buffer.
+         *
+         *     ``items`` were sent at or before ``cutoff_ms`` (the moment being watched,
+         *     epoch ms) and arrived after ``after``; pass ``next_after`` back as ``after``.
+         *     ``removed`` lists messages YouTube deleted since ``after``. ``earliest_ms``
+         *     is the send time of the oldest message Horde holds: chat from before it is
+         *     not available. ``status``: ``ok``; ``none`` (no chat, or not live);
+         *     ``unavailable`` (private, members-only or age-restricted without cookies).
+         */
+        LiveChatRead: {
+            /** Cutoff Ms */
+            cutoff_ms: number;
+            /** Earliest Ms */
+            earliest_ms?: number | null;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ChatReplayItem"][];
+            /**
+             * Next After
+             * @default 0
+             */
+            next_after: number;
+            /**
+             * Removed
+             * @default []
+             */
+            removed: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "none" | "unavailable";
         };
         /**
          * LiveCommentsRead
@@ -15717,6 +15776,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelLiveResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_chat_api_live__video_id__chat_get: {
+        parameters: {
+            query?: {
+                behind_ms?: number;
+                after?: number;
+            };
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveChatRead"];
                 };
             };
             /** @description Validation error */

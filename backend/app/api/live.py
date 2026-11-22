@@ -12,6 +12,7 @@ import gzip
 import logging
 import time
 from collections.abc import AsyncIterator
+from dataclasses import asdict
 from typing import Any
 
 import httpx
@@ -24,13 +25,22 @@ from starlette.concurrency import run_in_threadpool
 from .. import e2e_mode
 from ..auth import current_user
 from ..config import LIVE_POLL_SEC
-from ..context import get_ctx, get_session
+from ..context import current, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..openapi_responses import RAW, media_response
 from ..parental_guard import NOT_ALLOWED, stream_guard
-from ..schemas import ChannelLiveResponse, LiveChannelRead, LiveListResponse
+from ..schemas import (
+    ChannelLiveResponse,
+    ChatReplayItem,
+    LiveChannelRead,
+    LiveChatRead,
+    LiveListResponse,
+)
 from ..services import follows, stream_preview
 from ..services.auth.accounts import AuthUser
+from ..services.chat_replay.youtube import ChatReplayError
+from ..services.comments.fetch import LATER, RETRY
+from ..services.limits import ytdlp_slot
 from ..services.live.directory import (
     RATE_LIMIT_BACKOFF_SEC,
     STALE_LIVE_SEC,
@@ -297,3 +307,57 @@ async def live_audio_segment(
 ):
     """A segment of the separate audio rendition (packed AAC with an ID3 timestamp)."""
     return await _segment(request, video_id, key, sq, "audio/aac")
+
+
+# --- live chat -------------------------------------------------------------
+
+
+def now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def _live_session(video_id: str) -> LiveSession | None:
+    return current().live.sessions.get(video_id)
+
+
+@router.get(
+    "/{video_id}/chat",
+    response_model=LiveChatRead,
+    dependencies=[Depends(ytdlp_slot)],
+)
+def live_chat(
+    video_id: str = VideoId,
+    behind_ms: int = Query(0, ge=0, le=86_400_000),
+    after: int = Query(0, ge=0),
+):
+    """A live broadcast's chat at the moment being watched (``behind_ms`` behind
+    the player's live edge), after ``after``. Read from YouTube once per
+    broadcast for every viewer; kept in memory, never saved.
+    """
+    session = _live_session(video_id)
+    lag = session.edge_lag_sec() if session is not None else None
+    cutoff_ms = now_ms() - behind_ms - int((lag or 0) * 1000)
+    try:
+        page = current().live_chat.read(video_id, cutoff_ms, after)
+    except ChatReplayError as exc:
+        if exc.status == RETRY:
+            raise CodedHTTPException(
+                503,
+                "YouTube is limiting requests; try again later",
+                "youtube_rate_limited",
+            ) from exc
+        if exc.status == LATER:
+            raise CodedHTTPException(
+                503, "Could not reach YouTube; try again later", "youtube_unreachable"
+            ) from exc
+        raise CodedHTTPException(
+            502, "Could not load the live chat from YouTube", "chat_replay_unavailable"
+        ) from exc
+    return LiveChatRead(
+        status=page.status,
+        items=[ChatReplayItem.model_validate(asdict(i)) for i in page.items],
+        removed=page.removed,
+        next_after=page.next_after,
+        earliest_ms=page.earliest_ms,
+        cutoff_ms=cutoff_ms,
+    )

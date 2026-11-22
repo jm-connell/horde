@@ -356,6 +356,16 @@ class LiveSession:
         count = int(self._dvr_window_sec / max(1.0, target or 5.0))
         return min(count, _MAX_WINDOW_SEGMENTS)
 
+    def edge_lag_sec(self) -> float | None:
+        """How far the player's live edge trails the newest segment: three target
+        durations (the HLS hold-back Shaka uses). None until a playlist was read."""
+        targets = [
+            v.target_duration
+            for v in self.variants.values()
+            if not v.upstream.audio and v.target_duration
+        ]
+        return 3 * max(targets) if targets else None
+
     def broadcast_seconds(self, behind_live_sec: float) -> float | None:
         """Seconds from the start of the broadcast of a playhead this far behind live.
 

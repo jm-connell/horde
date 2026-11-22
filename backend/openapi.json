@@ -8745,6 +8745,62 @@
         "title": "LiveChannelRead",
         "type": "object"
       },
+      "LiveChatRead": {
+        "description": "A live broadcast's chat at the viewer's moment, read from Horde's buffer.\n\n``items`` were sent at or before ``cutoff_ms`` (the moment being watched,\nepoch ms) and arrived after ``after``; pass ``next_after`` back as ``after``.\n``removed`` lists messages YouTube deleted since ``after``. ``earliest_ms``\nis the send time of the oldest message Horde holds: chat from before it is\nnot available. ``status``: ``ok``; ``none`` (no chat, or not live);\n``unavailable`` (private, members-only or age-restricted without cookies).",
+        "properties": {
+          "cutoff_ms": {
+            "title": "Cutoff Ms",
+            "type": "integer"
+          },
+          "earliest_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliest Ms"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChatReplayItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_after": {
+            "default": 0,
+            "title": "Next After",
+            "type": "integer"
+          },
+          "removed": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "none",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "cutoff_ms"
+        ],
+        "title": "LiveChatRead",
+        "type": "object"
+      },
       "LiveCommentsRead": {
         "description": "The top ``limit`` comments of a YouTube video, read now (not saved).",
         "properties": {
@@ -23043,6 +23099,83 @@
           }
         },
         "summary": "Channel Live",
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/api/live/{video_id}/chat": {
+      "get": {
+        "description": "A live broadcast's chat at the moment being watched (``behind_ms`` behind\nthe player's live edge), after ``after``. Read from YouTube once per\nbroadcast for every viewer; kept in memory, never saved.",
+        "operationId": "live_chat_api_live__video_id__chat_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{11}$",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "behind_ms",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 86400000,
+              "minimum": 0,
+              "title": "Behind Ms",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveChatRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Live Chat",
         "tags": [
           "live"
         ]

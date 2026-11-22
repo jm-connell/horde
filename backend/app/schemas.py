@@ -2003,6 +2003,25 @@ class ChatReplayRead(BaseModel):
     next_cursor: str | None = None
 
 
+class LiveChatRead(BaseModel):
+    """A live broadcast's chat at the viewer's moment, read from Horde's buffer.
+
+    ``items`` were sent at or before ``cutoff_ms`` (the moment being watched,
+    epoch ms) and arrived after ``after``; pass ``next_after`` back as ``after``.
+    ``removed`` lists messages YouTube deleted since ``after``. ``earliest_ms``
+    is the send time of the oldest message Horde holds: chat from before it is
+    not available. ``status``: ``ok``; ``none`` (no chat, or not live);
+    ``unavailable`` (private, members-only or age-restricted without cookies).
+    """
+
+    status: Literal["ok", "none", "unavailable"]
+    items: list[ChatReplayItem] = []
+    removed: list[str] = []
+    next_after: int = 0
+    earliest_ms: int | None = None
+    cutoff_ms: int
+
+
 class ImportSuggestion(BaseModel):
     """Fields Horde can fill in for a review item. Only blanks are suggested."""
 
