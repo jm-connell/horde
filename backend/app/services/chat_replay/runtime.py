@@ -46,7 +46,12 @@ class ChatReplayRuntime:
 
     def video_lock(self, yt_id: str) -> threading.Lock:
         with self._lock:
-            for key in [k for k in self._video_locks if k not in self._opened]:
+            # Locks of other videos whose chat is closed are dropped; never this
+            # one's, or two first viewers could each get a lock of their own.
+            stale = [
+                k for k in self._video_locks if k not in self._opened and k != yt_id
+            ]
+            for key in stale:
                 if not self._video_locks[key].locked():
                     del self._video_locks[key]
             return self._video_locks.setdefault(yt_id, threading.Lock())

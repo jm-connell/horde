@@ -382,3 +382,50 @@ def test_the_first_failure_before_retrying_with_cookies_is_logged(monkeypatch, c
 
 def test_cursors_take_any_base64_token():
     assert service.CURSOR_RE.fullmatch("65000~op2w0wR+bA/c=_-%3D")
+
+
+# --- Deferred review items ---------------------------------------------------------
+
+
+def test_a_video_lock_is_the_same_until_its_chat_opens(init_db):
+    runtime = init_db["ctx"].chat_replay
+    assert runtime.video_lock(YT) is runtime.video_lock(YT)
+
+
+def test_reads_queued_behind_a_rate_limit_ask_youtube_no_more(monkeypatch, calls):
+    started = threading.Event()
+
+    def limited_open(yt_id: str) -> Opened:
+        calls.opens.append(yt_id)
+        started.set()
+        time.sleep(0.2)
+        raise ChatReplayError(RETRY)
+
+    monkeypatch.setattr(youtube, "open_chat", limited_open)
+    errors: list[str] = []
+
+    def read() -> None:
+        try:
+            service.read_at(YT, 0)
+        except ChatReplayError as exc:
+            errors.append(exc.status)
+
+    first = threading.Thread(target=read)
+    first.start()
+    started.wait()
+    second = threading.Thread(target=read)
+    second.start()
+    first.join()
+    second.join()
+    assert errors == [RETRY, RETRY]
+    assert calls.opens == [YT]
+
+
+def test_a_database_error_does_not_cost_the_chat(monkeypatch, calls):
+    from sqlalchemy.exc import OperationalError
+
+    def locked(*args, **kwargs):
+        raise OperationalError("UPDATE", {}, Exception("database is locked"))
+
+    monkeypatch.setattr(service, "_write_live_status", locked)
+    assert service.read_at(YT, 0).status == "ok"

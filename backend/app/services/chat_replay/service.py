@@ -11,12 +11,14 @@ or a second viewer costs nothing. A rate limit pauses every read for
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Literal
 
 from sqlalchemy import update
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, col
 
 from ...context import current, get_engine
@@ -26,6 +28,8 @@ from . import youtube
 from .parse import ChatItem
 from .runtime import PAUSE_ON_LIMIT_SEC
 from .youtube import ChatHandle, ChatReplayError, Chunk, Opened
+
+logger = logging.getLogger(__name__)
 
 #: ``<end_ms>~<YouTube replay token>``.
 CURSOR_RE = re.compile(r"\d{1,9}~[A-Za-z0-9_%=+/-]{1,4096}")
@@ -53,9 +57,19 @@ def _page(chunk: Chunk) -> ChatPage:
 
 
 def _record_live_status(yt_id: str, live_status: str | None) -> None:
-    """Tell a library video of unknown ``live_status`` what the page said."""
+    """Tell a library video of unknown ``live_status`` what the page said.
+
+    Best effort: the chat is served whether or not this could be written.
+    """
     if live_status is None:
         return
+    try:
+        _write_live_status(yt_id, live_status)
+    except SQLAlchemyError:
+        logger.warning("Could not record live_status of %s", yt_id, exc_info=True)
+
+
+def _write_live_status(yt_id: str, live_status: str) -> None:
     with Session(get_engine()) as session:
         session.exec(
             update(Video)
@@ -87,20 +101,31 @@ def _guarded(
         raise ChatReplayError(RETRY)
     try:
         with runtime.video_lock(yt_id):
-            opened = _opened(yt_id)
-            # Only a finished stream: while YouTube is still processing one
-            # (post_live) its video runs on a timeline the chat does not match.
-            if opened.handle is None or opened.live_status not in (None, "was_live"):
-                return ChatPage("none", [], None)
-            return read(opened.handle, opened.first)
+            # A read queued behind one that hit a rate limit asks no further.
+            if runtime.seconds_paused() > 0:
+                raise ChatReplayError(RETRY)
+            try:
+                opened = _opened(yt_id)
+                # Only a finished stream: while YouTube is still processing one
+                # (post_live) its video runs on a timeline the chat does not match.
+                if opened.handle is None or opened.live_status not in (
+                    None,
+                    "was_live",
+                ):
+                    return ChatPage("none", [], None)
+                return read(opened.handle, opened.first)
+            except ChatReplayError as exc:
+                # Settled before the lock is released, so a read waiting on it
+                # sees the pause and a fresh open.
+                if exc.status in (RETRY, FAILED):
+                    # Open afresh next time: the tokens may be what failed.
+                    runtime.opened_drop(yt_id)
+                if exc.status == RETRY:
+                    runtime.pause(PAUSE_ON_LIMIT_SEC)
+                raise
     except ChatReplayError as exc:
         if exc.status == UNAVAILABLE:
             return ChatPage("unavailable", [], None)
-        if exc.status in (RETRY, FAILED):
-            # Open afresh next time: the tokens may be what failed.
-            runtime.opened_drop(yt_id)
-        if exc.status == RETRY:
-            runtime.pause(PAUSE_ON_LIMIT_SEC)
         raise
 
 
