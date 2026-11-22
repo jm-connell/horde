@@ -48,14 +48,15 @@ def _send_ms(renderer: dict[str, Any]) -> int | None:
 
 
 def parse_live_actions(actions: list[Any]) -> tuple[list[ChatItem], list[str]]:
-    """Messages (in send order, each once) and the ids YouTube deleted."""
+    """Messages (in send order, each once) and the ids YouTube deleted (by the
+    author, or by a moderator)."""
     items: list[ChatItem] = []
     removed: list[str] = []
     seen: set[str] = set()
     for raw in _list(actions):
         action = _dict(raw)
         key = _first_dict_key(action)
-        if key == "removeChatItemAction":
+        if key in ("removeChatItemAction", "markChatItemAsDeletedAction"):
             target = _dict(action[key]).get("targetItemId")
             if isinstance(target, str) and target:
                 removed.append(target)

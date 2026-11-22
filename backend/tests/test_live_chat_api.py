@@ -30,6 +30,8 @@ def reads(monkeypatch):
 
 
 class _Session:
+    ended_at_ms: int | None = None
+
     def edge_lag_sec(self) -> float | None:
         return 6.0
 
@@ -94,3 +96,41 @@ def test_the_edge_lag_is_three_target_durations():
     holder = SimpleNamespace(variants={"v": video, "a": audio})
     assert LiveSession.edge_lag_sec(holder) == 6.0  # type: ignore[arg-type]  # a stand-in with only the fields read
     assert LiveSession.edge_lag_sec(SimpleNamespace(variants={})) is None  # type: ignore[arg-type]  # a stand-in with only the fields read
+
+
+def test_after_the_broadcast_ended_chat_follows_its_end(client, reads, monkeypatch):
+    class Ended(_Session):
+        ended_at_ms = NOW - 600_000
+
+    monkeypatch.setattr(live_api, "_live_session", lambda video_id: Ended())
+    body = client.get(URL, params={"behind_ms": 60_000}).json()
+    assert body["cutoff_ms"] == NOW - 600_000 - 60_000 - 6000
+
+
+def test_reads_do_not_wait_for_a_ytdlp_slot(client, reads, monkeypatch):
+    from app.services import limits
+
+    async def full(self):
+        raise AssertionError("took a yt-dlp slot")
+
+    monkeypatch.setattr(limits.YtdlpSlots, "slot", full)
+    assert client.get(URL).status_code == 200
+
+
+def test_a_restricted_member_gets_only_allowed_channels(
+    client, member_client, member_user, add_video, reads
+):
+    kids_url = "https://www.youtube.com/@kidscraft"
+    add_video(channel="Kids Craft", channel_url=kids_url, yt_id="kidsvideo01")
+    add_video(
+        channel="Night Frights",
+        channel_url="https://www.youtube.com/@nightfrights",
+        yt_id="otherviden1",
+    )
+    resp = client.put(
+        f"/api/users/{member_user.id}/allowed-channels",
+        json={"channels": [{"url": kids_url, "name": "Kids Craft"}]},
+    )
+    assert resp.status_code == 200, resp.text
+    assert member_client.get("/api/live/otherviden1/chat").status_code == 403
+    assert member_client.get("/api/live/kidsvideo01/chat").status_code == 200

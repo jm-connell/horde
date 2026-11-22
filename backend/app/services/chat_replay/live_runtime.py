@@ -37,6 +37,12 @@ READ_IDLE_SEC = 60.0
 BUFFER_IDLE_SEC = 600.0
 #: Messages kept per broadcast (also at most the DVR window of send time).
 MAX_MESSAGES = 20_000
+#: A "no chat" or "unavailable" answer is checked again after this long.
+RECHECK_SEC = 60.0
+#: Reopens that fail in a row before the buffer is served as it is, for good.
+MAX_REOPEN_FAILURES = 3
+#: The longest wait before trying a failed reopen again.
+MAX_REOPEN_WAIT_SEC = 600.0
 #: Bounds on YouTube's ``timeoutMs`` between polls.
 MIN_POLL_SEC = 2.0
 MAX_POLL_SEC = 30.0
@@ -74,6 +80,11 @@ class LiveChat:
     ended: bool = False
     #: Open afresh on the next read (the tokens may be what failed).
     reopen: bool = False
+    #: Failed reopens in a row, and the time before which none is tried.
+    failures: int = 0
+    reopen_after: float = 0.0
+    #: When YouTube was last asked whether the broadcast has chat.
+    checked_at: float = 0.0
     last_read: float = 0.0
     opened_at: float = field(default_factory=time.monotonic)
     thread: threading.Thread | None = None
@@ -104,6 +115,10 @@ class LiveChat:
 
     def page(self, cutoff_ms: int, after: int, limit: int) -> LiveChatPage:
         """Messages after ``after`` up to the first one sent past ``cutoff_ms``."""
+        if after > self.seq:
+            # A cursor from an earlier buffer (a restart, or one dropped while
+            # idle): start over rather than wait for the numbers to catch up.
+            after = 0
         shown: list[ChatItem] = []
         next_after = after
         for seq, item in self.items:
@@ -140,7 +155,10 @@ class LiveChatRuntime:
                     and not (chat.thread and chat.thread.is_alive())
                 ):
                     del self._chats[key]
-            return self._chats.setdefault(yt_id, LiveChat(yt_id))
+            chat = self._chats.setdefault(yt_id, LiveChat(yt_id))
+            # Marked read before the lock is let go, so no sweep drops it first.
+            chat.last_read = now
+            return chat
 
     def read(
         self, yt_id: str, cutoff_ms: int, after: int, limit: int = 300
@@ -155,8 +173,14 @@ class LiveChatRuntime:
         replay = ctx.chat_replay
         chat = self._chat(yt_id)
         with chat.lock:
-            chat.last_read = self.clock()
-            if chat.status is None or chat.reopen:
+            now = self.clock()
+            chat.last_read = now
+            recheck = (
+                chat.status in ("none", "unavailable")
+                and now - chat.checked_at > RECHECK_SEC
+            )
+            reopen = chat.reopen and now >= chat.reopen_after
+            if chat.status is None or recheck or reopen:
                 self._open(chat, replay)
             if chat.status != "ok":
                 if chat.status == "unavailable":
@@ -164,6 +188,7 @@ class LiveChatRuntime:
                 return LiveChatPage("none", [], [], after, None)
             if (
                 not chat.ended
+                and not chat.reopen
                 and replay.seconds_paused() == 0
                 and not (chat.thread and chat.thread.is_alive())
             ):
@@ -171,26 +196,43 @@ class LiveChatRuntime:
             return chat.page(cutoff_ms, after, limit)
 
     def _open(self, chat: LiveChat, replay: ChatReplayRuntime) -> None:
+        """Open (or reopen, or check again) the broadcast's chat (caller holds
+        ``chat.lock``). Raises only on the first open."""
         if replay.seconds_paused() > 0:
             if chat.status is None:
                 raise ChatReplayError(RETRY)
             return  # keep serving what is held
+        now = self.clock()
+        chat.checked_at = now
         try:
             handle, first, live_status = live.open_live_chat(chat.yt_id)
         except ChatReplayError as exc:
+            if exc.status == RETRY:
+                replay.pause(PAUSE_ON_LIMIT_SEC)
+            if chat.status == "ok":
+                # A reopen failed: keep serving what is held, and wait longer
+                # each time before asking YouTube again.
+                chat.failures += 1
+                chat.reopen_after = now + min(
+                    MAX_REOPEN_WAIT_SEC, MAX_POLL_SEC * 2**chat.failures
+                )
+                if chat.failures >= MAX_REOPEN_FAILURES:
+                    chat.reopen = False
+                    chat.ended = True
+                return
             if exc.status == UNAVAILABLE:
                 chat.status = "unavailable"
                 return
-            if exc.status == RETRY:
-                replay.pause(PAUSE_ON_LIMIT_SEC)
             if chat.status is None:
                 raise
-            return  # a reopen failed: keep serving what is held
+            return  # a check again failed: keep the earlier answer
         chat.reopen = False
+        chat.failures = 0
         if handle is None or first is None or live_status != "is_live":
-            if chat.status is None:
+            if chat.status == "ok":
+                chat.ended = True  # the broadcast ended: serve what is held
+            else:
                 chat.status = "none"
-            chat.ended = chat.status == "ok"
             return
         chat.handle = handle
         chat.status = "ok"
@@ -224,7 +266,7 @@ class LiveChatRuntime:
                     continue  # YouTube out of reach: try again next time
                 if exc.status == RETRY:
                     replay.pause(PAUSE_ON_LIMIT_SEC)
-                elif exc.status == FAILED:
+                elif exc.status in (FAILED, UNAVAILABLE):
                     with chat.lock:
                         chat.reopen = True
                 return

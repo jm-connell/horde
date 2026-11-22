@@ -40,7 +40,6 @@ from ..services import follows, stream_preview
 from ..services.auth.accounts import AuthUser
 from ..services.chat_replay.youtube import ChatReplayError
 from ..services.comments.fetch import LATER, RETRY
-from ..services.limits import ytdlp_slot
 from ..services.live.directory import (
     RATE_LIMIT_BACKOFF_SEC,
     STALE_LIVE_SEC,
@@ -320,11 +319,8 @@ def _live_session(video_id: str) -> LiveSession | None:
     return current().live.sessions.get(video_id)
 
 
-@router.get(
-    "/{video_id}/chat",
-    response_model=LiveChatRead,
-    dependencies=[Depends(ytdlp_slot)],
-)
+# No yt-dlp slot: a read is a look at memory; only a first open reaches YouTube.
+@router.get("/{video_id}/chat", response_model=LiveChatRead)
 def live_chat(
     video_id: str = VideoId,
     behind_ms: int = Query(0, ge=0, le=86_400_000),
@@ -336,7 +332,10 @@ def live_chat(
     """
     session = _live_session(video_id)
     lag = session.edge_lag_sec() if session is not None else None
-    cutoff_ms = now_ms() - behind_ms - int((lag or 0) * 1000)
+    # After the broadcast ended the player's live edge stops at its end, so
+    # the moment being watched counts back from there, not from now.
+    ended_at = session.ended_at_ms if session is not None else None
+    cutoff_ms = (ended_at or now_ms()) - behind_ms - int((lag or 0) * 1000)
     try:
         page = current().live_chat.read(video_id, cutoff_ms, after)
     except ChatReplayError as exc:

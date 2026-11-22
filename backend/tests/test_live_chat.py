@@ -212,3 +212,80 @@ def test_stop_all_joins_every_poller(yt, runtime):
     assert runtime.polling(YT)
     runtime.stop_all()
     assert not runtime.polling(YT)
+
+
+# --- Review fixes ------------------------------------------------------------------
+
+
+def test_a_cursor_from_before_a_restart_starts_over(yt, runtime):
+    page = runtime.read(YT, cutoff_ms=T0 + 10_000, after=5000)
+    assert [i.id for i in page.items] == ["a", "b"]
+
+
+def test_a_failing_reopen_backs_off(monkeypatch, yt, runtime):
+    now = [1000.0]
+    monkeypatch.setattr(runtime, "clock", lambda: now[0])
+    from app.services.comments.fetch import FAILED
+
+    yt.queue.append(ChatReplayError(FAILED))
+    runtime.read(YT, cutoff_ms=T0 + 10_000, after=0)
+    _wait(lambda: not runtime.polling(YT) and yt.polls >= 1)
+
+    def broken(yt_id):
+        yt.opens += 1
+        raise ChatReplayError(FAILED)
+
+    monkeypatch.setattr(live, "open_live_chat", broken)
+    for _ in range(5):
+        page = runtime.read(YT, cutoff_ms=T0 + 10_000, after=0)
+        assert [i.id for i in page.items] == ["a", "b"]  # the buffer is still served
+    assert yt.opens == 2  # the first open, then one reopen until the backoff passes
+    assert not runtime.polling(YT)
+    now[0] += 600
+    runtime.read(YT, cutoff_ms=T0 + 10_000, after=0)
+    assert yt.opens == 3
+
+
+def test_no_chat_is_checked_again_later(monkeypatch, runtime, init_db):
+    now = [1000.0]
+    monkeypatch.setattr(runtime, "clock", lambda: now[0])
+    opens = []
+
+    def no_chat(yt_id):
+        opens.append(yt_id)
+        return None, None, "is_live"
+
+    monkeypatch.setattr(live, "open_live_chat", no_chat)
+    runtime.read(YT, cutoff_ms=T0, after=0)
+    runtime.read(YT, cutoff_ms=T0, after=0)
+    assert len(opens) == 1
+    now[0] += live_runtime.RECHECK_SEC + 1
+    runtime.read(YT, cutoff_ms=T0, after=0)
+    assert len(opens) == 2
+
+
+def test_unavailable_on_a_reopen_keeps_the_buffer(monkeypatch, yt, runtime):
+    from app.services.comments.fetch import FAILED, UNAVAILABLE
+
+    yt.queue.append(ChatReplayError(FAILED))
+    runtime.read(YT, cutoff_ms=T0 + 10_000, after=0)
+    _wait(lambda: not runtime.polling(YT) and yt.polls >= 1)
+
+    def private(yt_id):
+        raise ChatReplayError(UNAVAILABLE)
+
+    monkeypatch.setattr(live, "open_live_chat", private)
+    page = runtime.read(YT, cutoff_ms=T0 + 10_000, after=0)
+    assert (page.status, [i.id for i in page.items]) == ("ok", ["a", "b"])
+
+
+def test_moderator_deletions_are_removals():
+    actions = [
+        {
+            "markChatItemAsDeletedAction": {
+                "targetItemId": "l9",
+                "deletedStateMessage": {},
+            }
+        }
+    ]
+    assert parse_live_actions(actions) == ([], ["l9"])

@@ -285,6 +285,8 @@ class LiveSession:
         self.source_url = watch_url(video_id)
         self.variants = {k: _Variant(upstream=u) for k, u in upstreams.items()}
         self.ended = False
+        #: Wall-clock time (epoch ms) the broadcast was seen to end.
+        self.ended_at_ms: int | None = None
         self.dvr_floor: int | None = None
         #: The lowest MEDIA-SEQUENCE any playlist may start at. HLS players map
         #: sequence numbers to time from the first playlist they load, so a later
@@ -361,7 +363,7 @@ class LiveSession:
         durations (the HLS hold-back Shaka uses). None until a playlist was read."""
         targets = [
             v.target_duration
-            for v in self.variants.values()
+            for v in list(self.variants.values())
             if not v.upstream.audio and v.target_duration
         ]
         return 3 * max(targets) if targets else None
@@ -486,6 +488,8 @@ class LiveSession:
                 variant.template = template
         if playlist.ended:
             self.ended = True
+            if self.ended_at_ms is None:
+                self.ended_at_ms = int(time.time() * 1000)
         if variant.head_sq is not None:
             floor = variant.head_sq - self._window_segments(variant.target_duration) - 8
             for sq in [sq for sq in variant.known if sq < floor]:
@@ -644,6 +648,8 @@ class LiveSession:
             if not is_live_info(info):
                 logger.info("live stream %s has ended", self.video_id)
                 self.ended = True
+                if self.ended_at_ms is None:
+                    self.ended_at_ms = int(time.time() * 1000)
                 for variant in self.variants.values():
                     variant.rendered = None
                 return False
