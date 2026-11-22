@@ -32,6 +32,7 @@ from sqlmodel import Session
 if TYPE_CHECKING:
     from .services.ai.state import AiRuntimeState
     from .services.auth.runtime import AuthRuntime
+    from .services.chat_replay.live_runtime import LiveChatRuntime
     from .services.chat_replay.runtime import ChatReplayRuntime
     from .services.comments.runtime import CommentsRuntime
     from .services.discovery.runtime import DiscoveryRuntime
@@ -144,6 +145,8 @@ class AppContext:
     comments: CommentsRuntime = field(default_factory=lambda: _new_comments())
     #: Chat replay: open chats, fetched chunks and the rate-limit pause, in memory.
     chat_replay: ChatReplayRuntime = field(default_factory=lambda: _new_chat_replay())
+    #: Live chat: one poller and buffer per broadcast that is live now.
+    live_chat: LiveChatRuntime = field(default_factory=lambda: _new_live_chat())
     #: The app's ``AuthRuntime`` (``install_context`` copies it from ``app.state``).
     auth: AuthRuntime | None = None
     #: Request-path caches (search results, duplicate groups); filled by whoever
@@ -342,3 +345,9 @@ def get_ctx(request: Request) -> AppContext:
 def get_session(ctx: AppContext = Depends(get_ctx)) -> Generator[Session]:
     with Session(ctx.engine) as session:
         yield session
+
+
+def _new_live_chat() -> LiveChatRuntime:
+    from .services.chat_replay.live_runtime import LiveChatRuntime
+
+    return LiveChatRuntime()

@@ -319,6 +319,7 @@ async def lifespan(app: FastAPI):
             if stuck:
                 logger.error("shutdown left running: %s", ", ".join(stuck))
             ctx.live.sessions.close_all()
+            await asyncio.to_thread(ctx.live_chat.stop_all)
             await preview.close_preview_client()
         finally:
             if restore_signals is not None:

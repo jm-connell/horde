@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
@@ -152,7 +152,12 @@ def _classified(exc: BaseException, url: str) -> ChatReplayError:
     return ChatReplayError(FAILED, message)
 
 
-def _open(yt_id: str, url: str, with_cookies: bool) -> Opened:
+def open_page(
+    yt_id: str, url: str, with_cookies: bool, chat_page_url: str
+) -> tuple[str | None, ChatHandle | None, dict[str, Any]]:
+    """The watch page's ``live_status`` and, when the video has chat, a handle
+    and the chat page's ``liveChatContinuation`` (``chat_page_url`` takes the
+    token: the replay or the live chat page)."""
     with _extractor(with_cookies) as ie:
         page = ie._download_webpage(url, yt_id, note=False)
         initial = ie.extract_yt_initial_data(yt_id, page, fatal=False) or {}
@@ -166,7 +171,7 @@ def _open(yt_id: str, url: str, with_cookies: bool) -> Opened:
         live_status = live_status_from_player_response(_dict(player))
         token = chat_continuation(_dict(initial))
         if token is None:
-            return Opened(live_status, None, None)
+            return live_status, None, {}
         ytcfg = _dict(ie.extract_ytcfg(yt_id, page))
         api_key = ytcfg.get("INNERTUBE_API_KEY")
         context = ytcfg.get("INNERTUBE_CONTEXT")
@@ -175,49 +180,65 @@ def _open(yt_id: str, url: str, with_cookies: bool) -> Opened:
         visitor = _dict(context.get("client")).get("visitorData")
         headers = dict(ie.generate_api_headers(ytcfg=ytcfg, visitor_data=visitor))
         headers["content-type"] = "application/json"
-        chat_page = ie._download_webpage(CHAT_PAGE_URL.format(token), yt_id, note=False)
+        chat_page = ie._download_webpage(chat_page_url.format(token), yt_id, note=False)
         data = _dict(ie.extract_yt_initial_data(yt_id, chat_page, fatal=False))
         lcc = _dict(data.get("continuationContents")).get("liveChatContinuation")
         if not isinstance(lcc, dict):
             # YouTube changed the page (or served a consent page): an error the
             # viewer can retry, not a chat that stays empty.
-            raise ChatReplayError(FAILED, "The chat replay page holds no chat")
-        first = chunk_from(lcc)
+            raise ChatReplayError(FAILED, "The chat page holds no chat")
     handle = ChatHandle(
         yt_id=yt_id,
         api_key=api_key,
         context=context,
         headers=headers,
         cookies=with_cookies,
-        seek_token=first.seek_token,
     )
+    return live_status, handle, lcc
+
+
+def _open(yt_id: str, url: str, with_cookies: bool) -> Opened:
+    live_status, handle, lcc = open_page(yt_id, url, with_cookies, CHAT_PAGE_URL)
+    if handle is None:
+        return Opened(live_status, None, None)
+    first = chunk_from(lcc)
+    handle.seek_token = first.seek_token
     return Opened(live_status, handle, first)
 
 
-def open_chat(yt_id: str) -> Opened:
-    """Read the watch page and the first chunk. Raises ``ChatReplayError``."""
-    url = WATCH_URL.format(yt_id)
+def with_cookie_retry[T](url: str, read: Callable[[bool], T]) -> T:
+    """``read(with_cookies)``, once more with cookies when YouTube asks for them.
+    Raises ``ChatReplayError``."""
     with_cookies = url_cookie_required(url)
     try:
-        return _open(yt_id, url, with_cookies)
+        return read(with_cookies)
     except ChatReplayError:
         raise
     except Exception as exc:
         if with_cookies or not should_retry_with_cookies({}, exc):
             raise _classified(exc, url) from exc
-        logger.debug("Chat replay for %s: retrying with cookies", url, exc_info=True)
+        logger.debug("Chat for %s: retrying with cookies", url, exc_info=True)
     try:
-        opened = _open(yt_id, url, True)
+        result = read(True)
     except ChatReplayError:
         raise
     except Exception as exc:
         raise _classified(exc, url) from exc
     remember_cookie_required(url)
-    return opened
+    return result
 
 
-def fetch_chunk(handle: ChatHandle, token: str, offset_ms: int) -> Chunk:
-    """One chunk at ``offset_ms`` with ``token``. Raises ``ChatReplayError``."""
+def open_chat(yt_id: str) -> Opened:
+    """Read the watch page and the first chunk. Raises ``ChatReplayError``."""
+    url = WATCH_URL.format(yt_id)
+    return with_cookie_retry(url, lambda cookies: _open(yt_id, url, cookies))
+
+
+def post_innertube(
+    handle: ChatHandle, api_url: str, token: str, offset_ms: int
+) -> dict[str, Any]:
+    """One chat request; the ``liveChatContinuation`` it answers. Raises
+    ``ChatReplayError``."""
     body = {
         "context": handle.context,
         "continuation": token,
@@ -226,7 +247,7 @@ def fetch_chunk(handle: ChatHandle, token: str, offset_ms: int) -> Chunk:
     try:
         with _extractor(handle.cookies) as ie:
             raw = ie._download_json(
-                REPLAY_API_URL.format(handle.api_key),
+                api_url.format(handle.api_key),
                 handle.yt_id,
                 note=False,
                 data=json.dumps(body).encode(),
@@ -234,6 +255,11 @@ def fetch_chunk(handle: ChatHandle, token: str, offset_ms: int) -> Chunk:
             )
     except Exception as exc:
         raise _classified(exc, WATCH_URL.format(handle.yt_id)) from exc
-    return chunk_from(
-        _dict(_dict(_dict(raw).get("continuationContents")).get("liveChatContinuation"))
+    return _dict(
+        _dict(_dict(raw).get("continuationContents")).get("liveChatContinuation")
     )
+
+
+def fetch_chunk(handle: ChatHandle, token: str, offset_ms: int) -> Chunk:
+    """One chunk at ``offset_ms`` with ``token``. Raises ``ChatReplayError``."""
+    return chunk_from(post_innertube(handle, REPLAY_API_URL, token, offset_ms))

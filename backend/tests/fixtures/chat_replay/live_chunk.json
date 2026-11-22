@@ -1,0 +1,82 @@
+{
+ "continuations": [
+  {
+   "invalidationContinuationData": {
+    "continuation": "LIVE2",
+    "timeoutMs": 10000
+   }
+  }
+ ],
+ "actions": [
+  {
+   "clickTrackingParams": "x",
+   "addChatItemAction": {
+    "item": {
+     "liveChatTextMessageRenderer": {
+      "id": "l1",
+      "timestampUsec": "1763740800000000",
+      "authorName": {
+       "simpleText": "Ada"
+      },
+      "message": {
+       "runs": [
+        {
+         "text": "hello live"
+        }
+       ]
+      }
+     }
+    },
+    "clientId": "c"
+   }
+  },
+  {
+   "clickTrackingParams": "x",
+   "addChatItemAction": {
+    "item": {
+     "liveChatPaidMessageRenderer": {
+      "id": "l2",
+      "timestampUsec": "1763740805000000",
+      "authorName": {
+       "simpleText": "Bo"
+      },
+      "purchaseAmountText": {
+       "simpleText": "$2.00"
+      },
+      "message": {
+       "runs": [
+        {
+         "text": "hi"
+        }
+       ]
+      },
+      "bodyBackgroundColor": 4280150454
+     }
+    },
+    "clientId": "c"
+   }
+  },
+  {
+   "addBannerToLiveChatCommand": {
+    "bannerRenderer": {}
+   }
+  },
+  {
+   "clickTrackingParams": "x",
+   "addChatItemAction": {
+    "item": {
+     "liveChatViewerEngagementMessageRenderer": {
+      "id": "e1",
+      "timestampUsec": "1763740801000000"
+     }
+    },
+    "clientId": "c"
+   }
+  },
+  {
+   "removeChatItemAction": {
+    "targetItemId": "l0"
+   }
+  }
+ ]
+}
