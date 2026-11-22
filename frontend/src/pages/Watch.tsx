@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Link,
   useLocation,
@@ -8,6 +9,7 @@ import {
 import LoadingIndicator from "../components/LoadingIndicator";
 import {
   usePlaybackActions,
+  usePlaybackLayout,
   usePlaybackSession,
 } from "../context/PlaybackContext";
 import { useStreamRelated } from "../queries/preview";
@@ -143,6 +145,7 @@ export default function Watch() {
 
   // A past stream's live chat replay, read from YouTube as playback goes.
   const { getCurrentPosition, getStreamPosition } = usePlaybackActions();
+  const { fullscreenAside } = usePlaybackLayout();
   const chatFor = source ? chatTarget(source) : null;
   const chat = useChatReplay(
     settings.showChatReplay && chatFor ? chatFor.youtubeId : null,
@@ -212,14 +215,13 @@ export default function Watch() {
       (chat.status === "loading" && chatFor.known));
   const chatHidden =
     chatFor != null && chatFor.known && !settings.showChatReplay;
-  const chatNode = chatShown ? (
-    <ChatReplayPanel
-      chat={chat}
-      variant={chatPlace === "sideways" ? "inline" : chatPlace}
-      onHide={() => updateSettings({ showChatReplay: false })}
-    />
+  const hideChat = () => updateSettings({ showChatReplay: false });
+  const showChat = () => updateSettings({ showChatReplay: true });
+  const sideways = chatPlace === "sideways" && (chatShown || chatHidden);
+  const chatNode = sideways ? null : chatShown ? (
+    <ChatReplayPanel chat={chat} variant={chatPlace} onHide={hideChat} />
   ) : chatHidden ? (
-    <ShowChatBar onShow={() => updateSettings({ showChatReplay: true })} />
+    <ShowChatBar onShow={showChat} />
   ) : null;
   const chatInSidebar = chatPlace === "sidebar" && chatNode != null;
   const sidebarShown = showRelatedRight || chatInSidebar;
@@ -250,6 +252,17 @@ export default function Watch() {
           streamDownload={streamDownload}
           onVideoUpdated={setVideo}
           dockRef={dockRef}
+          sideways={
+            !sideways ? undefined : chatShown ? (
+              <ChatReplayPanel
+                chat={chat}
+                variant="sideways"
+                onHide={hideChat}
+              />
+            ) : (
+              <ShowChatBar onShow={showChat} vertical />
+            )
+          }
           belowPlayer={
             clip && clipOpen ? (
               <ClipPanel
@@ -270,11 +283,7 @@ export default function Watch() {
             sidebarShown={sidebarShown}
             columnBounded={sidebarShown || isWide}
             onVideoUpdated={setVideo}
-            chatInline={
-              chatPlace === "inline" || chatPlace === "sideways"
-                ? chatNode
-                : undefined
-            }
+            chatInline={chatPlace === "inline" ? chatNode : undefined}
             chatBeside={chatPlace === "beside-info" ? chatNode : undefined}
           />
           {video && (
@@ -307,6 +316,17 @@ export default function Watch() {
         )}
       </div>
 
+      {/* Fullscreen on a touch screen: the chat beside the picture. */}
+      {fullscreenAside &&
+        chatShown &&
+        createPortal(
+          <ChatReplayPanel
+            chat={chat}
+            variant="fullscreen"
+            onHide={hideChat}
+          />,
+          fullscreenAside
+        )}
       {video && <RedownloadDialog video={video} actions={actions} />}
     </div>
   );

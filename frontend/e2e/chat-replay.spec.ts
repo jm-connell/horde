@@ -411,3 +411,84 @@ test("chat replay passes axe", async ({ page }) => {
   await expect(chatLog(page)).toContainText("message at 0.0s");
   await expectNoSeriousViolations(page, "watch with chat replay");
 });
+
+test.describe("phone turned sideways", () => {
+  test.use({
+    viewport: { width: 844, height: 390 },
+    isMobile: true,
+    hasTouch: true,
+  });
+
+  test("video and chat fill the screen side by side", async ({ page }) => {
+    await openCedar(page);
+    const chat = chatRegion(page);
+    await expect(chat).toBeVisible();
+    await expect(page.locator("[data-horde='watch-sideways']")).toBeVisible();
+    const video = (await page.locator("video").first().boundingBox())!;
+    const chatBox = (await chat.boundingBox())!;
+    expect(chatBox.x).toBeGreaterThanOrEqual(video.x + video.width - 1);
+    for (const box of [video, chatBox]) {
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.y + box.height).toBeLessThanOrEqual(391);
+    }
+    expect(chatBox.width).toBeGreaterThan(844 * 0.25);
+    expect(chatBox.width).toBeLessThan(844 * 0.4);
+    // The page behind does not scroll.
+    await page.evaluate(() => window.scrollTo(0, 500));
+    expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  });
+
+  test("hiding gives the whole screen to the video", async ({ page }) => {
+    await openCedar(page);
+    await chatRegion(page).getByRole("button", { name: "Hide" }).click();
+    const show = page.getByRole("button", { name: "Show live chat" });
+    await expect(show).toBeVisible();
+    await expect(page.locator("[data-horde='watch-sideways']")).toBeVisible();
+    const video = (await page.locator("video").first().boundingBox())!;
+    expect(video.width).toBeGreaterThan(844 * 0.85);
+    await show.click();
+    await expect(chatRegion(page)).toBeVisible();
+  });
+
+  test("other videos turn sideways as before", async ({ page }) => {
+    await page.goto(`/watch/${await libraryId(page, "Aurora Drift")}`);
+    await expect(page.locator("video").first()).toBeVisible();
+    await expect(page.locator("[data-horde='watch-sideways']")).toHaveCount(0);
+  });
+});
+
+test.describe("touch screen fullscreen", () => {
+  test.use({ viewport: { width: 1024, height: 768 }, hasTouch: true });
+
+  test("chat comes along beside the picture", async ({ page }) => {
+    await openCedar(page);
+    await expect(chatRegion(page)).toBeVisible();
+    const box = (await page.locator("video").first().boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.getByRole("button", { name: "Fullscreen", exact: true }).click();
+    await expect
+      .poll(() => page.evaluate(() => document.fullscreenElement !== null))
+      .toBe(true);
+    const aside = page.locator("[data-horde='player-fullscreen-aside']");
+    await expect(
+      aside.getByRole("region", { name: "Live chat" })
+    ).toBeVisible();
+    await page.evaluate(() => document.exitFullscreen());
+    await expect(aside).toHaveCount(0);
+  });
+});
+
+test("desktop fullscreen stays video only", async ({ page }) => {
+  await openCedar(page);
+  await expect(chatRegion(page)).toBeVisible();
+  const box = (await page.locator("video").first().boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.getByRole("button", { name: "Fullscreen", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => document.fullscreenElement !== null))
+    .toBe(true);
+  await expect(
+    page.locator("[data-horde='player-fullscreen-aside']")
+  ).toHaveCount(0);
+  await page.evaluate(() => document.exitFullscreen());
+});

@@ -16,8 +16,9 @@ const HEIGHT: Record<ChatPanelVariant, string> = {
   sidebar: "h-[min(40rem,calc(100vh-8rem))]",
   inline: "h-96",
   "beside-info": "h-96",
-  sideways: "h-full",
-  fullscreen: "h-full",
+  // A third of a phone turned sideways, at most the sidebar's width.
+  sideways: "h-full w-[min(24rem,33vw)]",
+  fullscreen: "h-full w-[min(24rem,33vw)]",
 };
 
 function errorNote(code: string | null): string {
