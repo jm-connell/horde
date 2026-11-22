@@ -861,6 +861,36 @@ def test_existing_subscriptions_are_added_to_ask_once(session, admin_user, init_
     assert len(session.exec(select(KbChannel)).all()) == 1
 
 
+def test_backfill_adds_only_subscriptions_that_could_turn_ask_on(
+    session, admin_user, member_user, init_db
+):
+    """The same rule as subscribing: a member's subscription counts only while
+    the administrator includes members' new channels, and a disabled account's
+    not at all."""
+    from app.services import app_settings, follows
+    from app.services.knowledge import subscriptions
+
+    member_user.permissions = '["manage_subscriptions"]'
+    session.add(member_user)
+    session.commit()
+    follows.follow(session, admin_user.id, "https://www.youtube.com/@mine", "Mine")
+    follows.follow(session, member_user.id, "https://www.youtube.com/@theirs", "T")
+    app_settings.save({"new_channel_subscribe_members": False})
+
+    assert subscriptions.add_subscribed_once() == 1
+    urls = {c.channel_url for c in session.exec(select(KbChannel)).all()}
+    assert urls == {"https://youtube.com/@mine"}
+
+    # A disabled administrator's subscriptions are left out too.
+    app_settings.save({"ask_subscriptions_indexed": False})
+    for c in session.exec(select(KbChannel)).all():
+        session.delete(c)
+    admin_user.disabled = True
+    session.add(admin_user)
+    session.commit()
+    assert subscriptions.add_subscribed_once() == 0
+
+
 def test_a_subscription_ask_already_has_under_another_address_is_dropped(
     session, monkeypatch
 ):

@@ -15,8 +15,10 @@ from sqlmodel import Session, col, select
 
 from ...context import current, get_engine
 from ...errors import CodedHTTPException
-from ...models import ChannelFollow, KbChannel
+from ...models import ChannelFollow, KbChannel, User
 from .. import app_settings
+from ..auth.accounts import effective_permissions
+from ..follows import may_index_on_subscribe
 from . import channels
 from . import search as kb_search
 
@@ -53,8 +55,10 @@ def _same_channel(
 
 
 def add_subscribed(session: Session) -> int:
-    """Queue every subscribed YouTube channel Ask does not have. Asks YouTube
-    nothing: the worker's listing fills in the rest."""
+    """Queue every subscribed YouTube channel Ask does not have, by the rule
+    subscribing follows: only subscriptions of enabled accounts that may turn
+    Ask on that way. Asks YouTube nothing: the worker's listing fills in the
+    rest."""
     known = [
         (c.channel_url, c.channel_name) for c in session.exec(select(KbChannel)).all()
     ]
@@ -63,8 +67,16 @@ def add_subscribed(session: Session) -> int:
         .where(col(ChannelFollow.followed).is_(True))
         .order_by(col(ChannelFollow.created_at))
     ).all()
+    allowed = {
+        user.id
+        for user in session.exec(select(User)).all()
+        if not user.disabled
+        and may_index_on_subscribe(user.is_admin, effective_permissions(user))
+    }
     added = 0
     for follow in follows:
+        if follow.user_id not in allowed:
+            continue
         try:
             url = channels.parse_channel_input(follow.channel_url)
         except CodedHTTPException:
