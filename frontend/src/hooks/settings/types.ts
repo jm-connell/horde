@@ -205,6 +205,8 @@ export interface Settings {
   tabBarItems: TabBarItem[];
   /** Pages in the top bar on a wider screen, in order (Settings always). */
   navBarItems: NavBarItem[];
+  /** The account's recent searches in the top bar's box, newest first. */
+  searchHistory: string[];
   normalizeVolumeOnDownload: boolean;
   /** Quality preselected on the Download page (a `PRESET_ORDER` value). */
   defaultDownloadPreset: string;

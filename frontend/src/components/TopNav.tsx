@@ -12,7 +12,8 @@ import { useHomeReset } from "../context/HomeResetContext";
 import { useInstalledApp } from "../hooks/useInstalledApp";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useVisualViewport } from "../hooks/useVisualViewport";
-import { useSettings } from "../hooks/useSettings";
+import { loadSettings, useSettings } from "../hooks/useSettings";
+import { addSearch, removeSearch } from "../searchHistory";
 import AccountMenu from "./auth/AccountMenu";
 import { queryKeys } from "../queries/keys";
 import { useReviewCount } from "../queries/status";
@@ -27,7 +28,7 @@ import {
 import LiquidNav from "./LiquidNav";
 import NavAskButton from "./NavAskButton";
 import { isLinkActive, useNavLinks } from "./navLinks";
-import YoutubeSearchChip from "./YoutubeSearchChip";
+import NavSearchField from "./NavSearchField";
 import { actionForKey, resolveHotkeys } from "../hotkeys";
 import {
   isInteractiveControl,
@@ -58,7 +59,7 @@ export default function TopNav() {
   const { activeCount } = useDownloads();
   const { search, setSearch, commitSearch } = useSearch();
   const { resetHome } = useHomeReset();
-  const [settings] = useSettings();
+  const [settings, updateSettings] = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
   const { mode } = usePlaybackSession();
@@ -290,10 +291,41 @@ export default function TopNav() {
     window.scrollTo({ top: 0 });
   };
 
+  // Recent searches (the account's, synced): a search counts once it is
+  // run (Enter or a pick) or a result is opened, not at each key typed.
+  const recordSearch = (query: string) =>
+    updateSettings({
+      searchHistory: addSearch(loadSettings().searchHistory, query),
+    });
+
   const onSearchEnter = () => {
     commitSearch();
+    recordSearch(search);
     window.scrollTo({ top: 0 });
   };
+
+  const onSearchPick = (query: string) => {
+    onSearchInput(query);
+    commitSearch();
+    recordSearch(query);
+    // The results, not the keyboard (which covers them on a phone).
+    (useHamburger ? searchInputRef : desktopSearchRef).current?.blur();
+  };
+
+  const onSearchRemove = (query: string) =>
+    updateSettings({
+      searchHistory: removeSearch(loadSettings().searchHistory, query),
+    });
+
+  // A result opened from the home page's search keeps that search.
+  const lastPathname = useRef(location.pathname);
+  useEffect(() => {
+    const from = lastPathname.current;
+    lastPathname.current = location.pathname;
+    if (from === "/" && location.pathname.startsWith("/watch") && search.trim())
+      recordSearch(search);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on navigation only; the search is read as it stands then
+  }, [location.pathname]);
 
   // The "Focus search" hotkey, on every page. No dependency list: it reads
   // the current layout and settings each render.
@@ -484,30 +516,18 @@ export default function TopNav() {
                 <ConnectionTag popupAlign="end" />
               </div>
               <NavAskButton compact={false} />
-              <div
-                data-horde="nav-search"
+              <NavSearchField
+                inputRef={desktopSearchRef}
+                dataHorde="nav-search"
                 className="relative mr-2 w-32 self-center xl:w-48"
-              >
-                <input
-                  ref={desktopSearchRef}
-                  type="search"
-                  value={search}
-                  onChange={(e) => onSearchInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      onSearchEnter();
-                    } else if (e.key === "Escape") {
-                      e.currentTarget.blur();
-                    }
-                  }}
-                  placeholder="Search"
-                  enterKeyHint="search"
-                  aria-label="Search library"
-                  className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 py-1.5 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent"
-                />
-                <YoutubeSearchChip />
-              </div>
+                value={search}
+                history={settings.searchHistory}
+                onInput={onSearchInput}
+                onSubmit={onSearchEnter}
+                onPick={onSearchPick}
+                onRemove={onSearchRemove}
+                onEscape={(input) => input.blur()}
+              />
               <AccountMenu variant="dropdown" />
             </div>
           )}
@@ -519,25 +539,16 @@ export default function TopNav() {
               }`}
             >
               {searchOpen && (
-                <div className="relative mr-1 min-w-0 flex-1">
-                  <input
-                    ref={searchInputRef}
-                    type="search"
-                    value={search}
-                    onChange={(e) => onSearchInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        onSearchEnter();
-                      }
-                    }}
-                    placeholder="Search"
-                    enterKeyHint="search"
-                    aria-label="Search library"
-                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 py-1.5 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent"
-                  />
-                  <YoutubeSearchChip />
-                </div>
+                <NavSearchField
+                  inputRef={searchInputRef}
+                  className="relative mr-1 min-w-0 flex-1"
+                  value={search}
+                  history={settings.searchHistory}
+                  onInput={onSearchInput}
+                  onSubmit={onSearchEnter}
+                  onPick={onSearchPick}
+                  onRemove={onSearchRemove}
+                />
               )}
               {!searchOpen && (hasOfflineItems || offlineMode) && (
                 <NavLink

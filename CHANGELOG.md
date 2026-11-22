@@ -9,6 +9,10 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Recent searches.** Click into the empty search box and your recent
+  searches open under it (four at a time, scrolling for more): pick one to
+  search again, or remove it with ×. They are saved with your account, so
+  they follow you to other devices and stay private to you.
 - **Choose the top bar's pages.** Settings → Appearance → **Top bar** picks
   which pages the bar at the top links to on a wider screen and puts them
   in order, like **Tab bar** does for the installed app on a phone. The

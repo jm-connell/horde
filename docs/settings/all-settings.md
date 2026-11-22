@@ -122,6 +122,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `uiFont` | `"oxanium"` | string | Builtin id or saved custom id | UI blob |
 | `customFonts` | `[]` | array | Saved URL/file fonts | UI blob |
 | `tabBarItems` | `["home","search","download","chat"]` | array | Up to 5 of `home` \| `search` \| `download` \| `chat` \| `playlists` \| `history` \| `offline` \| `settings`, in order | UI blob |
+| `searchHistory` | `[]` | array | The account's recent searches in the top bar's box, newest first, up to 20 (each up to 200 characters) | UI blob |
 | `navBarItems` | every page | array | `home` \| `playlists` \| `subscriptions` \| `history` \| `offline` \| `download` \| `import` \| `settings`, in order; `settings` is always kept | UI blob |
 
 ### Library / downloads (UI)

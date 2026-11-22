@@ -368,6 +368,11 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   search box is 128px, 192px from `xl`, so the links still fit beside both. Under the hamburger layout it is a
   chat icon beside the search icon, hidden while searching and in the
   installed app (its tab bar has Ask).
+- **Recent searches.** Focusing the empty search box drops the account's
+  recent searches under it on the `ui-menu` surface, right-aligned, at least
+  256px wide: a muted uppercase "Recent searches" label, then 36px rows (a
+  muted history icon, the query truncated, a quiet × at the right) in a list
+  four rows tall that scrolls for more. Arrow keys move through the rows.
 - **Channel sidebar.** One list of rows (`ChannelSidebar`): a 24px round
   avatar (`ChannelAvatar`; the initial on `accent/15` when there is no
   picture), the name (`text-sm`, truncated) and a muted `tabular-nums`

@@ -1,4 +1,5 @@
 import {
+  CSRF_HEADERS,
   ensureNavVisible,
   expect,
   hasChannelRail,
@@ -262,4 +263,84 @@ test.describe("route render failure", () => {
       page.getByRole("heading", { name: "Playlists", level: 1 })
     ).toBeVisible();
   });
+});
+
+test("the search box offers recent searches, newest first", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(videoCard(page, "Cedar Notes").first()).toBeVisible();
+  const box = await openSearchBox(page);
+  await box.fill("Cedar");
+  await box.press("Enter");
+  await box.fill("Aurora");
+  await box.press("Enter");
+
+  // An empty, focused box lists them under it.
+  await box.fill("");
+  const recent = page.getByRole("list", { name: "Recent searches" });
+  await expect(
+    recent.getByRole("button", { name: /^(Aurora|Cedar)$/ })
+  ).toHaveText(["Aurora", "Cedar"]);
+  // Typing hides them: the results are below.
+  await box.fill("P");
+  await expect(recent).toHaveCount(0);
+  await box.fill("");
+
+  // A recent search runs again when picked.
+  await recent.getByRole("button", { name: "Cedar", exact: true }).click();
+  await expect(box).toHaveValue("Cedar");
+  await expect(videoCard(page, "Cedar Notes").first()).toBeVisible();
+  await expect(recent).toHaveCount(0);
+
+  // And can be taken off the list.
+  await box.fill("");
+  await box.focus();
+  await recent
+    .getByRole("button", { name: "Remove “Aurora” from recent searches" })
+    .click();
+  await expect(
+    recent.getByRole("button", { name: /^(Aurora|Cedar)$/ })
+  ).toHaveText(["Cedar"]);
+});
+
+test("opening a result keeps its search, and the list scrolls past four", async ({
+  page,
+}) => {
+  const saved = await page.request.patch("/api/settings", {
+    headers: CSRF_HEADERS,
+    data: {
+      ui: { search_history: ["one", "two", "three", "four", "five", "six"] },
+    },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.goto("/");
+  await expect(videoCard(page, "Cedar Notes").first()).toBeVisible();
+  const box = await openSearchBox(page);
+  await box.focus();
+  const recent = page.getByRole("list", { name: "Recent searches" });
+  await expect(recent.getByRole("listitem")).toHaveCount(6);
+  // About four rows show; the rest scroll inside the box.
+  const fit = await recent.evaluate((el) => {
+    const row = el.querySelector("li")!.getBoundingClientRect().height;
+    return {
+      rows: el.clientHeight / row,
+      scrolls: el.scrollHeight > el.clientHeight,
+    };
+  });
+  expect(fit.rows).toBeGreaterThan(3.5);
+  expect(fit.rows).toBeLessThanOrEqual(4.5);
+  expect(fit.scrolls).toBe(true);
+
+  // Typed without Enter, then a result opened: the search is kept.
+  await box.fill("Paper");
+  await videoCard(page, "Paper Kites").first().click();
+  await expect(
+    page.getByRole("heading", { name: "Paper Kites", level: 1 })
+  ).toBeVisible();
+  await page.goto("/");
+  await expect(videoCard(page, "Cedar Notes").first()).toBeVisible();
+  const again = await openSearchBox(page);
+  await again.focus();
+  await expect(recent.getByRole("listitem").first()).toHaveText("Paper");
 });
