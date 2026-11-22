@@ -658,40 +658,39 @@ export default function DiscoverHome({
         </div>
       ) : (
         <>
-          <div className="relative">
-            {updating && (
-              // No height of its own, so the cards do not move; it rides
-              // below the top bar while the dimmed cards scroll under it.
-              <div className="pointer-events-none sticky top-20 z-20 h-0">
-                <div
-                  role="status"
-                  className="ui-panel mx-auto mt-2 flex w-fit flex-col items-center gap-1 rounded-xl border border-ink-700 bg-ink-900/95 px-4 pb-2.5 pt-2 text-sm text-gray-200 shadow-lg"
-                >
-                  {/* The animation on its own line, the words under it. */}
-                  <LoadingMark
-                    style={normalizeLoadingStyle(settings.loadingStyle)}
-                    compact
-                  />
-                  <span>Loading new picks…</span>
-                </div>
+          {updating && (
+            // Fixed below the top bar, so it stays in sight however far
+            // the dimmed cards are scrolled. (Sticky would not: the app's
+            // column clips sideways, which makes it the sticky container.)
+            <div className="pointer-events-none fixed inset-x-0 top-[calc(env(safe-area-inset-top)+5rem)] z-20 flex justify-center px-3">
+              <div
+                role="status"
+                className="ui-panel flex w-fit flex-col items-center gap-1 rounded-xl border border-ink-700 bg-ink-900/95 px-4 pb-2.5 pt-2 text-sm text-gray-200 shadow-lg"
+              >
+                {/* The animation on its own line, the words under it. */}
+                <LoadingMark
+                  style={normalizeLoadingStyle(settings.loadingStyle)}
+                  compact
+                />
+                <span>Loading new picks…</span>
               </div>
-            )}
-            <div
-              ref={gridRef}
-              className={`${gridClass} transition-opacity duration-200 ${updating ? "opacity-60" : ""}`}
-              aria-busy={updating || undefined}
-            >
-              {items.slice(0, splitAt).map(card)}
-              <SuggestedChannels
-                channels={category === null ? channels : []}
-                onSubscribe={
-                  can("manage_subscriptions") ? subscribeChannel : undefined
-                }
-                onDismiss={dismissChannel}
-                onOpen={(ch) => onChannelClick({ name: ch.name, url: ch.url })}
-              />
-              {items.slice(splitAt).map(card)}
             </div>
+          )}
+          <div
+            ref={gridRef}
+            className={`${gridClass} transition-opacity duration-200 ${updating ? "opacity-60" : ""}`}
+            aria-busy={updating || undefined}
+          >
+            {items.slice(0, splitAt).map(card)}
+            <SuggestedChannels
+              channels={category === null ? channels : []}
+              onSubscribe={
+                can("manage_subscriptions") ? subscribeChannel : undefined
+              }
+              onDismiss={dismissChannel}
+              onOpen={(ch) => onChannelClick({ name: ch.name, url: ch.url })}
+            />
+            {items.slice(splitAt).map(card)}
           </div>
           <div ref={sentinelRef} className="h-4" />
           {loadingMore && <LoadingIndicator />}

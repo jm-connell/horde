@@ -398,6 +398,8 @@ test("Recommended can be browsed by AI category", async ({ page }) => {
 test("Refresh shows that new picks are loading until they arrive", async ({
   page,
 }) => {
+  // A phone, where the feed runs well past one screen.
+  await page.setViewportSize({ width: 412, height: 839 });
   await openRecommended(page);
   // Hold the reshuffled page (it carries a seed) until the test lets it go.
   let release!: () => void;
@@ -419,6 +421,10 @@ test("Refresh shows that new picks are loading until they arrive", async ({
   await expect(refresh).toHaveAttribute("aria-busy", "true");
   // The old picks stay on screen meanwhile.
   await expect(page.getByText(FOUND)).toBeVisible();
+
+  // Scrolled down the dimmed cards, the note is still in sight.
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await expect(loading).toBeInViewport();
 
   release();
   await expect(loading).toHaveCount(0);
