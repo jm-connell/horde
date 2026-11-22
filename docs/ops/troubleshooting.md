@@ -59,6 +59,8 @@ Docker entrypoint runs Horde as `PUID`:`PGID` (defaults `1000:1000`) and chowns 
 
 **Fix:** set `PUID`/`PGID` to the owner of your media dataset, recreate the container, ensure the mount is writable by that user.
 
+Started as a non-root user instead (`user:` in Compose, `docker run --user`, or TrueNAS Apps), Horde runs as that user and ignores `PUID`/`PGID`. It cannot chown anything then: the data folder and the media folder must already belong to that user, and Horde will not start while the data folder is not writable.
+
 ## First install: stack missing or image will not build
 
 **Symptoms:** Dockge has no `horde` stack; `docker compose` cannot find a `Dockerfile`; build context is empty; `update.sh` says `not a git repository`.

@@ -85,8 +85,39 @@ jobs:
           docker exec horde-smoke ffmpeg -version | head -n 1
           docker logs horde-smoke 2>&1 | grep 'horde-entrypoint'
 
+      # How TrueNAS Apps runs it: started as a non-root user with every
+      # capability dropped, so the entrypoint cannot chown or switch users.
+      - name: Start as a non-root user (TrueNAS Apps)
+        run: |
+          mkdir -p "$RUNNER_TEMP/horde-nonroot/data" "$RUNNER_TEMP/horde-nonroot/downloads"
+          # The folders must belong to 568, as TrueNAS's permissions step leaves them.
+          sudo chown -R 568:568 "$RUNNER_TEMP/horde-nonroot"
+          docker run -d --name horde-nonroot \
+            -p 18081:8080 \
+            --user 568:568 \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            -v "$RUNNER_TEMP/horde-nonroot/data:/app/data" \
+            -v "$RUNNER_TEMP/horde-nonroot/downloads:/downloads" \
+            horde:ci
+          for _ in $(seq 1 60); do
+            status="$(docker inspect -f '{{.State.Health.Status}}' horde-nonroot)"
+            echo "health: ${status}"
+            if [ "${status}" = "healthy" ]; then
+              curl -fsS http://127.0.0.1:18081/api/ping
+              echo
+              docker logs horde-nonroot 2>&1 | grep 'horde-entrypoint'
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs horde-nonroot
+          exit 1
+
       - name: Tear down
         if: always()
         run: |
           docker logs horde-smoke 2>&1 | tail -n 50 || true
           docker rm -f horde-smoke || true
+          docker logs horde-nonroot 2>&1 | tail -n 50 || true
+          docker rm -f horde-nonroot || true

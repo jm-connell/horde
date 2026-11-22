@@ -24,7 +24,7 @@ The image is built in three stages:
 2. **docs** (`python:3.14-slim`) — `mkdocs build --strict` → HTML site
 3. **runtime** (`python:3.14-slim`) — install Python deps + ffmpeg (jellyfin-ffmpeg when available), copy `backend/app`, copy frontend build to `./static`, copy wiki to `./static/wiki`
 
-The runtime entrypoint drops privileges with `PUID`/`PGID` (TrueNAS-friendly) and starts Uvicorn on port **8080**.
+The runtime entrypoint drops privileges with `PUID`/`PGID` (TrueNAS-friendly), or runs as the starting user when the container is started as non-root (TrueNAS Apps), and starts Uvicorn on port **8080**.
 
 ```text
 frontend stage ──► /app/static
