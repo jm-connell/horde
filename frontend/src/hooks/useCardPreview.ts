@@ -124,7 +124,10 @@ function evaluateCenter() {
   const candidates = [];
   for (const [id, card] of cards) {
     if (card.blocked) continue;
-    const r = card.el.getBoundingClientRect();
+    // The picture, not the whole card: its title must not keep it playing.
+    const frame =
+      card.el.querySelector<HTMLElement>("[data-preview-frame]") ?? card.el;
+    const r = frame.getBoundingClientRect();
     candidates.push({
       id,
       top: r.top,
@@ -141,7 +144,9 @@ function evaluateCenter() {
     clearCenterTimer();
     return;
   }
-  if (winner === pendingCenterId) return;
+  // Already waiting to start this one. (Not when no card won: with nothing
+  // pending either, that would leave the playing preview running.)
+  if (winner != null && winner === pendingCenterId) return;
   clearCenterTimer();
   if (winner == null) {
     setActive(null);

@@ -55,6 +55,11 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- **A card's preview on a phone stops when it leaves the middle of the
+  screen.** It kept playing until another card's preview started, and it
+  counted as centred while only its title was in the middle. A preview now
+  plays only while the card's picture covers the middle of the screen.
+
 - **A video no longer stops with "This device couldn't play the AV1
   video" part-way through.** A playback error in a downloaded video that
   was already playing (a phone does this after a call or time in the

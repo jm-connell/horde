@@ -574,3 +574,39 @@ const YOUTUBE_HARBOR = {
   has_more: false,
   youtube_video_search_effective: true,
 };
+
+test.describe("on a touch phone", () => {
+  test.use({
+    viewport: { width: 412, height: 839 },
+    isMobile: true,
+    hasTouch: true,
+  });
+
+  test("a card's preview stops once its picture scrolls off the middle", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.getByRole("tab", { name: "Library", exact: true }).click();
+    const card = videoCard(page, "Paper Kites").first();
+    await expect(card).toBeVisible();
+    /** Scroll so the picture's top sits `offset` px from the screen's middle. */
+    const placePicture = (offset: number) =>
+      card.evaluate((el, at) => {
+        const frame = el.querySelector("[data-preview-frame]")!;
+        const top = frame.getBoundingClientRect().top;
+        window.scrollBy(0, top - (window.innerHeight / 2 + at));
+      }, offset);
+
+    // The picture over the middle of the screen plays.
+    const height = await card
+      .locator("[data-preview-frame]")
+      .evaluate((el) => el.getBoundingClientRect().height);
+    await placePicture(-height / 2);
+    await expect(card).toHaveAttribute("data-preview-active", "true");
+
+    // Its title still covers the middle, but the picture has gone past it.
+    await placePicture(-height - 20);
+    await expect(card).not.toHaveAttribute("data-preview-active", "true");
+    await expect(page.locator("[data-preview-active='true']")).toHaveCount(0);
+  });
+});
