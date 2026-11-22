@@ -1,4 +1,4 @@
-import type { Ref } from "react";
+import type { ReactNode, Ref } from "react";
 import { Link } from "react-router-dom";
 import { LiveNowLabel } from "../../components/ChannelFeedCard";
 import LoadingIndicator from "../../components/LoadingIndicator";
@@ -20,96 +20,105 @@ function DownloadedBadge() {
 
 const channelHref = (name: string) => `/?channel=${encodeURIComponent(name)}`;
 
-/** The right-hand column beside the player: the playback queue and "More like this". */
+/**
+ * The right-hand column beside the player: a past stream's live chat, the
+ * playback queue and "More like this".
+ */
 export function WatchSidebar({
   items,
   sentinelRef,
   loadingMore = false,
   hasQueue,
+  chat,
 }: {
   items: RelatedItem[];
   sentinelRef?: Ref<HTMLDivElement>;
   loadingMore?: boolean;
   hasQueue: boolean;
+  /** Live chat (or the bar that brings it back), first in the column. */
+  chat?: ReactNode;
 }) {
   return (
     <aside className="hidden space-y-6 xl:block">
+      {chat}
       {hasQueue && <PlaybackQueue className="sticky top-20" />}
-      <div className={hasQueue ? "" : "sticky top-20"}>
-        <div className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-            More like this
-          </h3>
-          <div className="space-y-2">
-            {/* The title link stretches over the whole row; the channel name
+      {items.length > 0 && (
+        <div className={hasQueue || chat ? "" : "sticky top-20"}>
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              More like this
+            </h3>
+            <div className="space-y-2">
+              {/* The title link stretches over the whole row; the channel name
                 and queue button sit above it as their own targets. */}
-            {items.map((v) => (
-              <div
-                key={v.key}
-                data-horde="related-item"
-                className="group relative flex gap-2 rounded-lg p-1 transition-colors hover:bg-ink-800"
-              >
-                <div className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-lg bg-ink-800">
-                  {v.thumb ? (
-                    <img
-                      decoding="async"
-                      width={160}
-                      height={90}
-                      src={v.thumb}
-                      alt=""
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-muted">
-                      <PlayIcon className="text-xl" />
-                    </div>
-                  )}
-                  {v.queueEntry && (
-                    <QueueButton
-                      entry={v.queueEntry}
-                      className="right-1 top-1 px-1.5 py-0.5 text-[11px]"
-                    />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 py-0.5">
-                  <Link
-                    to={v.href}
-                    className="line-clamp-2 block text-sm font-medium text-gray-200 after:absolute after:inset-0 after:rounded-lg group-hover:text-accent"
-                  >
-                    {v.title}
-                  </Link>
-                  {v.channel && (
+              {items.map((v) => (
+                <div
+                  key={v.key}
+                  data-horde="related-item"
+                  className="group relative flex gap-2 rounded-lg p-1 transition-colors hover:bg-ink-800"
+                >
+                  <div className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-lg bg-ink-800">
+                    {v.thumb ? (
+                      <img
+                        decoding="async"
+                        width={160}
+                        height={90}
+                        src={v.thumb}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-muted">
+                        <PlayIcon className="text-xl" />
+                      </div>
+                    )}
+                    {v.queueEntry && (
+                      <QueueButton
+                        entry={v.queueEntry}
+                        className="right-1 top-1 px-1.5 py-0.5 text-[11px]"
+                      />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 py-0.5">
                     <Link
-                      to={channelHref(v.channel)}
-                      className="relative z-10 mt-0.5 block truncate text-xs text-muted hover:text-accent hover:underline"
+                      to={v.href}
+                      className="line-clamp-2 block text-sm font-medium text-gray-200 after:absolute after:inset-0 after:rounded-lg group-hover:text-accent"
                     >
-                      {v.channel}
+                      {v.title}
                     </Link>
-                  )}
-                  {v.durationSec != null && (
-                    <p className="mt-0.5 text-xs text-muted">
-                      {formatDuration(v.durationSec)}
-                    </p>
-                  )}
-                  {v.live && (
-                    <p className="mt-1">
-                      <LiveNowLabel />
-                    </p>
-                  )}
-                  {v.downloaded && (
-                    <p className="mt-1">
-                      <DownloadedBadge />
-                    </p>
-                  )}
+                    {v.channel && (
+                      <Link
+                        to={channelHref(v.channel)}
+                        className="relative z-10 mt-0.5 block truncate text-xs text-muted hover:text-accent hover:underline"
+                      >
+                        {v.channel}
+                      </Link>
+                    )}
+                    {v.durationSec != null && (
+                      <p className="mt-0.5 text-xs text-muted">
+                        {formatDuration(v.durationSec)}
+                      </p>
+                    )}
+                    {v.live && (
+                      <p className="mt-1">
+                        <LiveNowLabel />
+                      </p>
+                    )}
+                    {v.downloaded && (
+                      <p className="mt-1">
+                        <DownloadedBadge />
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            {sentinelRef && <div ref={sentinelRef} className="h-2" />}
+            {loadingMore && <p className="text-xs text-muted">Loading more…</p>}
           </div>
-          {sentinelRef && <div ref={sentinelRef} className="h-2" />}
-          {loadingMore && <p className="text-xs text-muted">Loading more…</p>}
         </div>
-      </div>
+      )}
     </aside>
   );
 }

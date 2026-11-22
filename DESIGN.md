@@ -356,6 +356,17 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   Actions sit at the right of the header as small outlined buttons, like
   the watch page's Summary section: Regenerate, and Chat with a ↗ arrow,
   the mark for an action that opens something elsewhere (here Ask).
+- **Live chat replay.** A fixed-height `ui-panel` (heading "Live chat", a
+  quiet **Hide** button) whose message list (`role="log"`) keeps the newest
+  message at the bottom. Rows are compact: author in `text-muted` (the owner in
+  the same `ink-800` chip with `accent` text as a comment's uploader, moderators
+  `accent-soft`, members `success`), then the message; no avatars. Super Chats
+  and Super Stickers sit on `ink-800` with the amount in `gray-100` and a 4px
+  left stripe in YouTube's tier colour, the only place a colour comes from the
+  data; membership and gift notices are one `text-muted` 12px line. Scrolling up
+  pauses following; a round `ink-800` "Jump to latest" button (down arrow) floats
+  at the bottom centre until it is pressed or the list is back at the bottom.
+  Hidden, the panel's place holds a secondary "Show live chat" button.
 - **Rows and lists.** 4–8px padding, `hover:bg-ink-800`, drag handle on the left
   when reorderable, quiet remove button on the right.
 - **Inputs and selects.** `ink-800` fill, `ink-700` ring, accent focus ring;

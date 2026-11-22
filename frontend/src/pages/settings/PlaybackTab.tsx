@@ -40,7 +40,14 @@ export default function PlaybackTab() {
         anchor="watch-page"
         title="Watch page"
         hidden={
-          !match("watch page", "description", "related videos", "autoplay")
+          !match(
+            "watch page",
+            "description",
+            "related videos",
+            "live chat",
+            "chat replay",
+            "autoplay"
+          )
         }
       >
         <div className="space-y-4">
@@ -67,6 +74,21 @@ export default function PlaybackTab() {
                 onChange={() =>
                   update({
                     showRelatedVideos: !settings.showRelatedVideos,
+                  })
+                }
+              />
+            }
+          />
+          <SettingRow
+            title="Show live chat on past streams"
+            description="Replay a past livestream's chat beside the video, in step with playback. Read from YouTube while you watch, never saved."
+            hidden={!!q && !match("live chat", "chat replay", "stream")}
+            control={
+              <Toggle
+                checked={settings.showChatReplay}
+                onChange={() =>
+                  update({
+                    showChatReplay: !settings.showChatReplay,
                   })
                 }
               />

@@ -12,11 +12,17 @@ import {
 } from "../context/PlaybackContext";
 import { useStreamRelated } from "../queries/preview";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../context/AuthContext";
 import { useAskPageChannel, useAskPageVideo } from "../context/HelpChatContext";
 import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import ClipPanel from "./watch/ClipPanel";
+import ChatReplayPanel, {
+  ShowChatBar,
+} from "./watch/chatReplay/ChatReplayPanel";
+import { chatPlacement, chatTarget } from "./watch/chatReplay/model";
+import { useChatReplay } from "./watch/chatReplay/useChatReplay";
 import RedownloadDialog from "./watch/RedownloadDialog";
 import StreamActions from "./watch/StreamActions";
 import WatchActions from "./watch/WatchActions";
@@ -54,7 +60,7 @@ export default function Watch() {
   const streamUrlParam = (searchParams.get("url") || "").trim();
   const channelParam = (searchParams.get("channel") || "").trim();
   const startParam = parseStartParam(searchParams.get("t"));
-  const [settings] = useSettings();
+  const [settings, updateSettings] = useSettings();
   const isMobile = useIsMobile();
   const { mode, queue } = usePlaybackSession();
 
@@ -135,6 +141,16 @@ export default function Watch() {
     [video, related.videos, streamRelated.items]
   );
 
+  // A past stream's live chat replay, read from YouTube as playback goes.
+  const { getCurrentPosition, getStreamPosition } = usePlaybackActions();
+  const chatFor = source ? chatTarget(source) : null;
+  const chat = useChatReplay(
+    settings.showChatReplay && chatFor ? chatFor.youtubeId : null,
+    source?.kind === "library" ? getCurrentPosition : getStreamPosition
+  );
+  const landscape = useMediaQuery("(orientation: landscape)");
+  const wideScreen = useMediaQuery("(min-width: 1280px)");
+
   // Registered here, above the early returns: the loading and error views must
   // not unregister the dock, or the player would jump to the mini player.
   const { registerDock } = usePlaybackActions();
@@ -180,9 +196,36 @@ export default function Watch() {
     settings.showRelatedVideos &&
     relatedItems.length > 0;
   const queueVisible = queue.length > 0;
+  const chatPlace = chatPlacement({
+    isMobile,
+    landscape,
+    theater: isWide,
+    wide: wideScreen && mode === "standard",
+  });
+  // Shown once it has something to show; a library video not yet known to be
+  // a stream waits for the server's answer, so other videos never shift.
+  const chatShown =
+    chatFor != null &&
+    settings.showChatReplay &&
+    (chat.status === "ok" ||
+      chat.status === "error" ||
+      (chat.status === "loading" && chatFor.known));
+  const chatHidden =
+    chatFor != null && chatFor.known && !settings.showChatReplay;
+  const chatNode = chatShown ? (
+    <ChatReplayPanel
+      chat={chat}
+      variant={chatPlace === "sideways" ? "inline" : chatPlace}
+      onHide={() => updateSettings({ showChatReplay: false })}
+    />
+  ) : chatHidden ? (
+    <ShowChatBar onShow={() => updateSettings({ showChatReplay: true })} />
+  ) : null;
+  const chatInSidebar = chatPlace === "sidebar" && chatNode != null;
+  const sidebarShown = showRelatedRight || chatInSidebar;
   // Theater puts the player full-bleed, so the column only holds the details
   // under it: keep it at a readable width, centred under the video.
-  const contentClass = showRelatedRight
+  const contentClass = sidebarShown
     ? "mx-auto max-w-360 2xl:max-w-[116rem]"
     : isWide
       ? "mx-auto max-w-5xl xl:max-w-6xl"
@@ -194,7 +237,7 @@ export default function Watch() {
     >
       <div
         className={
-          showRelatedRight
+          sidebarShown
             ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_24rem]"
             : undefined
         }
@@ -224,9 +267,15 @@ export default function Watch() {
             source={source}
             ai={ai}
             queueVisible={queueVisible}
-            sidebarShown={showRelatedRight}
-            columnBounded={showRelatedRight || isWide}
+            sidebarShown={sidebarShown}
+            columnBounded={sidebarShown || isWide}
             onVideoUpdated={setVideo}
+            chatInline={
+              chatPlace === "inline" || chatPlace === "sideways"
+                ? chatNode
+                : undefined
+            }
+            chatBeside={chatPlace === "beside-info" ? chatNode : undefined}
           />
           {video && (
             <WatchActions
@@ -247,9 +296,10 @@ export default function Watch() {
             ))}
         </WatchPlayerSection>
 
-        {showRelatedRight && (
+        {sidebarShown && (
           <WatchSidebar
-            items={relatedItems}
+            chat={chatInSidebar ? chatNode : undefined}
+            items={showRelatedRight ? relatedItems : []}
             sentinelRef={video ? related.sentinelRef : undefined}
             loadingMore={video ? related.loadingMore : false}
             hasQueue={queueVisible}
