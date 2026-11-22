@@ -1295,6 +1295,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat-replay/youtube/{youtube_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Chat Replay
+         * @description The stretch of a past stream's chat around ``at_ms`` (default 0), or after
+         *     ``cursor`` (an earlier page's ``next_cursor``). Not saved; stretches are kept
+         *     in memory for 30 minutes.
+         */
+        get: operations["chat_replay_api_chat_replay_youtube__youtube_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/comments/youtube/{youtube_id}": {
         parameters: {
             query?: never;
@@ -6223,6 +6245,78 @@ export interface components {
             start_sec: number;
             /** Title */
             title: string;
+        };
+        /**
+         * ChatReplayItem
+         * @description One chat replay message, at ``offset_ms`` into the video.
+         */
+        ChatReplayItem: {
+            /** Amount */
+            amount?: string | null;
+            /** Author */
+            author?: string | null;
+            /**
+             * Badges
+             * @default []
+             */
+            badges: ("owner" | "moderator" | "member" | "verified")[];
+            /** Color */
+            color?: string | null;
+            /** Header */
+            header?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "paid" | "sticker" | "membership" | "gift";
+            /** Offset Ms */
+            offset_ms: number;
+            /**
+             * Runs
+             * @default []
+             */
+            runs: components["schemas"]["ChatReplayRun"][];
+            /** Sticker Alt */
+            sticker_alt?: string | null;
+            /** Sticker Url */
+            sticker_url?: string | null;
+        };
+        /**
+         * ChatReplayRead
+         * @description A stretch of a past stream's chat, read from YouTube now (never saved).
+         *
+         *     ``status``: ``ok``; ``none`` (the video has no chat replay); ``unavailable``
+         *     (private, removed, members-only or age-restricted without cookies). Pass
+         *     ``next_cursor`` back as ``cursor`` for the stretch after this one; null at
+         *     the end of the chat.
+         */
+        ChatReplayRead: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ChatReplayItem"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "none" | "unavailable";
+        };
+        /**
+         * ChatReplayRun
+         * @description A piece of a chat message: text, or a custom emoji image with its shortcut.
+         */
+        ChatReplayRun: {
+            /** Emoji Alt */
+            emoji_alt?: string | null;
+            /** Emoji Url */
+            emoji_url?: string | null;
+            /** Text */
+            text?: string | null;
         };
         /**
          * ClipCreate
@@ -13116,6 +13210,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelFeedPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    chat_replay_api_chat_replay_youtube__youtube_id__get: {
+        parameters: {
+            query?: {
+                at_ms?: number | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                youtube_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatReplayRead"];
                 };
             };
             /** @description Validation error */

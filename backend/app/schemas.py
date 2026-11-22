@@ -1962,6 +1962,47 @@ class LiveCommentsRead(BaseModel):
     next_limit: int | None = None
 
 
+class ChatReplayRun(BaseModel):
+    """A piece of a chat message: text, or a custom emoji image with its shortcut."""
+
+    text: str | None = None
+    emoji_url: str | None = None
+    emoji_alt: str | None = None
+
+
+class ChatReplayItem(BaseModel):
+    """One chat replay message, at ``offset_ms`` into the video."""
+
+    id: str
+    offset_ms: int
+    kind: Literal["text", "paid", "sticker", "membership", "gift"]
+    author: str | None = None
+    badges: list[Literal["owner", "moderator", "member", "verified"]] = []
+    runs: list[ChatReplayRun] = []
+    #: Super Chat / Super Sticker amount as YouTube shows it ("$5.00").
+    amount: str | None = None
+    #: YouTube's tier colour, ``#rrggbb``.
+    color: str | None = None
+    sticker_url: str | None = None
+    sticker_alt: str | None = None
+    #: Membership or gift line ("Member for 6 months", "Gifted 5 memberships").
+    header: str | None = None
+
+
+class ChatReplayRead(BaseModel):
+    """A stretch of a past stream's chat, read from YouTube now (never saved).
+
+    ``status``: ``ok``; ``none`` (the video has no chat replay); ``unavailable``
+    (private, removed, members-only or age-restricted without cookies). Pass
+    ``next_cursor`` back as ``cursor`` for the stretch after this one; null at
+    the end of the chat.
+    """
+
+    status: Literal["ok", "none", "unavailable"]
+    items: list[ChatReplayItem] = []
+    next_cursor: str | None = None
+
+
 class ImportSuggestion(BaseModel):
     """Fields Horde can fill in for a review item. Only blanks are suggested."""
 
