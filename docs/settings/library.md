@@ -20,7 +20,7 @@ Controls under **Settings → Library** (`?tab=library`). Display and download p
 | Show live streams | `showLiveStreams` | `true` | UI blob |
 | Color-code Recommended | `showRecommendedSources` | `false` | UI blob |
 
-**Show live streams** lists subscribed channels that are live. **Color-code Recommended** outlines each Recommended card by where it is from (a solid accent outline for a video you have downloaded, a faded one for a channel you follow or have indexed, none for a channel new to you) and shows the key beside the home tabs; it is off by default. Your subscriptions themselves are on the [Subscriptions](../guides/channels.md#subscriptions) page.
+**Show live streams** lists subscribed channels that are live. **Color-code Recommended** outlines each Recommended card by where it is from (a solid accent outline for a video you have downloaded, a faded one for a channel you follow or have listed, none for a channel new to you) and shows the key beside the home tabs; it is off by default. Your subscriptions themselves are on the [Subscriptions](../guides/channels.md#subscriptions) page.
 
 ### Progress expiry
 
@@ -101,7 +101,7 @@ These are **top-level** keys (not the `ui` blob). The whole section is server-wi
 | Recommendations learn from the household | `discovery_household` | `true` | boolean |
 | Comments | `comments_enabled` | `true` | boolean |
 
-When catalog indexing is enabled, Horde background-indexes **YouTube** channel uploads (titles; descriptions for the newest ~200) when you download from a channel or open its feed, so feed search works beyond the loaded page. Non-YouTube channel URLs are skipped.
+When the channel catalog is enabled, Horde lists **YouTube** channel uploads in the background (titles; descriptions for the newest ~200) when you download from a channel or open its feed, so feed search works beyond the loaded page. Non-YouTube channel URLs are skipped.
 
 **Max listed videos per channel** caps how many of each channel's uploads are listed, newest first, for channel feed search and auto-download. It does not limit how many videos you can download, or how many [Ask indexes](#videos-indexed-per-channel).
 
@@ -109,13 +109,13 @@ When catalog indexing is enabled, Horde background-indexes **YouTube** channel u
 
 **YouTube results in library search** is the **YT** control inside the main search bar: when it is highlighted, the home search box queries YouTube for videos that are not already in your library or catalogs after you pause typing (or immediately on Enter). The same setting is in Settings → Library. Search text is sent to YouTube. This is not the channel-page setting above.
 
-**Recommended looks on YouTube**: every few hours, for each person who opened Recommended in the last three days, Horde makes up to four YouTube searches built from what they watch and reads the up next list of up to three videos they liked; at most 30 calls an hour for everyone, 20 seconds apart, behind anything you are doing, and it pauses for a while when YouTube pushes back. The search words are sent to YouTube. It also needs **YouTube results in library search**. Off: Recommended picks from your library and indexed channels only.
+**Recommended looks on YouTube**: every few hours, for each person who opened Recommended in the last three days, Horde makes up to four YouTube searches built from what they watch and reads the up next list of up to three videos they liked; at most 30 calls an hour for everyone, 20 seconds apart, behind anything you are doing, and it pauses for a while when YouTube pushes back. The search words are sent to YouTube. It also needs **YouTube results in library search**. Off: Recommended picks from your library and listed channels only.
 
 **Recommendations learn from the household**: library videos that people here with similar taste liked get a small lift in Recommended. Nobody is shown who watched what.
 
 **Comments**: for every YouTube video in the library, Horde saves the top 100 comments and replies to the most popular threads, in the background (one video every 30 seconds, new downloads first, pausing for an hour when YouTube pushes back). They show under the video, count in library search and give Ask viewers' reactions when it answers about the video. Off turns all of that off for everyone: nothing is fetched, the watch page has no comments section (for streams too), and search and Ask leave comments out. Comments already saved stay in the database and come back when it is turned on again. Under the switch, Horde shows how much space they take; while comments are off, **Delete saved comments** removes them (`POST /api/settings/comments/delete`; `409 comments_enabled` while on). See [Comments](../guides/comments.md).
 
-!!! tip "Large indexes"
+!!! tip "Long video lists"
     Values above **1000** can take a long time and may slow other YouTube work while listing. System → Background activity has **Refresh catalogs** / **Full relist**.
 
 ### Metadata / catalog refresh interval
@@ -124,7 +124,7 @@ When catalog indexing is enabled, Horde background-indexes **YouTube** channel u
 |---------|-----|---------|-------|
 | Refresh interval (hours) | `metadata_sync_interval_hours` | `24` | 1–168 |
 
-How often Horde refreshes library video metadata and re-queues stale channel catalogs for a full index pass.
+How often Horde refreshes library video metadata and lists stale channel catalogs again in full.
 
 ### Metadata resync action
 

@@ -34,7 +34,7 @@ Subscribing is the one way to keep up with a channel. A subscription is yours al
 
 **Subscriptions** in the top bar shows your subscriptions as a grid of cards: the channel's picture and name with its YouTube subscriber count (when a downloaded video of it carries one), how many of its videos are downloaded and when Horde last read its uploads, and chips for what is turned on (**Auto 1080p**, **Ask**, a cleanup rule such as **Keeps latest 20**). The **⋯** button on a card opens the channel's settings sheet over the page. Under the grid, **Downloading for everyone** lists channels with automatic downloads or a cleanup rule that you do not subscribe to, each with **Subscribe** and **⋯**.
 
-The box at the top finds the channel: type its name to search YouTube's channels (the results list each one with its subscriber count; pick one), or paste its link or `@handle` to look it up. The channel needs no videos in the library. While it looks, a spinner shows and **Subscribe** waits; once a channel is found the box opens to show it, with two switches. **Download new uploads (1080p)** (with the `download` permission) turns on automatic downloads for new uploads only; change the quality or add older videos in the channel's settings. **Index for Ask and search** (on by default, shown when you may use it) turns [Ask](ask.md) on for the channel, which fetches the captions of every upload so the search bar and Ask can find what was said. A channel with more than 500 uploads is not indexed by itself: a notice says how big it is, and **Index anyway** (with **Manage channel indexing**) starts it. Subscribing from a channel's header, a suggested channel or a download card does the same.
+The box at the top finds the channel: type its name to search YouTube's channels (the results list each one with its subscriber count; pick one), or paste its link or `@handle` to look it up. The channel needs no videos in the library. While it looks, a spinner shows and **Subscribe** waits; once a channel is found the box opens to show it, with two switches. **Download new uploads (1080p)** (with the `download` permission) turns on automatic downloads for new uploads only; change the quality or add older videos in the channel's settings. **Index for Ask and search** (on by default, shown when you may use it) turns [Ask](ask.md) on for the channel, which fetches the captions of its newest uploads, up to [its limit](ask.md#how-much-of-a-channel-is-indexed), so the search bar and Ask can find what was said. Subscribing from a channel's header, a suggested channel or a download card does the same.
 
 While you type, the grid narrows to the channels you already have that match (by name, `@handle` or, for a pasted link, the same channel), with a line saying how many; a name you do not have yet leaves the whole grid in view.
 
@@ -55,7 +55,7 @@ A channel you unsubscribed from is never subscribed again by a download. When th
 Open a channel from the sidebar to see its **feed**:
 
 - Videos already in your library for that channel
-- Optionally **undownloaded** catalog entries (titles from the remote channel index)
+- Optionally **undownloaded** catalog entries (titles from the channel's video list)
 
 ### Header and channel settings
 
@@ -155,15 +155,15 @@ To stop seeing one channel's live streams without unsubscribing, open the **⋯*
 
 Leave a live stream (lock the screen, switch apps) and come back a minute or more later, and it reconnects and plays on from where you left it in the live timeline, as if you had paused it there; if that part is older than the seek bar reaches, it starts at the oldest part. Pressing play after a long pause with the page hidden does the same. How it works: [Live streams](../design/live-streams.md).
 
-## Catalog indexing
+## Channel video lists
 
-Catalog indexing is **YouTube only**. When you open a YouTube channel feed or download from a YouTube channel, Horde indexes that channel’s uploads in the background so feed search and “Available to stream” work without paging YouTube live every time. Non-YouTube sources skip catalog indexing.
+The channel catalog (each channel's **video list**) is **YouTube only**. When you open a YouTube channel feed or download from a YouTube channel, Horde lists that channel’s uploads in the background so feed search and “Available to stream” work without paging YouTube live every time. Non-YouTube sources are not listed. What Ask indexes is separate: see [Ask](ask.md).
 
 Progress shows under **Channel settings → Manage → Video list** (for example **All 1000 listed**). **List videos** there appears only when this catalog is missing, incomplete, or failed — a complete catalog does not need a manual re-walk. Age-restricted, members-only, and private uploads are skipped so the rest of the channel can still be listed; the channel page shows a toast when that happens.
 
 ### Phases
 
-Indexing runs in phases:
+Listing runs in phases:
 
 | Phase | What happens |
 |-------|----------------|
@@ -171,7 +171,7 @@ Indexing runs in phases:
 | **descriptions** | Fetch descriptions for the newest uploads (used for richer search / chapters later) |
 | **embed** | Queue catalog video embeddings when AI embed is available |
 
-Progress appears in status UI / AI queue breakdown as catalog indexing jobs.
+Progress appears in status UI / AI queue breakdown as catalog listing jobs.
 
 !!! warning "YouTube rate limits"
     Large catalogs and high concurrency can trigger bot checks. Prefer modest [max videos](#max-videos-per-channel) and low [`MAX_DOWNLOAD_CONCURRENCY`](../ops/environment.md) if you see access issues. See [YouTube access](../ops/youtube-access.md).

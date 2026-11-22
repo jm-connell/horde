@@ -159,7 +159,7 @@ Turn the archive into something you can actually ask questions of. Use any OpenA
 
 | Feature | Needs |
 |---------|--------|
-| Hybrid search (keyword + embeddings) | Embed indexes |
+| Hybrid search (keyword + embeddings) | Embeddings |
 | Related videos on Watch | Embeddings |
 | Recommended category shelves | Embeddings + categories |
 | Recommended (mixed feed with channels new to you) | Works without AI; embeddings make it much sharper; a chat model writes better searches |

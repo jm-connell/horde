@@ -1,12 +1,12 @@
 # Search
 
-Horde uses a **single search box** in the top navigation bar, on every page, plus a separate **channel-page search** when a channel is open. There is no separate Search screen and no UI toggle for “semantic” vs “keyword” mode — hybrid ranking runs on the backend whenever AI search indexes are available.
+Horde uses a **single search box** in the top navigation bar, on every page, plus a separate **channel-page search** when a channel is open. There is no separate Search screen and no UI toggle for “semantic” vs “keyword” mode — hybrid ranking runs on the backend whenever library videos have embeddings.
 
 ## Where to search
 
 Type in the search field in the navigation bar, just left of your account button (on narrow screens, tap the search icon). Typing on any other page, or on a channel page, takes you to the [Library](library.md) home page with the results. Library and catalog results update as you type (debounced). A compact **YT** control inside the search box (and the same setting under [Settings → Library](../settings/library.md)) turns live YouTube results on or off. With it highlighted, YouTube itself is queried after you pause typing (or immediately if you press Enter). Search text is sent to YouTube.
 
-On a **channel page**, the box in the header searches that channel’s **indexed catalog** and **downloaded library videos**. A compact **YT** control inside that box (the same default as [YouTube results in channel search](../settings/library.md)) queries YouTube for extra matches from **that channel only**. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from **YouTube results in library search** in the main search bar.
+On a **channel page**, the box in the header searches that channel’s **video list** and **downloaded library videos**. A compact **YT** control inside that box (the same default as [YouTube results in channel search](../settings/library.md)) queries YouTube for extra matches from **that channel only**. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from **YouTube results in library search** in the main search bar.
 
 ## Mixed results
 
@@ -26,18 +26,18 @@ With **Sections**, matches are grouped into up to five sections, in a fixed orde
 |---------|---------|------------|
 | **In your library** | Videos already downloaded / approved into your library, including videos found only through their saved [comments](comments.md) (after the others) | Nothing in your library matches. |
 | **Said in videos** | Moments in the captions of channels indexed for [Ask](ask.md) that mention your words, grouped by video; each timestamp opens the video there. Shown once a channel has captions indexed; needs no AI | Nothing in the indexed captions mentions that. |
-| **Available to stream** | Undownloaded catalog hits from channels you’ve indexed or already downloaded from | No matches in indexed channels. |
+| **Available to stream** | Undownloaded hits from channel video lists (channels you’ve listed or downloaded from) | No matches in channel video lists. |
 | **On YouTube** | Live YouTube video search (not limited to channels you already follow) | No other matches on YouTube. |
 | **Rest of your library** | Downloaded library videos that did not match the query | No other videos in your library. |
 
 Each section heading has a **▼** control to collapse or expand that group. **On YouTube** includes **Load more** at the bottom of the grid when another page of live hits is available.
 
-Catalog rows come from background [channel catalog indexing](channels.md). You can stream a preview or queue a download without leaving search. **On YouTube** cards use the same feed layout (thumbnail, duration, channel, date, views, Download). Click a channel name to open that creator in Horde. Changing the typed query hides live hits until the new query settles (or you press Enter).
+Catalog rows come from the background [channel video lists](channels.md). You can stream a preview or queue a download without leaving search. **On YouTube** cards use the same feed layout (thumbnail, duration, channel, date, views, Download). Click a channel name to open that creator in Horde. Changing the typed query hides live hits until the new query settles (or you press Enter).
 
-Live hits are not written into channel catalogs; opening or downloading a result starts indexing as usual.
+Live hits are not written into channel catalogs; opening or downloading a result starts listing its channel as usual.
 
 !!! tip "Empty catalog section"
-    If **Available to stream** always shows the empty message, catalogs may still be indexing, disabled, or the channel hasn’t been opened/downloaded yet. See [Channels](channels.md) and [Library settings](../settings/library.md).
+    If **Available to stream** always shows the empty message, catalogs may still be listing, disabled, or the channel hasn’t been opened/downloaded yet. See [Channels](channels.md) and [Library settings](../settings/library.md).
 
 ## Hybrid search (backend)
 
@@ -45,7 +45,7 @@ When embeddings are ready, the API runs **hybrid** search: keyword matching comb
 
 The embedding half embeds your query with the configured provider, which can cost money, so it only runs for accounts with the **Use AI** permission; other members get the keyword results (channel-catalog search follows the same rule). The server ranks a search once and keeps the ranking (and the query's embedding) for about two minutes, so paging through the results does not re-run the search or re-embed the query. Adding, editing or deleting a video, or changing embeddings, drops the saved rankings. Sorting by **last watched** is the exception: that order changes every time you watch something, so it is ranked afresh for each page (the query's embedding is still reused).
 
-Keyword matching splits the query into tokens (ignoring small stopwords) and requires **each** token to appear as a **whole word** in the metadata — so `paint fix` matches *I painted his House to Fix his WiFi*, not only the contiguous phrase `paint fix`, but `car` does not match *graphics card* or *carriers*. Light stemming still treats `paint` / `painted` / `painting` as the same token (short words only add a plural, so `car` can match `cars`). Library home search and channel-page search share this matcher. Keyword lookups (`hyprland`, `hyprland install guide`) stay keyword-only. Embeddings run only for sentence-like queries that still contain stopwords (`that episode about house wifi`). Without an embed provider / indexes, search falls back to this keyword-style matching.
+Keyword matching splits the query into tokens (ignoring small stopwords) and requires **each** token to appear as a **whole word** in the metadata — so `paint fix` matches *I painted his House to Fix his WiFi*, not only the contiguous phrase `paint fix`, but `car` does not match *graphics card* or *carriers*. Light stemming still treats `paint` / `painted` / `painting` as the same token (short words only add a plural, so `car` can match `cars`). Library home search and channel-page search share this matcher. Keyword lookups (`hyprland`, `hyprland install guide`) stay keyword-only. Embeddings run only for sentence-like queries that still contain stopwords (`that episode about house wifi`). Without an embedding provider / embeddings, search falls back to this keyword-style matching.
 
 ### Channel page search
 
@@ -56,22 +56,22 @@ The channel header search:
 3. Then looks for **related** catalog embeddings so natural-language phrasing can surface uploads that don’t share the same words.
 4. If the channel search **YT** control is on, queries YouTube’s in-channel search and adds videos that are not already on screen. Empty dates/views on local cards are filled from those hits when known. Approximate YouTube ages (`3 years ago`) stay as that wording instead of a made-up calendar day; **Recent** sort still uses the approximate timestamp under the hood. The combined list is then sorted by **Recent** (publish date) or **Popular** (view count) using the controls at the top of the page. While that call is in flight, the feed shows a quiet **Loading YouTube results…** line.
 
-Status copy shows **Searching the video list…**, then **Finding related matches…** while embeddings run, plus a match count when local results settle. If the catalog is still indexing, the feed notes that results may be incomplete.
+Status copy shows **Searching the video list…**, then **Finding related matches…** while embeddings run, plus a match count when local results settle. If the catalog is still listing, the feed notes that results may be incomplete.
 
-When a hit is **not** obvious from the title, a **?** appears on the thumbnail. Hover (or tap) the **?** for a short explanation: a description/tags/notes snippet, a caption quote on downloaded videos, a YouTube comment, “related by search index,” or “Found on YouTube” for extras from YouTube results in channel search.
+When a hit is **not** obvious from the title, a **?** appears on the thumbnail. Hover (or tap) the **?** for a short explanation: a description/tags/notes snippet, a caption quote on downloaded videos, a YouTube comment, “similar in meaning,” or “Found on YouTube” for extras from YouTube results in channel search.
 
-### What gets indexed
+### What gets embedded
 
-Search indexes are built from video metadata (title, channel, description, tags, notes) and, optionally, **subtitle/caption text**.
+Embeddings are built from video metadata (title, channel, description, tags, notes) and, optionally, **subtitle/caption text**.
 
 Control that in [Settings → AI](../settings/ai.md):
 
 | Setting | Effect |
 |---------|--------|
-| **Use subtitles in search indexes** (`use_subtitles`) | Include caption text when building embeddings and related corpora |
+| **Use subtitles in embeddings** (`use_subtitles`) | Include caption text when building embeddings and related corpora |
 
 !!! note "Rebuild after changes"
-    Changing the embedding model or subtitle inclusion means re-indexing so semantic search, related videos, and category shelves stay consistent. Horde prompts when the embed model changes.
+    Changing the embedding model or subtitle inclusion means re-embedding so semantic search, related videos, and category shelves stay consistent. Horde prompts when the embed model changes.
 
 ## Filters while searching
 
@@ -86,7 +86,7 @@ Clear the search box to return to the normal library or channel feed.
 ## Related
 
 - [Library](library.md) — home grid and tags
-- [Channels](channels.md) — catalog indexing that powers “Available to stream”
+- [Channels](channels.md) — channel video lists that power “Available to stream”
 - [AI features](ai-features.md) — embeddings, Recommended, related videos
 - [AI setup](../ops/ai-setup.md) — providers and models
 - [AI settings](../settings/ai.md) — `use_subtitles` and feature toggles
