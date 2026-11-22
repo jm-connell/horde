@@ -164,7 +164,7 @@ export default function AiQueueStatus({
                 onClick={() => void onIndexMissing()}
                 className="ui-panel ui-interactive rounded-lg border border-accent/40 bg-accent/15 px-2.5 py-1 text-xs text-accent hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {indexBusy ? "Queuing…" : "Index missing"}
+                {indexBusy ? "Queuing…" : "Embed missing"}
               </button>
             ) : (
               <span className="text-xs text-muted">Idle</span>
@@ -195,13 +195,13 @@ export default function AiQueueStatus({
         </>
       )}
       <div className="flex justify-between gap-3">
-        <dt className="text-gray-400">Indexed</dt>
+        <dt className="text-gray-400">Embedded</dt>
         <dd className="text-right text-gray-200">
           {aiStatus.indexed_videos} / {aiStatus.total_videos}
           {summary
             ? ` · ${summary}`
             : indexGap > 0
-              ? ` · ${indexGap} not indexed`
+              ? ` · ${indexGap} not embedded`
               : ""}
         </dd>
       </div>
@@ -280,15 +280,15 @@ export default function AiQueueStatus({
               aiStatus.queue_breakdown.embed_video
                 ? plural(
                     aiStatus.queue_breakdown.embed_video,
-                    "search index",
-                    "search indexes"
+                    "embedding",
+                    "embeddings"
                   )
                 : null,
               aiStatus.queue_breakdown.embed_catalog_video
                 ? plural(
                     aiStatus.queue_breakdown.embed_catalog_video,
-                    "catalog index",
-                    "catalog indexes"
+                    "catalog embedding",
+                    "catalog embeddings"
                   )
                 : null,
               aiStatus.queue_breakdown.enrich_tags

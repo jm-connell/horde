@@ -226,6 +226,12 @@ DEFAULTS: dict[str, Any] = {
     "metadata_sync_interval_hours": 24,
     "channel_catalog_enabled": True,
     "channel_catalog_max_videos": 1000,
+    # Ask indexes this many of a channel's newest uploads unless the channel
+    # has a limit of its own (services/knowledge/channels.effective_limit).
+    "ask_max_videos": 500,
+    # Set once the subscriptions that predate automatic Ask indexing were
+    # added to Ask (services/knowledge/channels.add_subscribed_once).
+    "ask_subscriptions_indexed": False,
     # A finished download from a channel its requester does not subscribe to:
     # always subscribe them, ask on the download card, or never
     # (services/follows.new_channel_mode); and whether members' downloads count.
@@ -272,6 +278,18 @@ def clamp_catalog_max_videos(value: Any) -> int:
     except TypeError, ValueError:
         n = int(DEFAULTS["channel_catalog_max_videos"])
     return max(CHANNEL_CATALOG_MAX_MIN, min(CHANNEL_CATALOG_MAX_MAX, n))
+
+
+ASK_MAX_VIDEOS_MIN = 50
+ASK_MAX_VIDEOS_MAX = 5000
+
+
+def clamp_ask_max_videos(value: Any) -> int:
+    try:
+        n = int(value)
+    except TypeError, ValueError:
+        n = int(DEFAULTS["ask_max_videos"])
+    return max(ASK_MAX_VIDEOS_MIN, min(ASK_MAX_VIDEOS_MAX, n))
 
 
 def clamp_max_library_bytes(value: Any) -> int | None:

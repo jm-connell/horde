@@ -21,6 +21,12 @@ Open **Settings → Library → Channels Ask can answer from** and press **Add c
 
 Turning Ask on for a channel also subscribes you to it (if you may manage subscriptions and have not unsubscribed from it before), so it is on your **Subscriptions** page and its new uploads reach Recommended, even when you have downloaded nothing from it.
 
+Subscribing to a channel turns Ask on for it too, whatever its size (the **Index for Ask and search** switch on the Subscriptions page leaves it off). Channels subscribed to before Horde did this are added once, the first time it starts after the update.
+
+### How much of a channel is indexed
+
+Ask indexes a channel's newest videos up to a limit: 500 unless an administrator changed **Videos indexed per channel** in Settings → Library → Ask. The channel's page shows the count against everything the channel has uploaded, for example **500 of 2,310 indexed**. Click it (or open the channel's settings) to change **Newest videos to index** for that channel, or, as an administrator, for every channel. Raising a limit fetches the older videos; lowering it deletes them from Ask, after a confirm. A channel that already had more than 500 videos indexed when this arrived keeps them: its count became its own limit.
+
 Indexing runs in the background and can take hours: Horde fetches about four videos' captions a minute, waits when YouTube rate-limits it, and always lets your own library's caption fetches go first. The newest uploads are indexed first, so Ask is useful long before it finishes. New uploads are picked up once a day. Videos you have downloaded use their caption file, with no request to YouTube.
 
 That section shows each channel's progress: videos indexed, videos without captions (Ask cannot use those) and videos it could not fetch (members-only, removed). **Pause** stops fetching; **Turn off** deletes everything indexed for the channel.

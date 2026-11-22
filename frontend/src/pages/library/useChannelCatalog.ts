@@ -153,7 +153,7 @@ export function useChannelCatalog(
         url: activeChannelUrl,
         force: true,
       });
-      showToast(result.detail || "Channel indexing queued");
+      showToast(result.detail || "Channel listing queued");
       // Refresh progress immediately so the status line updates.
       queryClient
         .fetchQuery({
@@ -188,7 +188,7 @@ export function useChannelCatalog(
       showToast(
         err instanceof Error && err.message
           ? err.message
-          : "Could not start channel indexing"
+          : "Could not start listing the channel"
       );
     } finally {
       setIndexingChannel(false);

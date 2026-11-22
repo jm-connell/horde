@@ -72,7 +72,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "library",
     access: "admin",
     keywords:
-      "library metadata resync thumbnails captions view counts channel catalog index max videos refresh interval youtube only youtube direct youtube search youtube video search youtube results channel search library search indexed save top comments replies",
+      "library metadata resync thumbnails captions view counts channel catalog video list max videos refresh interval youtube only youtube direct youtube search youtube video search youtube results channel search library search listed save top comments replies",
   },
   {
     tab: "library",
@@ -100,7 +100,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "library",
     access: "manage_ask",
     keywords:
-      "ask channels ask can answer from channel indexing captions transcripts knowledge index live streams",
+      "ask channels ask can answer from channel indexing captions transcripts knowledge index live streams limit newest videos",
   },
   {
     tab: "library",
@@ -172,7 +172,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "ai",
     pane: "providers",
     keywords:
-      "provider ollama openai lm studio llama.cpp vllm groq gemini mistral connection enable ai base url test queue indexed features gpu vram workload light normal heavy general openrouter api key privacy",
+      "provider ollama openai lm studio llama.cpp vllm groq gemini mistral connection enable ai base url test queue embedded features gpu vram workload light normal heavy general openrouter api key privacy",
   },
   {
     tab: "ai",
@@ -184,13 +184,13 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "ai",
     pane: "providers",
     keywords:
-      "models embedding chat model background model assistant search index vram auto-pull download gpu",
+      "models embedding chat model background model assistant embeddings vram auto-pull download gpu",
   },
   {
     tab: "ai",
     pane: "jobs",
     keywords:
-      "when to run schedule process run all recent full embeds index rebuild reindex tags categories timer automatic catch up run now queue pause resume individual steps whole library gpu jobs indexed idle index missing",
+      "when to run schedule process run all recent full embeds embeddings rebuild re-embed tags categories timer automatic catch up run now queue pause resume individual steps whole library gpu jobs embedded idle embed missing index missing reindex rebuild indexes",
   },
   {
     tab: "ai",
@@ -210,7 +210,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "system",
     keywords:
-      "background tasks background activity channel catalog index queue ai process metadata sync ffmpeg sprites seek previews thumbnails cpu usage scanner loudness normalization yt-dlp activity refresh catalogs full reindex gpu jobs indexed idle index missing",
+      "background tasks background activity channel catalog video list queue ai process metadata sync ffmpeg sprites seek previews thumbnails cpu usage scanner loudness normalization yt-dlp activity refresh catalogs full relist gpu jobs embedded idle embed missing",
   },
   {
     tab: "system",

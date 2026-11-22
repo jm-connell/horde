@@ -54,6 +54,22 @@ export function snippetParts(
   return parts;
 }
 
+/**
+ * How much of the channel Ask has, against everything the channel uploaded:
+ * "312 of 2,310 indexed". "500+" when the total is not known and the listing
+ * stopped at the limit; "Not indexed" for a channel Ask does not have.
+ */
+export function askIndexedLabel(c: AskChannel | null): string {
+  if (!c) return "Not indexed";
+  if (c.videos === 0)
+    return c.status === "error" ? "Indexing failed" : "Indexing…";
+  const checked = c.videos - c.pending;
+  const more = c.channel_total == null && c.videos >= c.limit ? "+" : "";
+  const total = (c.channel_total ?? c.videos).toLocaleString();
+  const text = `${checked.toLocaleString()} of ${total}${more} indexed`;
+  return c.status === "paused" ? `${text} · paused` : text;
+}
+
 /** "312 of 412 videos indexed · 20 without captions". */
 export function askProgressText(c: AskChannel): string {
   if (c.videos === 0) return c.status === "error" ? "" : "No videos listed yet";

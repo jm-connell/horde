@@ -37,10 +37,6 @@ SOURCE_ASK = "ask"
 NewChannelMode = Literal["always", "ask", "never"]
 NEW_CHANNEL_MODES: tuple[NewChannelMode, ...] = ("always", "ask", "never")
 
-#: Subscribing turns Ask indexing on by itself up to this many uploads; a larger
-#: channel needs a confirm (and the manage_ask permission).
-ASK_INDEX_AUTO_MAX = 500
-
 
 _TAB_SUFFIXES = frozenset(
     {"videos", "streams", "shorts", "live", "playlists", "featured", "about", "search"}
@@ -381,9 +377,8 @@ def follow_from_download(job_id: int, video_id: int | None) -> None:
 
 def _index_new_subscription(session: Session, user: User, channel_url: str) -> None:
     """Turn Ask on for a channel a download just subscribed someone to, as a
-    subscribe by hand would: by itself up to ``ASK_INDEX_AUTO_MAX`` uploads (a
-    bigger one waits for someone to choose it). Reads YouTube, so it is
-    skipped in the browser suite; never raises."""
+    subscribe by hand would. Reads YouTube, so it is skipped in the browser
+    suite; never raises."""
     from ..context import current
     from .knowledge import channels as kb_channels
     from .knowledge import search as kb_search
@@ -391,23 +386,10 @@ def _index_new_subscription(session: Session, user: User, channel_url: str) -> N
     if current().e2e or not kb_search.fts_available(session):
         return
     try:
-        done = kb_channels.index_on_subscribe(
-            session,
-            channel_url,
-            user_id=require_id(user),
-            auto_max=ASK_INDEX_AUTO_MAX,
-            confirm_large=False,
-        )
+        kb_channels.index_on_subscribe(session, channel_url, user_id=require_id(user))
     except Exception:
         logger.warning(
             "could not turn Ask on for %s after subscribing", channel_url, exc_info=True
-        )
-        return
-    if done.large:
-        logger.info(
-            "Ask not turned on for %s: more than %s uploads",
-            channel_url,
-            ASK_INDEX_AUTO_MAX,
         )
 
 

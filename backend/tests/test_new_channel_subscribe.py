@@ -202,59 +202,27 @@ def _subscribe(c) -> None:
     assert c.put("/api/follows", json={"channel_url": CHANNEL}).status_code == 200
 
 
-def test_small_channel_is_indexed_on_subscribe(client, channel_size, init_db):
-    _subscribe(client)
-    body = client.post("/api/follows/ask-index", json={"channel_url": CHANNEL}).json()
-    assert body["indexed"] is True and body["large"] is False
-    assert body["video_count"] == 120
-    [kb] = _kb(init_db["engine"])
-    assert kb.channel_url == NORMAL and kb.include_streams is False
-    # Asking again changes nothing and says it was on already.
-    again = client.post("/api/follows/ask-index", json={"channel_url": CHANNEL})
-    assert again.json()["already"] is True
-    assert len(_kb(init_db["engine"])) == 1
-
-
-def test_large_channel_waits_for_a_confirm(client, channel_size, init_db):
-    channel_size["count"] = follows.ASK_INDEX_AUTO_MAX + 1
+def test_subscribing_indexes_the_channel_whatever_its_size(
+    client, channel_size, init_db
+):
+    channel_size["count"] = 2400
     _subscribe(client)
     body = client.post("/api/follows/ask-index", json={"channel_url": CHANNEL}).json()
     assert body == {
         "channel_url": NORMAL,
         "channel_name": "Dl Chan",
-        "video_count": follows.ASK_INDEX_AUTO_MAX + 1,
-        "indexed": False,
+        "video_count": 2400,
+        "indexed": True,
         "already": False,
-        "large": True,
     }
-    assert _kb(init_db["engine"]) == []
-    confirmed = client.post(
-        "/api/follows/ask-index",
-        json={"channel_url": CHANNEL, "confirm_large": True},
-    )
-    assert confirmed.json()["indexed"] is True
+    [kb] = _kb(init_db["engine"])
+    assert kb.channel_url == NORMAL and kb.include_streams is False
+    # It follows the app-wide limit rather than taking all 2,400.
+    assert kb.max_videos is None
+    # Asking again changes nothing and says it was on already.
+    again = client.post("/api/follows/ask-index", json={"channel_url": CHANNEL})
+    assert again.json()["already"] is True
     assert len(_kb(init_db["engine"])) == 1
-
-
-@pytest.mark.parametrize(("more", "indexed"), [(True, False), (False, True)])
-def test_unknown_size_is_counted_by_looking_past_the_limit(
-    more, indexed, client, channel_size, monkeypatch, init_db
-):
-    """YouTube often reports no count for a channel: whether there is an upload
-    past the limit decides instead."""
-    channel_size["count"] = None
-    asked: list[int] = []
-
-    def fake(url: str, n: int) -> bool:
-        asked.append(n)
-        return more
-
-    monkeypatch.setattr(listing, "has_more_uploads_than", fake)
-    _subscribe(client)
-    body = client.post("/api/follows/ask-index", json={"channel_url": CHANNEL}).json()
-    assert asked == [follows.ASK_INDEX_AUTO_MAX]
-    assert body["indexed"] is indexed and body["large"] is (not indexed)
-    assert len(_kb(init_db["engine"])) == (1 if indexed else 0)
 
 
 def test_turned_on_meanwhile_counts_as_already(client, monkeypatch, init_db):
@@ -294,24 +262,11 @@ def test_only_subscribers_index(client, channel_size, init_db):
     assert channel_size["seen"] == []
 
 
-def test_member_indexes_small_channels_while_included(
-    member_client, channel_size, init_db
-):
+def test_member_indexes_channels_while_included(member_client, channel_size, init_db):
+    channel_size["count"] = 5000
     _subscribe(member_client)
     resp = member_client.post("/api/follows/ask-index", json={"channel_url": CHANNEL})
     assert resp.status_code == 200 and resp.json()["indexed"] is True
-
-
-def test_member_may_not_confirm_a_large_channel(member_client, channel_size, init_db):
-    channel_size["count"] = 5000
-    _subscribe(member_client)
-    resp = member_client.post(
-        "/api/follows/ask-index",
-        json={"channel_url": CHANNEL, "confirm_large": True},
-    )
-    assert resp.status_code == 403
-    assert resp.json()["code"] == "channel_too_large"
-    assert _kb(init_db["engine"]) == []
 
 
 @pytest.mark.parametrize(("mode", "members"), [("never", True), ("ask", False)])
@@ -337,21 +292,13 @@ def test_never_also_skips_the_administrators_library_seed(
 # --- a download that subscribes also turns Ask on ------------------------------
 
 
-def test_auto_subscribe_indexes_a_small_channel(
+def test_auto_subscribe_indexes_the_channel(
     session, admin_user, add_video, channel_size, init_db
 ):
+    channel_size["count"] = 2400
     _finished_download(session, admin_user.id, add_video)
     [kb] = _kb(init_db["engine"])
     assert kb.channel_url == NORMAL and kb.added_by == admin_user.id
-
-
-def test_auto_subscribe_leaves_a_big_channel_alone(
-    session, admin_user, add_video, channel_size, init_db
-):
-    channel_size["count"] = follows.ASK_INDEX_AUTO_MAX + 1
-    _finished_download(session, admin_user.id, add_video)
-    assert _followed(init_db["engine"], admin_user.id)[0].followed
-    assert _kb(init_db["engine"]) == []
 
 
 @pytest.mark.parametrize("mode", ["ask", "never"])

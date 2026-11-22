@@ -35,7 +35,7 @@ export function useAskChannels(enabled = true, { poll = false } = {}) {
   });
 }
 
-/** Add, change, pause, resume and remove channels; each refreshes the list. */
+/** Add, change, limit, pause, resume and remove channels; each refreshes the list. */
 export function useAskChannelActions() {
   const qc = useQueryClient();
   const onSuccess = () =>
@@ -55,6 +55,11 @@ export function useAskChannelActions() {
       api.setAskChannelStreams(v.id, v.includeStreams),
     onSuccess,
   });
+  const setLimit = useMutation({
+    mutationFn: (v: { id: number; maxVideos: number | null }) =>
+      api.setAskChannelLimit(v.id, v.maxVideos),
+    onSuccess,
+  });
   const pause = useMutation({
     mutationFn: (id: number) => api.pauseAskChannel(id),
     onSuccess,
@@ -67,7 +72,7 @@ export function useAskChannelActions() {
     mutationFn: (id: number) => api.removeAskChannel(id),
     onSuccess,
   });
-  return { add, setStreams, pause, resume, remove };
+  return { add, setStreams, setLimit, pause, resume, remove };
 }
 
 /** Transcript search across the given channels (all when empty). */

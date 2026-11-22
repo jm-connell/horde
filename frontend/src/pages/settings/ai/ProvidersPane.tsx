@@ -71,7 +71,7 @@ export default function ProvidersPane() {
                     void runAiProcess("reindex_embeds");
                   }}
                 >
-                  Rebuild indexes
+                  Re-embed
                 </button>
                 <button
                   type="button"

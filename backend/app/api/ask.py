@@ -46,17 +46,34 @@ _SORT = "relevance"
 
 
 def _read(
-    channel: KbChannel, counts: kb_channels.ChannelCounts, *, is_admin: bool
+    channel: KbChannel,
+    counts: kb_channels.ChannelCounts,
+    totals: dict[str, int],
+    *,
+    is_admin: bool,
 ) -> AskChannelRead:
     error = channel.last_error
     if error and not is_admin:
         error = member_view.CATALOG_ERROR
+    limit = kb_channels.effective_limit(channel)
+    total = totals.get(channel.channel_url)
+    if channel.include_streams:
+        # ``videos`` counts past live streams too; the total is uploads only.
+        total = None
+    elif total is None and channel.last_listed_at and counts.videos < limit:
+        # The listing ended before the limit: that is the whole channel.
+        total = counts.videos
+    elif total is not None:
+        total = max(total, counts.videos)
     return AskChannelRead(
         id=require_id(channel),
         channel_url=channel.channel_url,
         channel_name=channel.channel_name,
         status=channel.status.value,
         include_streams=channel.include_streams,
+        max_videos=channel.max_videos,
+        limit=limit,
+        channel_total=total,
         videos=counts.videos,
         fetched=counts.fetched,
         pending=counts.pending,
@@ -80,7 +97,9 @@ def _one(session: Session, channel: KbChannel, user: AuthUser) -> AskChannelRead
     counts = kb_channels.counts(session).get(
         channel.id or 0, kb_channels.ChannelCounts()
     )
-    return _read(channel, counts, is_admin=user.is_admin)
+    return _read(
+        channel, counts, kb_channels.channel_totals(session), is_admin=user.is_admin
+    )
 
 
 @router.get("/channels", response_model=AskChannelList)
@@ -90,10 +109,12 @@ def list_channels(
 ):
     """Every Ask channel with its indexing progress."""
     counts = kb_channels.counts(session)
+    totals = kb_channels.channel_totals(session)
     items = [
         _read(
             c,
             counts.get(c.id or 0, kb_channels.ChannelCounts()),
+            totals,
             is_admin=user.is_admin,
         )
         for c in kb_channels.list_channels(session)
@@ -162,7 +183,10 @@ def update_channel(
     user: AuthUser = Depends(current_user),
 ):
     channel = kb_channels.get_or_404(session, channel_id)
-    kb_channels.set_streams(session, channel, body.include_streams)
+    if body.include_streams is not None:
+        kb_channels.set_streams(session, channel, body.include_streams)
+    if "max_videos" in body.model_fields_set:
+        kb_channels.set_limit(session, channel, body.max_videos)
     session.refresh(channel)
     return _one(session, channel, user)
 

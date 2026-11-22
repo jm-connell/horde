@@ -654,8 +654,8 @@ export default function TuningPanel({
           onChange={() => set("use_library", !values.use_library)}
         />
         <ToggleRow
-          label="Indexed channels"
-          tip="Uploads of channels whose catalog you indexed, downloaded or not."
+          label="Channel video lists"
+          tip="Uploads of channels Horde keeps a video list of, downloaded or not."
           checked={values.use_catalogs}
           onChange={() => set("use_catalogs", !values.use_catalogs)}
         />

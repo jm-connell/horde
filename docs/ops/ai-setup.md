@@ -17,7 +17,7 @@ In Settings → AI (and the setup wizard) there is one field: paste an API key o
 
 ### Providers without embeddings
 
-Groq, DeepSeek and Anthropic's OpenAI endpoint have no `/v1/embeddings`. Leave the embedding model empty (search indexes stay off), or turn on **Use a different server for embeddings** and point that at one that has them, for example OpenRouter or a local Ollama with `nomic-embed-text`.
+Groq, DeepSeek and Anthropic's OpenAI endpoint have no `/v1/embeddings`. Leave the embedding model empty (embeddings stay off), or turn on **Use a different server for embeddings** and point that at one that has them, for example OpenRouter or a local Ollama with `nomic-embed-text`.
 
 ## Which URL do I type? (Docker networking)
 
@@ -121,8 +121,8 @@ Profile scales invent/sample intensity and enqueue batch limits for any provider
 
 **Critical** VRAM **locks** the profile to **Light** so models fit. Recommended defaults: critical→light, large→heavy, medium/small→normal.
 
-!!! warning "Reindex after an embedding model change"
-    Vectors are model-specific. Changing the embedding model (or the server that runs it, when the model differs) requires rebuilding indexes; Settings offers to. Stale vectors break hybrid search and recommendations.
+!!! warning "Re-embed after an embedding model change"
+    Vectors are model-specific. Changing the embedding model (or the server that runs it, when the model differs) requires re-embedding the library; Settings offers to. Stale vectors break hybrid search and recommendations.
 
 ## Costs and the weekly budget
 
@@ -143,7 +143,7 @@ A budget alone warns in the UI without stopping the queue.
 
 ## Upgrading from the Ollama / OpenRouter split
 
-Before this change Settings had separate Ollama and OpenRouter panes. On the first start after the upgrade Horde converts them once, keeping model names so nothing is re-indexed:
+Before this change Settings had separate Ollama and OpenRouter panes. On the first start after the upgrade Horde converts them once, keeping model names so nothing is re-embedded:
 
 | Before | After |
 |--------|-------|

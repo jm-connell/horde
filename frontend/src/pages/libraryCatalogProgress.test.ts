@@ -40,10 +40,10 @@ describe("catalogDenominator", () => {
 
 describe("formatCatalogProgress", () => {
   it("labels empty, in-progress, and complete states", () => {
-    expect(formatCatalogProgress(base)).toBe("Not indexed");
+    expect(formatCatalogProgress(base)).toBe("Not listed");
     expect(
       formatCatalogProgress({ ...base, indexing: true, indexed: 12, total: 80 })
-    ).toBe("Indexing… 12/80");
+    ).toBe("Listing… 12/80");
     expect(
       formatCatalogProgress({
         ...base,
@@ -51,7 +51,7 @@ describe("formatCatalogProgress", () => {
         indexed: 80,
         total: 80,
       })
-    ).toBe("Fully indexed (80)");
+    ).toBe("All 80 listed");
     expect(
       formatCatalogProgress({
         ...base,
@@ -59,7 +59,7 @@ describe("formatCatalogProgress", () => {
         total: 5000,
         complete: false,
       })
-    ).toBe("Fully indexed (1000)");
+    ).toBe("All 1000 listed");
     expect(
       formatCatalogProgress({
         ...base,
@@ -67,7 +67,7 @@ describe("formatCatalogProgress", () => {
         total: 5000,
         complete: true,
       })
-    ).toBe("Fully indexed (1000)");
+    ).toBe("All 1000 listed");
     expect(
       formatCatalogProgress({
         ...base,
@@ -75,9 +75,9 @@ describe("formatCatalogProgress", () => {
         total: 80,
         status: "error",
       })
-    ).toBe("Index failed (12/80)");
+    ).toBe("Listing failed (12/80)");
     expect(formatCatalogProgress({ ...base, status: "error" })).toBe(
-      "Index failed"
+      "Listing failed"
     );
   });
 });
@@ -133,9 +133,7 @@ describe("showChannelIndexButton", () => {
 describe("feed search status copy", () => {
   it("labels in-flight phases and match counts", () => {
     expect(feedSearchStatusLabel("idle")).toBeNull();
-    expect(feedSearchStatusLabel("keywords")).toBe(
-      "Searching indexed catalog…"
-    );
+    expect(feedSearchStatusLabel("keywords")).toBe("Searching the video list…");
     expect(feedSearchStatusLabel("related")).toBe("Finding related matches…");
     expect(feedSearchStatusLabel("done")).toBeNull();
     expect(YOUTUBE_SEARCH_LOADING_LABEL).toBe("Loading YouTube results…");
@@ -180,7 +178,7 @@ describe("formatMatchReasonTip", () => {
       )
     ).toBe("In a YouTube comment: “the wifi trick at 3:10”");
     expect(formatMatchReasonTip({ source: "related" }, "wifi")).toBe(
-      "Related by search index from the title and description."
+      "Similar in meaning to the title and description."
     );
     expect(formatMatchReasonTip({ source: "youtube" }, "paint")).toBe(
       "Found on YouTube (not in the local catalog)."

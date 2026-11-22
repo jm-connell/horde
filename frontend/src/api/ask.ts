@@ -54,6 +54,17 @@ export const askApi = {
     });
   },
 
+  /** The channel's own limit on indexed videos; null follows the app-wide one. */
+  setAskChannelLimit(
+    id: number,
+    maxVideos: number | null
+  ): Promise<AskChannel> {
+    return request<AskChannel>(`/api/ask/channels/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ max_videos: maxVideos }),
+    });
+  },
+
   pauseAskChannel(id: number): Promise<AskChannel> {
     return request<AskChannel>(`/api/ask/channels/${id}/pause`, {
       method: "POST",

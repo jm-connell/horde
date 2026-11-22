@@ -83,21 +83,19 @@ test("a channel that downloads for everyone is listed apart", async ({
   await expect(others).toHaveCount(0);
 });
 
-test("a big channel is not indexed for Ask without a confirm", async ({
+test("subscribing indexes a big channel for Ask without asking", async ({
   page,
 }) => {
-  const asked: { confirm_large: boolean }[] = [];
+  const asked: unknown[] = [];
   await page.route(/\/api\/follows\/ask-index$/, (route) => {
-    const body = route.request().postDataJSON() as { confirm_large: boolean };
-    asked.push(body);
+    asked.push(route.request().postDataJSON());
     return route.fulfill({
       json: {
         channel_url: "https://youtube.com/@e2ebigchannel",
         channel_name: "e2ebigchannel",
         video_count: 2400,
-        indexed: body.confirm_large,
+        indexed: true,
         already: false,
-        large: !body.confirm_large,
       },
     });
   });
@@ -107,13 +105,10 @@ test("a big channel is not indexed for Ask without a confirm", async ({
     .fill("@e2ebigchannel");
   await expect(page.getByLabel(/Index for Ask and search/)).toBeChecked();
   await page.getByRole("button", { name: "Subscribe", exact: true }).click();
-  const warning = page
-    .getByRole("status")
-    .filter({ hasText: /has 2,400 videos, so it was not indexed/ });
-  await expect(warning).toBeVisible();
-  await warning.getByRole("button", { name: "Index anyway" }).click();
   await expect(page.getByText("Indexing e2ebigchannel for Ask")).toBeVisible();
-  expect(asked.map((b) => b.confirm_large)).toEqual([false, true]);
+  expect(asked).toEqual([
+    { channel_url: "https://youtube.com/@e2ebigchannel" },
+  ]);
 });
 
 test("unticking Ask indexing subscribes without indexing", async ({ page }) => {

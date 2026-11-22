@@ -189,7 +189,7 @@ def test_catalog_skip_message_names_target():
     )
     assert msg.startswith("Age-restricted / private:")
     assert "skipped" in msg
-    assert "continued indexing" in msg
+    assert "continued listing" in msg
     assert "Secret Video" in msg
     assert "karrigan" in msg
 

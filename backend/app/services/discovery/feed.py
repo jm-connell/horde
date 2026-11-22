@@ -153,7 +153,11 @@ def _found_by(c: Candidate, hit: _Hit | None) -> str:
     if c.pool == "history":
         return "Your watch history"
     if c.pool == "catalog":
-        return f"The indexed uploads of {c.channel}" if c.channel else "A channel index"
+        return (
+            f"The listed uploads of {c.channel}"
+            if c.channel
+            else "A channel video list"
+        )
     if hit is not None:
         if hit.source == "search":
             return f"YouTube search: {hit.seed}"

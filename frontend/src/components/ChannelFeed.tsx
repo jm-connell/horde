@@ -688,7 +688,7 @@ export default function ChannelFeed({
             <span>{YOUTUBE_SEARCH_LOADING_LABEL}</span>
           )}
           {indexIncomplete && (
-            <span>Index still running — results may be incomplete.</span>
+            <span>Still listing videos — results may be incomplete.</span>
           )}
         </div>
       )}
@@ -697,7 +697,7 @@ export default function ChannelFeed({
         <LoadingIndicator
           label={
             searchBusy
-              ? searchStatusLabel || "Searching indexed catalog…"
+              ? searchStatusLabel || "Searching the video list…"
               : YOUTUBE_SEARCH_LOADING_LABEL
           }
           labelVisible

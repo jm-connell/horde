@@ -33,7 +33,7 @@ One connection to any OpenAI-compatible endpoint serves chat, and embeddings unl
 |---------|-----|---------|--------|
 | Assistant model (Ask) | `help_model` | `""` | The model Ask answers with (channels, a video, Horde). Pick any model from the list; summaries and tags stay on the background model, so a stronger one here costs more only when someone asks. Empty = the background model, except on OpenRouter while the background model is still the former Budget preset (`google/gemini-2.5-flash-lite`): then Ask uses `deepseek/deepseek-v4.1-flash`, because answering from dozens of passages with a correct reference for each needs a stronger model |
 | Background model | `chat_model` | `""` | The jobs that run for every video: summaries, chapters, tags, categories, duplicates (named **Chat model** before; the key is unchanged). A list when the server lists its models (OpenRouter rows show USD per 1M tokens and Budget / Best presets), otherwise typed. **Budget** (`deepseek/deepseek-v4.1-flash`) is what a new OpenRouter setup starts with; **Best** is `openai/gpt-5.6-luna`, which places chapters a little more accurately for about a third more. An install set up earlier keeps the model it has saved (`google/gemini-2.5-flash-lite` was Budget then) until someone picks another. These jobs run with the model's thinking off on OpenRouter (minimal for a model that cannot switch it off), so a reasoning model such as `deepseek/deepseek-v4.1-flash` works here and costs no more than its answer |
-| Embedding model | `embed_model` | `""` | Semantic search, related videos, category shelves. Empty = those stay off. Changing it offers to rebuild the indexes |
+| Embedding model | `embed_model` | `""` | Semantic search, related videos, category shelves. Empty = those stay off. Changing it offers to re-embed the library |
 | Use a different server for embeddings | `embed_base_url`, `embed_api_key` | `""` | Empty = embeddings use the chat connection. For providers without `/v1/embeddings` (Groq, DeepSeek, Anthropic) |
 | Show costs in Watch | `show_costs` | `false` | Only shown when the provider reports cost (OpenRouter) |
 
@@ -85,7 +85,7 @@ Summary length guide: short ≈75–120 words, medium ≈200–280, long ≈300�
 
 Live queue status appears here and on System:
 
-- Indexed count and **runnable / deferred / waiting / failed** breakdown
+- Embedded count and **runnable / deferred / waiting / failed** breakdown
 - **Blocked** state + reason when jobs cannot run (provider down, paused, budget hard limit)
 - Current job (with attempt number when retrying)
 - **Failed jobs** list with Retry, Retry all, Clear failed
@@ -101,9 +101,9 @@ Live queue status appears here and on System:
 
 | Schedule value | Behavior |
 |----------------|----------|
-| `on_download` | Embed and enrich tags when a download finishes; also queues missing search indexes when the GPU job queue is idle |
+| `on_download` | Embed and enrich tags when a download finishes; also queues missing embeddings when the GPU job queue is idle |
 | `on_request` | No automatic work — use Run now / process actions |
-| `timer` | Periodically index videos missing search indexes |
+| `timer` | Periodically embed videos that have no embeddings |
 | `set_time` | Run once per day at `schedule_time` |
 
 Backend-only bookkeeping: `last_daily_run` (`YYYY-MM-DD` when `set_time` last ran) — not shown as an editable control.
@@ -112,15 +112,15 @@ Backend-only bookkeeping: `last_daily_run` (`YYYY-MM-DD` when `set_time` last ra
 
 | Action | Label | What it queues |
 |--------|--------|----------------|
-| `all_recent` | Process recent | Missing search indexes + AI tags for videos watched/added in the last 30 days, then refresh categories |
+| `all_recent` | Process recent | Missing embeddings + AI tags for videos watched/added in the last 30 days, then refresh categories |
 | `all_full` | Process full library | Same across the whole library, then categories |
-| `embeds` | Index missing videos | Search indexes for missing/stale/wrong-model embeds |
-| `reindex_embeds` | Rebuild search indexes | Force re-queue indexing; prefer after changing embed model |
+| `embeds` | Embed missing videos | Embeddings for missing/stale/wrong-model videos |
+| `reindex_embeds` | Re-embed everything | Queue every video for embedding again; use after changing the embedding model |
 | `missing_tags` | Enrich missing tags | Background model tags only where AI tags are absent |
 | `full_tags` | Re-tag entire library | Re-run enrichment for every unlocked video |
-| `categories` | Refresh categories | Invent browse categories, rematch shelves via indexes |
+| `categories` | Refresh categories | Invent browse categories, rematch shelves using embeddings |
 
-`pending_category_refresh` is a backend flag set when a category refresh should run after indexing — not a Settings toggle.
+`pending_category_refresh` is a backend flag set when a category refresh should run after embedding — not a Settings toggle.
 
 Duplicate LLM scoring is **on-demand** during Import when `ai_duplicates` is enabled — there is no batch Settings job for duplicates.
 

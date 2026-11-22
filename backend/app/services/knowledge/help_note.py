@@ -128,7 +128,13 @@ def for_question(
         else:
             lines.append(f"{name} is not indexed for Ask.")
     lines.append(
-        f"Channels are indexed in {where}. When the user asks what a channel "
+        "Only the channels above are indexed for Ask. The channel catalog "
+        "(Settings → System) is a different thing, a list of each channel's "
+        "uploads: a channel counted there is not indexed for Ask."
+    )
+    lines.append(
+        f"Channels are indexed in {where}; subscribing to a channel indexes "
+        "its newest videos, up to a limit. When the user asks what a channel "
         "says and it is not ready here, say it is not indexed (or still "
         "indexing), how to index it, and offer the library videos above if "
         "any; never offer to download or search something else instead."

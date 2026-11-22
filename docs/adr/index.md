@@ -40,6 +40,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0032](0032-parental-controls.md) | Parental controls are an allowlist enforced on the server | Accepted |
 | [0033](0033-ask-answers-unnamed-questions-from-channels.md) | Ask sends a question that names no channel to the channels that cover it | Accepted |
 | [0034](0034-ask-skips-sponsor-reads.md) | Ask leaves sponsor reads out of answers using SponsorBlock | Accepted |
+| [0035](0035-ask-indexes-subscriptions-up-to-a-limit.md) | Ask indexes every subscription, up to a limit; only Ask is called indexed (the catalog is listed, the library embedded) | Accepted |
 
 ## Writing a new record
 

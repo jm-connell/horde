@@ -25,7 +25,7 @@ export default function SearchSection({
     <SettingsSection
       id="search"
       title="Search"
-      description="Searching this channel always looks in your library and its indexed uploads. It can also ask YouTube, which sends your search text to YouTube."
+      description="Searching this channel always looks in your library and its listed uploads. It can also ask YouTube, which sends your search text to YouTube."
       readOnlyNote={
         editable ? null : "Changing this needs the Edit metadata permission."
       }

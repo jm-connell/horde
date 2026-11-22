@@ -95,7 +95,7 @@ function newSeed(): number {
 }
 
 /**
- * Recommended: the library, indexed channels and videos found on YouTube,
+ * Recommended: the library, listed channels and videos found on YouTube,
  * mixed into one feed (familiar channels, more like what you watch, new
  * channels, and throwbacks), with channels to follow.
  */
@@ -417,7 +417,7 @@ export default function DiscoverHome({
     try {
       await subscribe(ch.url, ch.name);
       if (can("download") && !ch.indexed) {
-        // Indexing lists the channel's uploads, so they join Recommended.
+        // Listing the channel's uploads lets them join Recommended.
         await api
           .indexChannelCatalog({ url: ch.url, channel: ch.name })
           .catch(() => undefined);
@@ -595,7 +595,7 @@ export default function DiscoverHome({
         >
           <p className="min-w-0 flex-1">
             Looking on YouTube is off, so these come from your library and
-            indexed channels.{" "}
+            listed channels.{" "}
             {isAdmin ? (
               <Link
                 to="/settings?tab=library&find=discovery"
@@ -653,7 +653,7 @@ export default function DiscoverHome({
           <p className="mt-1 text-sm">
             {gathering
               ? "This takes a minute or two the first time."
-              : "Watch a few videos, subscribe to some channels, or index a channel's catalog."}
+              : "Watch a few videos, subscribe to some channels, or list a channel's videos."}
           </p>
         </div>
       ) : (

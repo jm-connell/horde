@@ -32,14 +32,14 @@ When an administrator adds or edits an account they pick its **type** in *Accoun
 | `manage_subscriptions` | Subscribe to and unsubscribe from channels (their own [subscriptions](../guides/channels.md#subscriptions)), including Takeout's subscriptions and being subscribed by a download. Without it the list stays as it is | on |
 | `manage_ask` | Turn [Ask](../guides/ask.md) on or off for channels and pause or resume their indexing (hours of caption fetching from YouTube, and disk space) | off |
 
-Members do not see how the server is set up: the server settings, AI status and health endpoints answer them with readiness and feature switches only (no provider type or address, schedule, GPU details, API key tail, budget or model names), and the AI job list is for administrators. The same goes for the rest of the API: a member gets coarse status (counts, `ready`/`error` states, whether a GPU can encode) but no internal address, file path, model name, GPU name or raw error text. Where a member's screen reports a failure (a video whose AI indexing or H.264 copy failed) it gets a generic message; the administrator sees the server's own text. In detail, for a member:
+Members do not see how the server is set up: the server settings, AI status and health endpoints answer them with readiness and feature switches only (no provider type or address, schedule, GPU details, API key tail, budget or model names), and the AI job list is for administrators. The same goes for the rest of the API: a member gets coarse status (counts, `ready`/`error` states, whether a GPU can encode) but no internal address, file path, model name, GPU name or raw error text. Where a member's screen reports a failure (a video whose embedding or H.264 copy failed) it gets a generic message; the administrator sees the server's own text. In detail, for a member:
 
-- video reads give `embed_error` as "AI indexing failed" and `compat.error` as a generic sentence, and leave out `ai_summary_model` and `ai_summary_cost`;
+- video reads give `embed_error` as "Embedding failed" and `compat.error` as a generic sentence, and leave out `ai_summary_model` and `ai_summary_cost`;
 - `GET /api/system/activity` lists tasks without `engine`, `detail` or `error`;
 - `GET /api/settings` leaves the server-only fields at their defaults, including the library size limit (`max_library_bytes`);
 - `GET /api/system/stats` leaves out the GPU name and memory and the ffmpeg path;
 - `GET /api/health` leaves out the PO token provider address and error, and the message, target and URL of the last failed YouTube extract; its `storage_warning` says that storage is on a network filesystem without the data directory or mount point;
-- `GET /api/channels/catalog/status` gives a failed catalog's `last_error` as "Indexing failed";
+- `GET /api/channels/catalog/status` gives a failed catalog's `last_error` as "Listing failed";
 - a channel feed that cannot load answers with the generic message and code `channel_feed_unavailable` (for everyone; the server log has the cause).
 
 Download job errors are not trimmed: they explain why a download the member can see failed (for example a private or members-only video).
