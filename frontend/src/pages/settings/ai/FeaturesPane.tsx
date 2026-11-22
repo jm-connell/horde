@@ -21,7 +21,7 @@ export default function FeaturesPane() {
       hidden={
         !match(
           "features",
-          "use subtitles in search indexes",
+          "use subtitles in embeddings",
           "embeddings",
           "ai video summaries",
           "summarize",
@@ -54,11 +54,9 @@ export default function FeaturesPane() {
     >
       <div className="space-y-3">
         <SettingRow
-          title="Use subtitles in search indexes"
+          title="Use subtitles in embeddings"
           description="Caption text feeds search, related videos and categories."
-          hidden={
-            !!q && !match("Use subtitles in search indexes", "embeddings")
-          }
+          hidden={!!q && !match("Use subtitles in embeddings", "search")}
           control={
             <Toggle
               checked={aiDraft.use_subtitles}

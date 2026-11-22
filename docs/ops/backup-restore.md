@@ -51,7 +51,7 @@ These can be rebuilt after restore:
 |------|-------------------|
 | **Thumbnails** (`data/thumbnails/`) | Regenerated from media / source metadata |
 | **Sprites** (`data/sprites/`) | Regenerated for seek previews |
-| **Embeddings** (rows in `horde.db`) | AI **reindex** / embed jobs after providers are online |
+| **Embeddings** (rows in `horde.db`) | AI **Re-embed everything** / embed jobs after providers are online |
 
 Also regenerable: `feed_meta_cache.json` (refills as you browse channel feeds).
 
@@ -62,7 +62,7 @@ Not regenerable without re-download or re-entry: video files, custom titles/note
 1. Restore `DATA_PATH` and `DOWNLOADS_PATH` to the mounts Compose expects.
 2. Confirm `PUID`/`PGID` can read/write both trees ([permissions](troubleshooting.md)).
 3. Start Horde; orphan cleanup runs on startup for missing files.
-4. If you wiped embeddings or changed models, run AI maintenance reindex ([Maintenance](maintenance.md)).
+4. If you wiped embeddings or changed models, run **Re-embed everything** ([Maintenance](maintenance.md)).
 5. Confirm `/api/health` and open the library.
 
 ## Related

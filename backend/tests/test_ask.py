@@ -653,3 +653,268 @@ def test_channels_are_indexed_in_turn_newest_first(session):
         session.add(video)
         session.commit()
     assert order == [(first.id, 0), (second.id, 0), (first.id, 1), (second.id, 1)]
+
+
+# --- how much of a channel is indexed ------------------------------------------
+
+
+def _uploads(n: int, first: int = 0) -> list[listing.Upload]:
+    return [
+        listing.Upload(f"v{first + i:010d}", f"Video {first + i}", None, None, False, i)
+        for i in range(n)
+    ]
+
+
+def test_listing_asks_for_the_limit_in_force(session, monkeypatch, client):
+    own = _channel(session, status=KbChannelStatus.queued, max_videos=80)
+    asked: list[int] = []
+
+    def fake(url, *, include_streams, max_videos):
+        asked.append(max_videos)
+        return listing.Listing(channel_name="x", uploads=[])
+
+    monkeypatch.setattr(listing, "list_channel", fake)
+    assert worker.list_due_channel()
+    session.refresh(own)
+    own.max_videos = None
+    own.status = KbChannelStatus.queued
+    session.add(own)
+    session.commit()
+    assert worker.list_due_channel()
+    assert asked == [80, 500]  # its own, then the app-wide default
+
+
+def test_lowering_the_limit_deletes_the_videos_beyond_it(client, session, monkeypatch):
+    channel = _channel(session, status=KbChannelStatus.queued)
+    monkeypatch.setattr(
+        listing,
+        "list_channel",
+        lambda url, *, include_streams, max_videos: listing.Listing(
+            channel_name="x", uploads=_uploads(120)[:max_videos]
+        ),
+    )
+    assert worker.list_due_channel()
+    oldest = session.exec(select(KbVideo).where(KbVideo.position == 119)).one()
+    _index(session, oldest)
+    assert kb_search.search(session, ["timing"], channel_ids=None, limit=10)
+
+    r = client.patch(f"/api/ask/channels/{channel.id}", json={"max_videos": 50})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert (body["max_videos"], body["limit"], body["status"]) == (50, 50, "queued")
+    assert worker.list_due_channel()
+    session.expire_all()
+    rows = session.exec(select(KbVideo)).all()
+    assert len(rows) == 50 and max(r.position for r in rows) == 49
+    assert kb_search.search(session, ["timing"], channel_ids=None, limit=10) == []
+
+    # Back to the app-wide limit: the older videos are listed again.
+    r = client.patch(f"/api/ask/channels/{channel.id}", json={"max_videos": None})
+    assert (r.json()["max_videos"], r.json()["limit"]) == (None, 500)
+    assert worker.list_due_channel()
+    assert len(session.exec(select(KbVideo)).all()) == 120
+
+
+def test_a_video_youtube_stopped_listing_is_kept_within_the_limit(session):
+    channel = _channel(session)
+    indexing.apply_listing(session, channel, listing.Listing(uploads=_uploads(3)), 500)
+    indexing.apply_listing(
+        session, channel, listing.Listing(uploads=_uploads(2, first=1)), 500
+    )
+    assert len(session.exec(select(KbVideo)).all()) == 3
+
+
+def test_new_uploads_push_the_oldest_past_the_limit(session):
+    """A listing that fills the limit leaves out what new uploads pushed past
+    it: those go, though their last position was inside the limit."""
+    channel = _channel(session)
+    indexing.apply_listing(session, channel, listing.Listing(uploads=_uploads(5)), 5)
+    newer = [
+        listing.Upload(f"n{i:010d}", f"New {i}", None, None, False, i) for i in range(3)
+    ]
+    kept = [
+        listing.Upload(u.yt_id, u.title, None, None, False, 3 + i)
+        for i, u in enumerate(_uploads(2))
+    ]
+    indexing.apply_listing(session, channel, listing.Listing(uploads=newer + kept), 5)
+    rows = session.exec(select(KbVideo)).all()
+    assert sorted(r.yt_id for r in rows) == sorted(u.yt_id for u in newer + kept)
+    assert sorted(r.position for r in rows) == [0, 1, 2, 3, 4]
+
+
+def test_a_full_streams_tab_does_not_trim_uploads(session):
+    channel = _channel(session)
+    indexing.apply_listing(session, channel, listing.Listing(uploads=_uploads(3)), 3)
+    streams = [
+        listing.Upload(f"s{i:010d}", f"Stream {i}", None, None, True, i)
+        for i in range(3)
+    ]
+    # Uploads came back short of the limit: the unlisted one is kept.
+    indexing.apply_listing(
+        session, channel, listing.Listing(uploads=_uploads(2) + streams), 3
+    )
+    assert len(session.exec(select(KbVideo)).all()) == 6
+
+
+def test_limit_is_validated_and_needs_the_permission(client, member_client, session):
+    channel = _channel(session)
+    url = f"/api/ask/channels/{channel.id}"
+    assert client.patch(url, json={"max_videos": 10}).status_code == 422
+    assert client.patch(url, json={"max_videos": 5001}).status_code == 422
+    assert member_client.patch(url, json={"max_videos": 100}).status_code == 403
+    # Changing only the limit leaves the streams choice alone.
+    assert client.patch(url, json={"max_videos": 100}).json()["include_streams"] is (
+        False
+    )
+
+
+def test_changing_the_app_wide_limit_lists_its_channels_again(client, session):
+    follows_default = _channel(session, status=KbChannelStatus.ready)
+    own = _channel(
+        session,
+        channel_url="https://youtube.com/@own",
+        status=KbChannelStatus.ready,
+        max_videos=80,
+    )
+    paused = _channel(
+        session,
+        channel_url="https://youtube.com/@paused",
+        status=KbChannelStatus.paused,
+    )
+    r = client.patch("/api/settings", json={"ask_max_videos": 200})
+    assert r.status_code == 200, r.text
+    assert r.json()["ask_max_videos"] == 200
+    for row in (follows_default, own, paused):
+        session.refresh(row)
+    assert follows_default.status == KbChannelStatus.queued
+    assert own.status == KbChannelStatus.ready
+    assert paused.status == KbChannelStatus.paused
+    items = {c["id"]: c for c in client.get("/api/ask/channels").json()["items"]}
+    assert items[follows_default.id]["limit"] == 200
+    assert items[own.id]["limit"] == 80
+    # Saving the same number again lists nothing.
+    follows_default.status = KbChannelStatus.ready
+    session.add(follows_default)
+    session.commit()
+    client.patch("/api/settings", json={"ask_max_videos": 200})
+    session.refresh(follows_default)
+    assert follows_default.status == KbChannelStatus.ready
+
+
+def test_channel_total_comes_from_the_catalog_or_a_short_listing(client, session):
+    from app.models import ChannelCatalog
+
+    capped = _channel(session, max_videos=50)
+    whole = _channel(session, channel_url="https://youtube.com/@whole", max_videos=50)
+    unknown = _channel(session, channel_url="https://youtube.com/@unknown")
+    for channel, n in ((capped, 50), (whole, 12)):
+        channel.last_listed_at = channel.created_at
+        session.add(channel)
+        session.commit()
+        indexing.apply_listing(
+            session,
+            channel,
+            listing.Listing(uploads=_uploads(n, first=channel.id * 1000)),
+            50,
+        )
+    session.add(
+        ChannelCatalog(
+            channel_url="https://www.youtube.com/@carcarenut", channel_total=2310
+        )
+    )
+    session.commit()
+    items = {c["id"]: c for c in client.get("/api/ask/channels").json()["items"]}
+    assert items[capped.id]["channel_total"] == 2310
+    assert items[whole.id]["channel_total"] == 12
+    assert items[unknown.id]["channel_total"] is None
+
+
+# --- subscriptions that predate automatic indexing -----------------------------
+
+
+def test_existing_subscriptions_are_added_to_ask_once(session, admin_user, init_db):
+    from app.services import app_settings, follows
+    from app.services.knowledge import subscriptions
+
+    have = _channel(session, channel_url="https://youtube.com/channel/UCcarcarenut01")
+    follows.follow(session, admin_user.id, "https://www.youtube.com/@one", "One")
+    # Ask has this one under its id: the same name by handle is the same channel.
+    follows.follow(
+        session, admin_user.id, "https://www.youtube.com/@carcarenut", have.channel_name
+    )
+    follows.follow(session, admin_user.id, "https://www.youtube.com/@gone", "Gone")
+    follows.unfollow(session, admin_user.id, "https://www.youtube.com/@gone")
+
+    assert subscriptions.add_subscribed_once() == 1
+    rows = {c.channel_url: c for c in session.exec(select(KbChannel)).all()}
+    assert set(rows) == {have.channel_url, "https://youtube.com/@one"}
+    added = rows["https://youtube.com/@one"]
+    assert added.status == KbChannelStatus.queued
+    assert (added.channel_name, added.added_by) == ("One", admin_user.id)
+    assert added.max_videos is None
+    assert app_settings.load()["ask_subscriptions_indexed"] is True
+
+    # Once: a channel turned off afterwards stays off.
+    session.delete(added)
+    session.commit()
+    assert subscriptions.add_subscribed_once() == 0
+    assert len(session.exec(select(KbChannel)).all()) == 1
+
+
+def test_backfill_adds_only_subscriptions_that_could_turn_ask_on(
+    session, admin_user, member_user, init_db
+):
+    """The same rule as subscribing: a member's subscription counts only while
+    the administrator includes members' new channels, and a disabled account's
+    not at all."""
+    from app.services import app_settings, follows
+    from app.services.knowledge import subscriptions
+
+    member_user.permissions = '["manage_subscriptions"]'
+    session.add(member_user)
+    session.commit()
+    follows.follow(session, admin_user.id, "https://www.youtube.com/@mine", "Mine")
+    follows.follow(session, member_user.id, "https://www.youtube.com/@theirs", "T")
+    app_settings.save({"new_channel_subscribe_members": False})
+
+    assert subscriptions.add_subscribed_once() == 1
+    urls = {c.channel_url for c in session.exec(select(KbChannel)).all()}
+    assert urls == {"https://youtube.com/@mine"}
+
+    # A disabled administrator's subscriptions are left out too.
+    app_settings.save({"ask_subscriptions_indexed": False})
+    for c in session.exec(select(KbChannel)).all():
+        session.delete(c)
+    admin_user.disabled = True
+    session.add(admin_user)
+    session.commit()
+    assert subscriptions.add_subscribed_once() == 0
+
+
+def test_a_subscription_ask_already_has_under_another_address_is_dropped(
+    session, monkeypatch
+):
+    have = _channel(session, channel_url="https://youtube.com/channel/UCsame0000001")
+    alias = _channel(
+        session,
+        channel_url="https://youtube.com/@samechannel",
+        channel_name=None,
+        status=KbChannelStatus.queued,
+    )
+    monkeypatch.setattr(
+        listing,
+        "list_channel",
+        lambda *a, **k: listing.Listing(
+            channel_name="The Car Care Nut",
+            channel_url="https://www.youtube.com/channel/UCsame0000001",
+            uploads=_uploads(3),
+        ),
+    )
+    have.last_listed_at = have.created_at
+    session.add(have)
+    session.commit()
+    assert alias.id is not None
+    assert worker.list_due_channel()
+    session.expire_all()
+    assert [c.id for c in session.exec(select(KbChannel)).all()] == [have.id]
+    assert session.exec(select(KbVideo)).all() == []

@@ -12,6 +12,7 @@ from .models import (
     PlaylistVisibility,
     VideoStatus,
 )
+from .services import app_settings
 from .services.discovery.tuning import Tuning
 
 #: Largest list a bulk endpoint accepts (video ids, pasted URLs).
@@ -1354,8 +1355,6 @@ class SubscribeAskIndexRequest(BaseModel):
     """Turn Ask indexing on for a channel the caller subscribes to."""
 
     channel_url: str = Field(min_length=1, max_length=500)
-    #: Index it even though it has more uploads than subscribing indexes by itself.
-    confirm_large: bool = False
 
 
 class SubscribeAskIndexResult(BaseModel):
@@ -1367,8 +1366,6 @@ class SubscribeAskIndexResult(BaseModel):
     indexed: bool = False
     #: It was on already.
     already: bool = False
-    #: Too many uploads to index without ``confirm_large``; nothing was changed.
-    large: bool = False
 
 
 class LiveChannelRead(BaseModel):
@@ -1769,6 +1766,12 @@ class AskChannelRead(BaseModel):
     #: queued | listing | indexing | ready | paused | error
     status: str
     include_streams: bool = False
+    #: The channel's own limit on how many of its newest uploads are indexed
+    #: (null: it follows the app-wide ``ask_max_videos``), and the one in force.
+    max_videos: int | None = None
+    limit: int
+    #: Uploads the channel has on YouTube, when known (null: unknown).
+    channel_total: int | None = None
     #: Uploads listed; captions fetched; still to fetch; without captions;
     #: unavailable (members-only or failed); searchable passages.
     videos: int = 0
@@ -1805,7 +1808,15 @@ class AskChannelCreate(BaseModel):
 
 
 class AskChannelUpdate(BaseModel):
-    include_streams: bool
+    """Only the fields sent change. ``max_videos`` null returns the channel to
+    the app-wide limit."""
+
+    include_streams: bool | None = None
+    max_videos: int | None = Field(
+        default=None,
+        ge=app_settings.ASK_MAX_VIDEOS_MIN,
+        le=app_settings.ASK_MAX_VIDEOS_MAX,
+    )
 
 
 class AskSearchHit(BaseModel):

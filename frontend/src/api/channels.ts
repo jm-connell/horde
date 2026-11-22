@@ -306,21 +306,12 @@ export const channelsApi = {
     });
   },
 
-  /**
-   * Turn Ask on for a channel the user subscribes to (reads YouTube). A big
-   * channel answers `large` until called again with `confirmLarge`.
-   */
-  indexSubscribedChannel(
-    channelUrl: string,
-    confirmLarge = false
-  ): Promise<SubscribeAskIndexResult> {
+  /** Turn Ask on for a channel the user subscribes to (reads YouTube). */
+  indexSubscribedChannel(channelUrl: string): Promise<SubscribeAskIndexResult> {
     return request<SubscribeAskIndexResult>("/api/follows/ask-index", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        channel_url: channelUrl,
-        confirm_large: confirmLarge,
-      }),
+      body: JSON.stringify({ channel_url: channelUrl }),
     });
   },
 

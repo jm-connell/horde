@@ -25,10 +25,12 @@ from sqlmodel import Session, col, or_, select
 from ...context import current, get_engine
 from ...models import KbChannel, KbChannelStatus, KbVideo, as_utc, require_id, utcnow
 from .. import activity
+from ..follows import normalize_channel_url
 from ..subtitle_retry import next_due_video
 from ..workers import BackgroundWorker
 from ..ytdlp_common import classify_ytdlp_error
-from . import captions, embed, indexing, listing, sponsorblock
+from . import captions, embed, indexing, listing, sponsorblock, subscriptions
+from . import channels as kb_channels
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +83,8 @@ def list_due_channel() -> bool:
         channel_id = require_id(channel)
         url = channel.channel_url
         include_streams = channel.include_streams
-        max_videos = channel.max_videos
+        max_videos = kb_channels.effective_limit(channel)
+        first_listing = channel.last_listed_at is None
         name = channel.channel_name or url
         channel.status = KbChannelStatus.listing
         session.add(channel)
@@ -116,12 +119,28 @@ def list_due_channel() -> bool:
             or channel.include_streams != include_streams
         ):
             return True
-        added = indexing.apply_listing(session, channel, found)
+        if first_listing and _is_duplicate(session, channel, found):
+            logger.info("Ask: %s is a channel Ask already has; dropped", name)
+            kb_channels.remove(session, channel)
+            return True
+        added = indexing.apply_listing(session, channel, found, max_videos)
         # SponsorBlock segments are often submitted days after upload.
         sponsorblock.mark_recent_due(session, channel_id)
         indexing.finish_if_done(session, channel_id)
     logger.info("Ask: listed %s (%s new)", name, added)
     return True
+
+
+def _is_duplicate(session: Session, channel: KbChannel, found: listing.Listing) -> bool:
+    """A channel added by a subscription's address (``subscriptions.py``) that
+    YouTube knows under the address of a channel Ask already has."""
+    canonical = normalize_channel_url(found.channel_url or "")
+    if not canonical or canonical == channel.channel_url:
+        return False
+    other = session.exec(
+        select(KbChannel.id).where(KbChannel.channel_url == canonical)
+    ).first()
+    return other is not None
 
 
 def _next_video(session: Session) -> KbVideo | None:
@@ -205,6 +224,10 @@ def _loop(worker: BackgroundWorker) -> None:
         logger.warning("Ask: recovering channels failed", exc_info=True)
     if worker.sleep(STARTUP_DELAY_SEC):
         return
+    try:
+        subscriptions.add_subscribed_once()
+    except Exception:
+        logger.warning("Ask: adding subscribed channels failed", exc_info=True)
     # Idle passes come every 3 s during a SponsorBlock backfill: check
     # embeddings no more often than captions are fetched.
     embeddings_checked = -float(FETCH_SPACING_SEC)

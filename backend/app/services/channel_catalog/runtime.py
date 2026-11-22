@@ -557,7 +557,7 @@ def enqueue_all_library_channels(*, force: bool = True) -> dict[str, Any]:
             "queued": 0,
             "skipped": 0,
             "refreshed": 0,
-            "detail": "Channel catalog indexing is disabled",
+            "detail": "The channel catalog is turned off",
         }
     queued = 0
     skipped = 0
@@ -584,7 +584,7 @@ def refresh_all_library_channels() -> dict[str, Any]:
             "queued": 0,
             "skipped": 0,
             "refreshed": 0,
-            "detail": "Channel catalog indexing is disabled",
+            "detail": "The channel catalog is turned off",
         }
     queued = 0
     skipped = 0

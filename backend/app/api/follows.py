@@ -208,11 +208,10 @@ def index_subscribed_channel(
 ):
     """Turn Ask indexing on for a channel the caller subscribes to.
 
-    Up to ``ASK_INDEX_AUTO_MAX`` uploads it starts by itself; a larger channel
-    answers ``large`` and starts only with ``confirm_large``, which needs
-    ``manage_ask``. Members without ``manage_ask`` may do this while the
-    administrator includes their new channels (``follows.may_index_on_subscribe``).
-    Reads the channel's upload count from YouTube.
+    Whatever its size: Ask indexes its newest uploads up to the limit. Members
+    without ``manage_ask`` may do this while the administrator includes their
+    new channels (``follows.may_index_on_subscribe``). Reads the channel's name
+    and address from YouTube.
     """
     if not follows.may_index_on_subscribe(user.is_admin, user.permissions):
         raise CodedHTTPException(
@@ -228,26 +227,13 @@ def index_subscribed_channel(
     if get_ctx(request).e2e:
         # The browser suite has no YouTube: nothing is looked up or turned on.
         return SubscribeAskIndexResult(channel_url=url)
-    if payload.confirm_large and "manage_ask" not in user.permissions:
-        raise CodedHTTPException(
-            403,
-            "Indexing a channel this large needs the Manage channel indexing permission",
-            "channel_too_large",
-        )
-    done = kb_channels.index_on_subscribe(
-        session,
-        url,
-        user_id=user.id,
-        auto_max=follows.ASK_INDEX_AUTO_MAX,
-        confirm_large=payload.confirm_large,
-    )
+    done = kb_channels.index_on_subscribe(session, url, user_id=user.id)
     return SubscribeAskIndexResult(
         channel_url=done.channel_url,
         channel_name=done.channel_name,
         video_count=done.video_count,
         indexed=done.indexed,
         already=done.already,
-        large=done.large,
     )
 
 

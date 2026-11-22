@@ -212,7 +212,7 @@ def enqueue_missing_embeds(
 
 
 def maybe_enqueue_index_catchup() -> dict:
-    """Queue missing search indexes under the default on-download schedule.
+    """Queue missing embeddings under the default on-download schedule.
 
     Per-video enqueue only runs when a download (or review) finishes, so
     imported/scanned library videos and missed jobs would otherwise sit
@@ -224,7 +224,7 @@ def maybe_enqueue_index_catchup() -> dict:
     if ai.get("paused"):
         return _result(breakdown, empty="AI queue is paused")
     if str(ai.get("schedule") or "on_download") != "on_download":
-        return _result(breakdown, empty="Schedule does not auto-index")
+        return _result(breakdown, empty="Schedule does not embed automatically")
     return enqueue_missing_embeds(skip_failed=True, skip_empty_document=True)
 
 
@@ -264,7 +264,7 @@ def enqueue_reindex_embeds(*, limit: int | None = None) -> dict:
         app_settings.save({"ai": {"pending_category_refresh": True}})
     return _result(
         breakdown,
-        empty="Search indexes already match the current embed model",
+        empty="Embeddings already match the current embedding model",
     )
 
 
@@ -357,7 +357,7 @@ def enqueue_library_backlog(*, force: bool = True) -> dict:
         "tags": b["breakdown"]["tags"],
         "categories": c["breakdown"]["categories"],
     }
-    return _result(breakdown, empty="Nothing new to process (library already indexed)")
+    return _result(breakdown, empty="Nothing new to process (library already embedded)")
 
 
 def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
@@ -427,7 +427,7 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
     breakdown["categories"] = cats["breakdown"]["categories"]
     return _result(
         breakdown,
-        empty="Nothing recent to process (last 30 days already indexed)",
+        empty="Nothing recent to process (last 30 days already embedded)",
     )
 
 

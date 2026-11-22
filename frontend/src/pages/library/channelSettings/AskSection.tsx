@@ -3,9 +3,10 @@ import { useAuth } from "../../../context/AuthContext";
 import { useAskChannels } from "../../../queries/ask";
 import AddAskChannel from "../../ask/AddAskChannel";
 import { askProgressText, findAskChannel } from "../../ask/askLinks";
+import AskLimit from "./AskLimit";
 import SettingsSection from "./SettingsSection";
 
-/** Whether Ask indexes this channel's captions, and turning it on. */
+/** Whether Ask indexes this channel's captions, how much of it, and turning it on. */
 export default function AskSection({
   channel,
   channelUrl,
@@ -29,20 +30,25 @@ export default function AskSection({
       }
     >
       {found ? (
-        <p className="text-sm text-gray-300">
-          On · {askProgressText(found)}.
+        <>
+          <p className="text-sm text-gray-300">
+            On · {askProgressText(found)}.
+            {manage && (
+              <>
+                {" "}
+                <Link
+                  to="/settings?tab=library&find=ask-channels"
+                  className="text-accent hover:underline"
+                >
+                  Manage in Settings
+                </Link>
+              </>
+            )}
+          </p>
           {manage && (
-            <>
-              {" "}
-              <Link
-                to="/settings?tab=library&find=ask-channels"
-                className="text-accent hover:underline"
-              >
-                Manage in Settings
-              </Link>
-            </>
+            <AskLimit key={`${found.id}-${found.limit}`} channel={found} />
           )}
-        </p>
+        </>
       ) : manage && channelUrl ? (
         <AddAskChannel initialUrl={channelUrl} />
       ) : (

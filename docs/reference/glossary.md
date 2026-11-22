@@ -4,11 +4,15 @@ Short definitions for terms used across the Horde UI and wiki.
 
 ## Catalog
 
-A channel’s **remote listing** of videos (metadata from YouTube / yt-dlp) used to browse what exists upstream, mark downloads, and drive channel feeds. Distinct from the local **library** of files on disk. Catalog sync can run in phases and stores progress on `channel_catalogs` rows.
+A channel’s **remote listing** of videos (metadata from YouTube / yt-dlp) used to browse what exists upstream, mark downloads, and drive channel feeds. Distinct from the local **library** of files on disk. Catalog sync can run in phases and stores progress on `channel_catalogs` rows. The interface calls it the channel's **video list**, and a channel in it **listed**.
 
 ## Embedding
 
-A numeric vector representing text (title, description, notes, tags, subtitle chunks) for **semantic search**, related videos, and recommendation shelves. Produced by the AI provider's embedding model (often a small local one such as `nomic-embed-text` on Ollama). See [Local vs cloud AI](../design/local-vs-cloud-ai.md).
+A numeric vector representing text (title, description, notes, tags, subtitle chunks) for **semantic search**, related videos, and recommendation shelves. Produced by the AI provider's embedding model (often a small local one such as `nomic-embed-text` on Ollama). The interface calls a library video that has them **embedded**. See [Local vs cloud AI](../design/local-vs-cloud-ai.md).
+
+## Indexed
+
+Only used for **Ask**: a channel is indexed when Ask has fetched its videos' captions and can answer from them and the search bar can find what they say. Not the catalog (**listed**) and not the library's embeddings (**embedded**). See [Ask](../guides/ask.md).
 
 ## GPU
 

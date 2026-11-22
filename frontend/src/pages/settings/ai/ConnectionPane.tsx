@@ -161,7 +161,7 @@ export default function ConnectionPane() {
             "embedding",
             "budget",
             "best",
-            "search index",
+            "embeddings",
             "costs"
           )
         }
@@ -261,7 +261,7 @@ export default function ConnectionPane() {
             tip={EMBED_MODEL_TIP}
             value={aiDraft.embed_model}
             models={embedChoices}
-            placeholder="e.g. nomic-embed-text (empty = no search indexes)"
+            placeholder="e.g. nomic-embed-text (empty = no embeddings)"
             onSave={(v) => void saveModels({ embed_model: v })}
           />
           {!aiDraft.embed_model && (

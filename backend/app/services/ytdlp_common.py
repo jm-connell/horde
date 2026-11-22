@@ -239,8 +239,8 @@ def catalog_skip_message(
     label = _CATALOG_SKIP_LABELS.get(kind, "Skipped")
     target = describe_extract_target(url, title=title, channel=channel)
     if target:
-        return f"{label}: skipped {target} and continued indexing"
-    return f"{label}: skipped a video and continued indexing"
+        return f"{label}: skipped {target} and continued listing"
+    return f"{label}: skipped a video and continued listing"
 
 
 def _strip_ansi_local(text: str) -> str:

@@ -2027,11 +2027,10 @@ export interface paths {
          * Index Subscribed Channel
          * @description Turn Ask indexing on for a channel the caller subscribes to.
          *
-         *     Up to ``ASK_INDEX_AUTO_MAX`` uploads it starts by itself; a larger channel
-         *     answers ``large`` and starts only with ``confirm_large``, which needs
-         *     ``manage_ask``. Members without ``manage_ask`` may do this while the
-         *     administrator includes their new channels (``follows.may_index_on_subscribe``).
-         *     Reads the channel's upload count from YouTube.
+         *     Whatever its size: Ask indexes its newest uploads up to the limit. Members
+         *     without ``manage_ask`` may do this while the administrator includes their
+         *     new channels (``follows.may_index_on_subscribe``). Reads the channel's name
+         *     and address from YouTube.
          */
         post: operations["index_subscribed_channel_api_follows_ask_index_post"];
         delete?: never;
@@ -5202,6 +5201,11 @@ export interface components {
         AppSettingsRead: {
             ai?: components["schemas"]["AiSettingsRead"];
             /**
+             * Ask Max Videos
+             * @default 500
+             */
+            ask_max_videos: number;
+            /**
              * Channel Catalog Enabled
              * @default true
              */
@@ -5285,6 +5289,8 @@ export interface components {
         /** AppSettingsUpdate */
         AppSettingsUpdate: {
             ai?: components["schemas"]["AiSettingsUpdate"] | null;
+            /** Ask Max Videos */
+            ask_max_videos?: number | null;
             /** Channel Catalog Enabled */
             channel_catalog_enabled?: boolean | null;
             /** Channel Catalog Max Videos */
@@ -5375,6 +5381,8 @@ export interface components {
         AskChannelRead: {
             /** Channel Name */
             channel_name?: string | null;
+            /** Channel Total */
+            channel_total?: number | null;
             /** Channel Url */
             channel_url: string;
             /**
@@ -5398,6 +5406,10 @@ export interface components {
             last_error?: string | null;
             /** Last Listed At */
             last_listed_at?: string | null;
+            /** Limit */
+            limit: number;
+            /** Max Videos */
+            max_videos?: number | null;
             /**
              * No Captions
              * @default 0
@@ -5426,10 +5438,16 @@ export interface components {
              */
             videos: number;
         };
-        /** AskChannelUpdate */
+        /**
+         * AskChannelUpdate
+         * @description Only the fields sent change. ``max_videos`` null returns the channel to
+         *     the app-wide limit.
+         */
         AskChannelUpdate: {
             /** Include Streams */
-            include_streams: boolean;
+            include_streams?: boolean | null;
+            /** Max Videos */
+            max_videos?: number | null;
         };
         /**
          * AskChatRequest
@@ -9036,11 +9054,6 @@ export interface components {
         SubscribeAskIndexRequest: {
             /** Channel Url */
             channel_url: string;
-            /**
-             * Confirm Large
-             * @default false
-             */
-            confirm_large: boolean;
         };
         /** SubscribeAskIndexResult */
         SubscribeAskIndexResult: {
@@ -9058,11 +9071,6 @@ export interface components {
              * @default false
              */
             indexed: boolean;
-            /**
-             * Large
-             * @default false
-             */
-            large: boolean;
             /** Video Count */
             video_count?: number | null;
         };

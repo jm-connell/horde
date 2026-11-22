@@ -23,6 +23,7 @@ import {
 import HelpTip from "../../components/HelpTip";
 import ThemedSelect from "../../components/ThemedSelect";
 import { DEFAULT_PRESET_OPTIONS } from "../../presets";
+import AskLimitSetting from "./AskLimitSetting";
 import AskChannelsSection from "./AskChannelsSection";
 import CommentsSetting from "./CommentsSetting";
 import HelpDataSection from "./HelpDataSection";
@@ -53,6 +54,9 @@ const ASK_CHANNEL_TERMS = [
   "transcripts",
   "knowledge",
   "index",
+  "indexed",
+  "limit",
+  "max videos",
   "live streams",
 ];
 
@@ -395,11 +399,12 @@ export default function LibraryTab() {
                 can search it from the search bar, and Ask answers from a
                 channel when a question names it or it is picked as the source.
                 Subscribing to a channel, by hand or through a download, turns
-                this on for it when it has up to 500 videos.
+                this on for it.
               </p>
               <AskChannelsSection />
             </div>
           )}
+          {isAdmin && match(...ASK_CHANNEL_TERMS) && <AskLimitSetting />}
           {isAdmin && (
             <p className="text-xs text-muted">
               Models, video chat and summaries are in{" "}
@@ -512,8 +517,8 @@ export default function LibraryTab() {
       >
         <div className="mb-4 space-y-4">
           <SettingRow
-            title="Index channel libraries"
-            description="YouTube only — background-index uploads when you download from a channel or open its feed, so feed search works beyond the loaded page."
+            title="Keep channel video lists"
+            description="YouTube only — list a channel's uploads in the background when you download from it or open its feed, so feed search works beyond the loaded page. Separate from what Ask indexes."
             control={
               <div className="flex items-center gap-2">
                 <HelpTip text={CATALOG_INDEX_TIP} />
@@ -533,7 +538,7 @@ export default function LibraryTab() {
           <SettingRow
             anchor="youtube-channel-search"
             title="YouTube results in channel search"
-            description="A channel’s search box also finds that channel’s uploads on YouTube that are not indexed yet."
+            description="A channel’s search box also finds that channel’s uploads on YouTube that are not in its video list yet."
             control={
               <div className="flex items-center gap-2">
                 <HelpTip text={DIRECT_YOUTUBE_SEARCH_TIP} />
@@ -621,7 +626,7 @@ export default function LibraryTab() {
                 htmlFor="settings-catalog-max"
                 className="mb-1 flex items-center gap-1.5 text-xs text-muted"
               >
-                Max indexed videos per channel
+                Max listed videos per channel
                 <HelpTip text={CATALOG_MAX_TIP} />
               </label>
               <div className="flex flex-wrap items-center gap-2">
@@ -658,7 +663,7 @@ export default function LibraryTab() {
               </div>
               {parseInt(catalogMaxInput, 10) > 1000 && (
                 <p className="mt-1.5 text-xs text-warning">
-                  Large indexes can take a long time and may slow other YouTube
+                  Long lists can take a long time and may slow other YouTube
                   work while running.
                 </p>
               )}

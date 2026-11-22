@@ -9,6 +9,20 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Ask indexes every subscription, up to a limit.** Subscribing turns Ask
+  on for a channel whatever its size, and channels you already subscribe to
+  are added once after the update. Ask indexes each channel's newest videos
+  up to **Videos indexed per channel** (Settings → Library → Ask, 500 by
+  default) or the channel's own limit, set from the indexed count on its
+  page ("500 of 2,310 indexed"). Lowering a limit deletes what lies beyond
+  it. Channels that already had more indexed keep it.
+- **Only Ask is called "indexed".** The channel catalog is now a "video
+  list" throughout the interface (**Keep channel video lists**, **Max listed
+  videos per channel**, **Full relist**), so its counts no longer read as
+  what Ask can answer from. The library's AI search data is called
+  embeddings: Settings → AI shows **Embedded** and **Embed missing**, and
+  Jobs has **Embed missing videos** and **Re-embed everything** (they were
+  "Indexed", "Index missing videos" and "Rebuild search indexes").
 - **New OpenRouter presets.** A new setup, and the **Budget** preset, now
   use `deepseek/deepseek-v4.1-flash` for the background jobs instead of
   `google/gemini-2.5-flash-lite`: it names chapters more specifically and

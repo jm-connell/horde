@@ -341,12 +341,7 @@ export default function AddChannel({
                       checked={indexAsk}
                       onChange={() => setIndexAsk((v) => !v)}
                     />
-                    <span>
-                      Index for Ask and search{" "}
-                      <span className="text-muted">
-                        (asks first above 500 videos)
-                      </span>
-                    </span>
+                    Index for Ask and search
                   </label>
                 )}
               </div>

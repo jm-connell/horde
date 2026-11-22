@@ -35,11 +35,11 @@ export const INPUT_KEY =
   "ui-panel w-48 max-w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent";
 
 export const CATALOG_INDEX_TIP =
-  "YouTube channels only. When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Non-YouTube sources are skipped. Settings → System → Refresh catalogs catches new channels and new uploads on ready catalogs; Full reindex re-walks every channel.";
+  "YouTube channels only. When you download from a channel or open its feed, Horde lists that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Non-YouTube sources are skipped. Settings → System → Refresh catalogs catches new channels and new uploads on ready catalogs; Full relist re-walks every channel. What Ask indexes (what channels say in their videos) is separate: Settings → Library → Ask.";
 export const STORAGE_LIMIT_TIP =
   "Downloads wait, and start again by themselves, while the library is at this size. A download that has already started is allowed to finish, so the library can pass the limit by about one video per download slot. Imports are not held. Downloads also wait when the disk is nearly full (less than HORDE_MIN_FREE_GB free, 2 GB by default).";
 export const CATALOG_MAX_TIP =
-  "How many of each YouTube channel’s uploads Horde indexes, newest first, for channel feed search and auto-download. It does not limit how many videos you can download. Values above 1000 can take a long time and may slow other YouTube work while indexing.";
+  "How many of each YouTube channel’s uploads Horde lists, newest first, for channel feed search and auto-download. It does not limit how many videos you can download or how many Ask indexes. Values above 1000 can take a long time and may slow other YouTube work while listing.";
 export const DIRECT_YOUTUBE_SEARCH_TIP =
   "When on, a channel page’s search box also asks YouTube for that channel’s uploads that are not already in the results. Search text is sent to YouTube. YouTube-linked channels only; the YT control in a channel’s search box can override this per channel.";
 export const DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP =
@@ -50,7 +50,7 @@ export const YOUTUBE_VIDEO_SEARCH_HEADER_TIP = "Toggle YouTube search results";
 export const DISCOVERY_TIP =
   "Every few hours, for people who opened Recommended lately, Horde makes a few YouTube searches built from their interests and reads the up next list of videos they liked (at most 7 calls a person, 20 seconds apart and 30 an hour in all, behind anything you are doing). The search words are sent to YouTube. If YouTube pushes back, Horde waits before asking again.";
 export const METADATA_INTERVAL_TIP =
-  "How often Horde refreshes library video metadata and re-queues stale channel catalogs for a full index pass.";
+  "How often Horde refreshes library video metadata and lists stale channel catalogs again in full.";
 
 export const STATUS_TIPS = {
   horde:
@@ -58,7 +58,7 @@ export const STATUS_TIPS = {
   ytdlp:
     "The downloader Horde uses to fetch metadata and video files from YouTube and other sites. Keep it current — extractors break when sites change.",
   pot: "YouTube issues Proof-of-Origin (PO) tokens to tell real players from bots. Horde’s bgutil-pot sidecar mints them for yt-dlp. If this is down, downloads and previews often fail with bot-check errors.",
-  ai: "The AI provider (any OpenAI-compatible endpoint: OpenRouter, Ollama, LM Studio, …) used for summaries, tags, chat, and search indexes. Configure it under AI → Providers.",
+  ai: "The AI provider (any OpenAI-compatible endpoint: OpenRouter, Ollama, LM Studio, …) used for summaries, tags, chat, and embeddings. Configure it under AI → Providers.",
   cookies:
     "Browser or Netscape cookies for yt-dlp. Horde leaves them off public requests and only attaches them after an age-restricted or members-only block on that one video. Bot checks use the PO token sidecar, not cookies. This still identifies your account to YouTube for those gated videos.",
   library:
@@ -70,7 +70,7 @@ export const STATUS_TIPS = {
   aiQueue:
     "Background AI work (embeddings, tags, summaries). Depth is waiting jobs; running/failed show worker progress. A blocked reason means the provider isn’t usable.",
   catalogQueue:
-    "Channel catalog indexing — walking YouTube upload lists so feed search works beyond the visible page.",
+    "Channel video lists — walking YouTube upload lists so feed search works beyond the visible page.",
   extractFailure:
     "The most recent yt-dlp metadata error (bot check, age-restricted/private, PO token, and similar), including the video or channel it happened on.",
   disk: "Free space on the downloads volume versus total size. Downloads and imports will fail if this runs out.",
@@ -104,13 +104,13 @@ export const AI_PROCESS_CATCH_UP: {
     action: "all_recent",
     label: "Process recent",
     description:
-      "Queue missing search indexes and AI tags for videos watched or added in the last 30 days, then refresh categories.",
+      "Queue missing embeddings and AI tags for videos watched or added in the last 30 days, then refresh categories.",
   },
   {
     action: "all_full",
     label: "Process full library",
     description:
-      "Queue missing search indexes and AI tags across the whole library, then refresh categories.",
+      "Queue missing embeddings and AI tags across the whole library, then refresh categories.",
   },
 ];
 
@@ -121,15 +121,15 @@ export const AI_PROCESS_JOBS: {
 }[] = [
   {
     action: "embeds",
-    label: "Index missing videos",
+    label: "Embed missing videos",
     description:
-      "Build search indexes for videos that are missing, stale, or indexed with a different embed model.",
+      "Compute embeddings for videos that have none, are stale, or were embedded with a different embedding model.",
   },
   {
     action: "reindex_embeds",
-    label: "Rebuild search indexes",
+    label: "Re-embed everything",
     description:
-      "Force re-queue indexing for those videos (even if already queued) and refresh categories when done. Prefer this after changing the embed model.",
+      "Queue every video for embedding again (even if already queued) and refresh categories when done. Use this after changing the embedding model.",
   },
   {
     action: "missing_tags",
@@ -147,12 +147,12 @@ export const AI_PROCESS_JOBS: {
     action: "categories",
     label: "Refresh categories",
     description:
-      "Invent browse categories from a diverse sample, then rematch shelves via search indexes. Run after re-indexing if you changed the embed model.",
+      "Invent browse categories from a diverse sample, then rematch shelves using embeddings. Run after re-embedding if you changed the embedding model.",
   },
 ];
 
 export const EMBED_MODEL_TIP =
-  "Search index model — used for semantic search, related videos, and filling category shelves. On Ollama, nomic-embed-text is a solid default (~0.5–1GB VRAM); on OpenRouter or OpenAI, openai/text-embedding-3-small. Leave empty to turn search indexes off. Changing it requires re-indexing the library.";
+  "Embedding model — turns each video into embeddings used for semantic search, related videos, and filling category shelves. On Ollama, nomic-embed-text is a solid default (~0.5–1GB VRAM); on OpenRouter or OpenAI, openai/text-embedding-3-small. Leave empty to turn embeddings off. Changing it requires re-embedding the library.";
 export const BACKGROUND_MODEL_TIP =
   "Background model — the jobs that run for every video: summaries, chapters, tags, category chips and duplicate checks. A cheap, fast model is right here. Ask answers with the Assistant model above. On Ollama, 3B-class models need about 3–6GB of VRAM.";
 
@@ -260,12 +260,12 @@ export const AI_SCHEDULE_OPTIONS: {
     value: "on_download",
     label: "On download",
     description:
-      "Embed and enrich tags when a video finishes downloading, and queue missing search indexes when the GPU job queue is idle",
+      "Embed and enrich tags when a video finishes downloading, and queue missing embeddings when the GPU job queue is idle",
   },
   {
     value: "timer",
     label: "Timer",
-    description: "Periodically index videos missing search indexes",
+    description: "Periodically embed videos that have no embeddings",
   },
   {
     value: "set_time",
@@ -280,9 +280,9 @@ export const AI_SCHEDULE_OPTIONS: {
 ];
 
 export const WORKLOAD_TIP =
-  "Applies with any provider. Light keeps invent samples and indexing queues " +
+  "Applies with any provider. Light keeps invent samples and embedding queues " +
   "small for quieter runs. Normal is the balanced default. Heavy uses larger invent " +
-  "samples, deeper subtitle context, and bigger index batches — more processing time, " +
+  "samples, deeper subtitle context, and bigger embedding batches — more processing time, " +
   "better coverage on large libraries. When the provider is Ollama, applying a workload " +
   "also picks and downloads models that fit its GPU.";
 

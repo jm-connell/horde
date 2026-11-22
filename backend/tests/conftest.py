@@ -132,7 +132,6 @@ def _no_ask_channel_lookups(monkeypatch):
         raise RuntimeError("no YouTube in tests")
 
     monkeypatch.setattr(listing, "preview", offline)
-    monkeypatch.setattr(listing, "has_more_uploads_than", offline)
 
 
 @pytest.fixture(autouse=True)

@@ -27,6 +27,7 @@ from ..services.auth.accounts import AuthUser
 from ..services.comments import store as comments_store
 from ..services.css_sanitize import sanitize_ui_css
 from ..services.follows import NewChannelMode
+from ..services.knowledge import channels as kb_channels
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -126,6 +127,8 @@ class AppSettingsRead(BaseModel):
     metadata_sync_interval_hours: int = 24
     channel_catalog_enabled: bool = True
     channel_catalog_max_videos: int = 1000
+    # Newest uploads Ask indexes per channel, unless the channel has its own limit.
+    ask_max_videos: int = 500
     direct_youtube_search: bool = True
     youtube_video_search: bool = True
     # Recommended looks for videos on YouTube (needs youtube_video_search too).
@@ -160,6 +163,11 @@ class AppSettingsUpdate(BaseModel):
         default=None,
         ge=app_settings.CHANNEL_CATALOG_MAX_MIN,
         le=app_settings.CHANNEL_CATALOG_MAX_MAX,
+    )
+    ask_max_videos: int | None = Field(
+        default=None,
+        ge=app_settings.ASK_MAX_VIDEOS_MIN,
+        le=app_settings.ASK_MAX_VIDEOS_MAX,
     )
     direct_youtube_search: bool | None = None
     youtube_video_search: bool | None = None
@@ -204,6 +212,7 @@ MEMBER_HIDDEN_FIELDS = (
     "metadata_sync_interval_hours",
     "channel_catalog_enabled",
     "channel_catalog_max_videos",
+    "ask_max_videos",
     "max_library_bytes",
     "media_server_sidecars",
     "require_two_factor",
@@ -320,6 +329,7 @@ def _settings_read(
         channel_catalog_max_videos=app_settings.clamp_catalog_max_videos(
             data.get("channel_catalog_max_videos")
         ),
+        ask_max_videos=app_settings.clamp_ask_max_videos(data.get("ask_max_videos")),
         direct_youtube_search=app_settings.direct_youtube_search_system(data),
         youtube_video_search=app_settings.youtube_video_search_system(data),
         discovery_enabled=bool(data.get("discovery_enabled", True)),
@@ -393,6 +403,8 @@ def update_settings(
         updates["channel_catalog_max_videos"] = app_settings.clamp_catalog_max_videos(
             payload.channel_catalog_max_videos
         )
+    if payload.ask_max_videos is not None:
+        updates["ask_max_videos"] = payload.ask_max_videos
     if payload.direct_youtube_search is not None:
         updates["direct_youtube_search"] = bool(payload.direct_youtube_search)
     if payload.youtube_video_search is not None:
@@ -471,7 +483,13 @@ def update_settings(
     turned_on = (
         updates.get(media_sidecars.SETTING) is True and not media_sidecars.enabled()
     )
+    ask_limit_changed = (
+        "ask_max_videos" in updates
+        and updates["ask_max_videos"] != kb_channels.default_limit()
+    )
     data = app_settings.save(updates) if updates else app_settings.load()
+    if ask_limit_changed:
+        kb_channels.default_limit_changed(session)
     if turned_on:
         ctx.sidecars.write_all()
     if updates.get(comments_svc.SETTING) is True:

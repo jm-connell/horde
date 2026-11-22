@@ -12,7 +12,7 @@ import SettingsSection, { fieldLabel } from "./SettingsSection";
 
 const box = "rounded-lg border border-ink-700 bg-ink-950/50 p-4";
 
-/** Rare actions: rename the channel and (re)build its search index. */
+/** Rare actions: rename the channel and (re)build its video list. */
 export default function ManageSection({
   channel,
   youtube,
@@ -86,7 +86,7 @@ export default function ManageSection({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="flex items-center gap-1.5 text-sm font-medium text-gray-200">
-                  Search index
+                  Video list
                   <HelpTip text={FEED_INDEX_TIP} placement="bottom" />
                 </p>
                 <p
@@ -107,7 +107,7 @@ export default function ManageSection({
                     disabled={indexing}
                     className={button("secondary", "sm")}
                   >
-                    {indexing ? "Queuing…" : "Index channel"}
+                    {indexing ? "Queuing…" : "List videos"}
                   </button>
                 )}
             </div>

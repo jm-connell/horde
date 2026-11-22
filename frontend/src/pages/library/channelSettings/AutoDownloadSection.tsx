@@ -159,7 +159,7 @@ function AutoDownloadForm({
                 checked={previousMode === "all"}
                 onChange={() => setPreviousMode("all")}
               />
-              All indexed videos
+              All listed videos
             </label>
           </fieldset>
 
@@ -194,7 +194,7 @@ function AutoDownloadForm({
 
           <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             {previousMode === "all"
-              ? `All indexed videos can use a lot of storage. It is limited to the channel catalog cap (${policy.catalog_max_videos} videos).`
+              ? `All listed videos can use a lot of storage. It is limited to the channel catalog cap (${policy.catalog_max_videos} videos).`
               : "Automatic downloads can use a lot of storage over time."}
             {policy.pending_estimate > 0 &&
               ` About ${policy.pending_estimate} catalog video${

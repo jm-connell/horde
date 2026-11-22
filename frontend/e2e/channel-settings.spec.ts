@@ -222,7 +222,7 @@ test("the header shows the channel's picture and its index beside Subscribe", as
     .toBe(1);
   await expect(page.getByText(/\d+ videos? downloaded/)).toBeVisible();
 
-  // The index state sits on the action row, left of Subscribe, not on a line of its own.
+  // What Ask has indexed sits on the action row, left of Subscribe, not on a line of its own.
   const index = page.getByRole("button", { name: "Not indexed" });
   const follow = page.getByRole("button", { name: "Subscribe", exact: true });
   await expect(index).toBeVisible();
@@ -236,41 +236,141 @@ test("the header shows the channel's picture and its index beside Subscribe", as
   ).toBeLessThan(4);
 });
 
-test("the header shows the index state the server matched to the channel", async ({
+/** Ask's row for Kiln, as GET /api/ask/channels would list it. */
+function askKiln(over: Record<string, unknown> = {}) {
+  return {
+    id: 7,
+    channel_url: "https://youtube.com/@kiln",
+    channel_name: "Kiln",
+    status: "ready",
+    include_streams: false,
+    max_videos: null,
+    limit: 500,
+    channel_total: 2310,
+    videos: 500,
+    fetched: 480,
+    pending: 0,
+    no_captions: 20,
+    unavailable: 0,
+    passages: 9000,
+    last_listed_at: "2026-01-01T00:00:00Z",
+    last_error: null,
+    created_at: "2026-01-01T00:00:00Z",
+    ...over,
+  };
+}
+
+test("the header shows how much of the channel Ask has indexed", async ({
   page,
 }) => {
   await giveKilnAYoutubeUrl(page);
-  // The catalog stores the normalized URL (no www, lowercase handle); only the
-  // server's channel_catalog links it to the library's URL.
-  await page.route(/\/api\/channels\/catalog\/status(\?.*)?$/, (route) => {
-    const params = new URL(route.request().url()).searchParams;
-    const row = {
-      id: 7,
-      channel_url: "https://youtube.com/@kiln",
-      channel_name: "Kiln",
-      status: "ready",
-      indexed_count: 1000,
-      channel_total: 1000,
-      complete: true,
-      max_videos: 1000,
-    };
-    return route.fulfill({
-      json: {
-        enabled: true,
-        running: false,
-        queue_depth: 0,
-        catalogs: [row],
-        channel_catalog: params.get("channel_url") === CHANNEL_URL ? row : null,
-        direct_youtube_search: true,
-      },
-    });
-  });
+  await page.route(/\/api\/ask\/channels$/, (route) =>
+    route.fulfill({ json: { items: [askKiln()], available: true } })
+  );
   await page.goto("/?channel=Kiln");
 
-  await expect(
-    page.getByRole("button", { name: "Fully indexed (1000)" })
-  ).toBeVisible();
+  // Against everything the channel uploaded, not only what the limit allows.
+  const count = page.getByRole("button", { name: "500 of 2,310 indexed" });
+  await expect(count).toBeVisible();
   await expect(page.getByRole("button", { name: "Not indexed" })).toHaveCount(
     0
   );
+  // It opens the limit.
+  await count.click();
+  const sheet = page.getByRole("dialog", { name: "Channel settings" });
+  await expect(sheet.getByLabel("Newest videos to index")).toHaveValue("500");
+  await expect(sheet.getByText(/The channel has 2,310 videos/)).toBeVisible();
+});
+
+test("the limit is set for one channel or for every channel", async ({
+  page,
+}) => {
+  await giveKilnAYoutubeUrl(page);
+  let row = askKiln();
+  await page.route(/\/api\/ask\/channels$/, (route) =>
+    route.fulfill({ json: { items: [row], available: true } })
+  );
+  const channelPatches: unknown[] = [];
+  await page.route(/\/api\/ask\/channels\/7$/, (route) => {
+    const body = route.request().postDataJSON() as {
+      max_videos: number | null;
+    };
+    channelPatches.push(body);
+    row = askKiln({
+      max_videos: body.max_videos,
+      limit: body.max_videos ?? row.limit,
+    });
+    return route.fulfill({ json: row });
+  });
+  const settingsPatches: unknown[] = [];
+  await page.route(/\/api\/settings$/, async (route) => {
+    if (route.request().method() !== "PATCH") return route.fallback();
+    const body = route.request().postDataJSON() as { ask_max_videos: number };
+    settingsPatches.push(body);
+    row = askKiln({ limit: body.ask_max_videos });
+    const response = await route.fetch();
+    return route.fulfill({ response });
+  });
+  await page.goto("/?channel=Kiln&settings=ask");
+  const sheet = page.getByRole("dialog", { name: "Channel settings" });
+  const limit = sheet.getByLabel("Newest videos to index");
+  const save = sheet.getByRole("button", { name: "Save", exact: true });
+  await expect(save).toBeDisabled();
+
+  await limit.fill("1200");
+  await save.click();
+  await expect(
+    sheet.getByText("This channel has its own limit.")
+  ).toBeVisible();
+  expect(channelPatches).toEqual([{ max_videos: 1200 }]);
+
+  // Lowering it for every channel deletes what lies beyond, so it asks first.
+  await sheet.getByLabel("Newest videos to index").fill("200");
+  await sheet.getByLabel("Every channel").check();
+  await sheet.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Lower the limit" }).click();
+  await expect(
+    sheet.getByText("This channel follows the limit for every channel.")
+  ).toBeVisible();
+  expect(settingsPatches).toEqual([{ ask_max_videos: 200 }]);
+  expect(channelPatches).toEqual([{ max_videos: 1200 }, { max_videos: null }]);
+  await expect(sheet.getByLabel("Newest videos to index")).toHaveValue("200");
+});
+
+test("raising its own limit to a lower one for every channel still asks first", async ({
+  page,
+}) => {
+  // Kiln has its own 80; every other channel follows 500. Saving 300 for
+  // every channel lowers theirs, so it must confirm, and nothing is saved
+  // when that is cancelled.
+  await giveKilnAYoutubeUrl(page);
+  const row = askKiln({ max_videos: 80, limit: 80, videos: 80 });
+  await page.route(/\/api\/ask\/channels$/, (route) =>
+    route.fulfill({ json: { items: [row], available: true } })
+  );
+  const patches: unknown[] = [];
+  await page.route(/\/api\/ask\/channels\/7$/, (route) => {
+    patches.push(route.request().postDataJSON());
+    return route.fulfill({ json: row });
+  });
+  await page.route(/\/api\/settings$/, async (route) => {
+    if (route.request().method() === "PATCH") {
+      patches.push(route.request().postDataJSON());
+      return route.fulfill({ status: 500, json: { detail: "unexpected" } });
+    }
+    const response = await route.fetch();
+    const json = await response.json();
+    return route.fulfill({ response, json: { ...json, ask_max_videos: 500 } });
+  });
+  await page.goto("/?channel=Kiln&settings=ask");
+  const sheet = page.getByRole("dialog", { name: "Channel settings" });
+  await sheet.getByLabel("Newest videos to index").fill("300");
+  await sheet.getByLabel("Every channel").check();
+  await sheet.getByRole("button", { name: "Save", exact: true }).click();
+  const confirm = page.getByRole("dialog").filter({ hasText: "every channel" });
+  await expect(
+    confirm.getByRole("button", { name: "Lower the limit" })
+  ).toBeVisible();
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+  expect(patches).toEqual([]);
 });

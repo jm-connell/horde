@@ -40,12 +40,12 @@ export default function JobsPane() {
         hidden={
           !match(
             "queue",
-            "indexed",
+            "embedded",
             "pause",
             "resume",
             "process",
             "gpu jobs",
-            "index missing"
+            "embed missing"
           )
         }
       >
@@ -191,7 +191,7 @@ export default function JobsPane() {
                   void runAiProcess("reindex_embeds");
                 }}
               >
-                Rebuild indexes
+                Re-embed
               </button>
               <button
                 type="button"
@@ -294,7 +294,7 @@ export default function JobsPane() {
       <Section
         anchor="ai-run-now"
         title="Run now"
-        description="Queue search indexing, tagging, and category jobs on demand."
+        description="Queue embedding, tagging, and category jobs on demand."
         hidden={
           !match(
             "process",
@@ -302,9 +302,9 @@ export default function JobsPane() {
             "recent",
             "full",
             "embeds",
-            "index",
+            "embeddings",
             "rebuild",
-            "reindex",
+            "re-embed",
             "tags",
             "categories",
             "catch up",
@@ -316,7 +316,7 @@ export default function JobsPane() {
           <div>
             <p className="mb-2 text-sm font-medium text-gray-200">Catch up</p>
             <p className="mb-3 text-xs text-muted">
-              Queue missing search indexes and AI tags, then refresh categories.
+              Queue missing embeddings and AI tags, then refresh categories.
             </p>
             <div className="ui-panel mb-3 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
               <button
@@ -386,19 +386,19 @@ export default function JobsPane() {
               <div className="space-y-4">
                 <div>
                   <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted">
-                    Search index
+                    Embeddings
                   </p>
                   <div className="divide-y divide-ink-800">
                     <ProcessActionRow
-                      label="Index missing videos"
-                      description="Build search indexes for videos that are missing, stale, or indexed with a different embed model."
+                      label="Embed missing videos"
+                      description="Compute embeddings for videos that have none, are stale, or were embedded with a different embedding model."
                       busy={aiProcessingAction === "embeds"}
                       disabled={!!aiProcessingAction || !!aiStatus?.paused}
                       onClick={() => runAiProcess("embeds")}
                     />
                     <ProcessActionRow
-                      label="Rebuild all indexes"
-                      description="Force re-queue indexing for those videos (even if already queued) and refresh categories when done. Prefer this after changing the embed model."
+                      label="Re-embed everything"
+                      description="Queue every video for embedding again (even if already queued) and refresh categories when done. Use this after changing the embedding model."
                       heavy
                       busy={aiProcessingAction === "reindex_embeds"}
                       disabled={!!aiProcessingAction || !!aiStatus?.paused}
@@ -435,7 +435,7 @@ export default function JobsPane() {
                   <div className="divide-y divide-ink-800">
                     <ProcessActionRow
                       label="Refresh categories"
-                      description="Invent browse categories from a diverse sample, then rematch shelves via search indexes. Run after re-indexing if you changed the embed model."
+                      description="Invent browse categories from a diverse sample, then rematch shelves using embeddings. Run after re-embedding if you changed the embedding model."
                       busy={aiProcessingAction === "categories"}
                       disabled={!!aiProcessingAction || !!aiStatus?.paused}
                       onClick={() => runAiProcess("categories")}

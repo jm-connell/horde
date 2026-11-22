@@ -77,9 +77,9 @@ def _upload(entry: dict[str, Any], tab: str, position: int) -> Upload:
     )
 
 
-def list_tab(channel_url: str, tab: str, limit: int | None, into: Listing) -> None:
-    """Append the tab's uploads (newest first) to ``into``. Raises on YouTube errors."""
-    cap = min(limit or MAX_PER_TAB, MAX_PER_TAB)
+def list_tab(channel_url: str, tab: str, limit: int, into: Listing) -> None:
+    """Append the tab's newest ``limit`` uploads to ``into``. Raises on YouTube errors."""
+    cap = min(limit, MAX_PER_TAB)
     offset = 0
     position = 0
     while position < cap:
@@ -99,7 +99,7 @@ def list_tab(channel_url: str, tab: str, limit: int | None, into: Listing) -> No
 
 
 def list_channel(
-    channel_url: str, *, include_streams: bool, max_videos: int | None
+    channel_url: str, *, include_streams: bool, max_videos: int
 ) -> Listing:
     """The channel's uploads. Raises ``ChannelNotFound`` when YouTube has no
     such channel (rather than listing it as a channel with nothing in it)."""
@@ -123,14 +123,6 @@ class Preview:
     channel_url: str
     video_count: int | None
     has_streams: bool
-
-
-def has_more_uploads_than(channel_url: str, n: int) -> bool:
-    """Whether the channel has more than ``n`` uploads, for when YouTube reports
-    no count (it often does not for a channel's Videos tab): is there one at
-    position ``n + 1``?"""
-    page = _page(channel_url, n, 1, "videos", EXTRACT_PRIORITY_INTERACTIVE)
-    return bool(page.get("entries"))
 
 
 def preview(channel_url: str) -> Preview:

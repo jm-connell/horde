@@ -6,19 +6,19 @@ Optional AI turns Horde from a downloader into a smarter archive: semantic searc
 
 AI features need **providers ready**:
 
-- **Embeddings** — the provider's embedding model, or a second server's (for search indexes, related, catalog embeds, categories)
+- **Embeddings** — the provider's embedding model, or a second server's (for library embeddings, related, catalog embeds, categories)
 - **Chat / LLM** — the **Background model** (summaries, chapters, enrich tags, category invention, duplicate confirmation) and the **Assistant model** (Ask)
 
 Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../ops/ai-setup.md). Until embed/chat models are present and healthy, Library stays on a single home tab (no Recommended), hybrid search degrades to keyword-only, and LLM actions stay unavailable.
 
 !!! tip "Workload profiles"
-    Use workload profiles so indexing and chat don’t thrash a small GPU. See [Workload profiles](../design/workload-profiles.md) and [Local vs cloud AI](../design/local-vs-cloud-ai.md).
+    Use workload profiles so embedding and chat don’t thrash a small GPU. See [Workload profiles](../design/workload-profiles.md) and [Local vs cloud AI](../design/local-vs-cloud-ai.md).
 
 ## Feature overview
 
 | Feature | What it does | Needs |
 |---------|----------------|--------|
-| **Hybrid search** | Keyword + embedding ranking; no UI semantic toggle | Embed indexes |
+| **Hybrid search** | Keyword + embedding ranking; no UI semantic toggle | Embeddings |
 | **Use subtitles in search indexes** | Include VTT/caption text in corpora (`use_subtitles`) | Embed rebuild after change |
 | **Related videos** | Neighbors on the watch page | Embeddings |
 | **Summaries** | Generate a synopsis for a video | Chat LLM |
@@ -113,12 +113,12 @@ The home page's **Recommended** tab works with AI off: it then ranks by what you
 
 On [Import & review](import-review.md), possible duplicate groups can be scored with AI when **AI duplicate confirmation** is enabled. Scoring is **on-demand** from the Import API (not a background AI job). Groups show verdict, confidence, optional similarity score, and reason text; if AI is enabled but no chat provider is up, the UI shows **AI unavailable** (`ai_error`) instead of a silent blank. Use **Keep this**, **Delete**, or **Not a duplicate** to resolve groups.
 
-## Search indexes & catalog embeds
+## Embeddings & catalog embeds
 
 - Library videos get `embed_video` jobs for semantic search and related
 - Channel catalog entries can get `embed_catalog_video` after [catalog phases](channels.md) reach **embed**
 - Changing the embedding model prompts a rebuild so shelves and search stay coherent
-- Failed indexes store `embed_status=error` + `embed_error` on the video; rebuild from Jobs
+- Failed embeddings store `embed_status=error` + `embed_error` on the video; rebuild from Jobs
 
 ## Single-flight & queues
 
@@ -132,7 +132,7 @@ See [Single-flight AI](../design/single-flight-ai.md) and [AI pipeline](../archi
 
 ## Related
 
-- [Search](search.md) — hybrid search and subtitle indexing
+- [Search](search.md) — hybrid search and subtitle embeddings
 - [Library](library.md) — Recommended tab
 - [Import & review](import-review.md) — duplicates
 - [AI settings](../settings/ai.md)
