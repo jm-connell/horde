@@ -85,7 +85,7 @@ shows its live chat beside the player, in the same places chat replay uses.
   number; at most `HORDE_LIVE_DVR_HOURS` (default 4 h) of send time and at most
   20 000 messages *(builder's call)*, oldest dropped first.
 - **API:** `GET /api/live/{video_id}/chat?behind_ms=&after=` on the live router
-  (its `stream_guard` applies). Answers `{status, items, next_after, earliest_ms}`:
+  (its `stream_guard` applies). Answers `{status, items, removed, next_after, earliest_ms, cutoff_ms}`:
   `status` `ok` / `none` (no chat or not live) / `unavailable`; `items` the
   messages sent at or before `server_now - behind_ms`, after sequence `after`,
   at most 300 (the newest 300 when more qualify); `next_after` the last
@@ -110,6 +110,33 @@ shows its live chat beside the player, in the same places chat replay uses.
   note: "Chat from before HH:MM isn't available." *(proposal: wording)*
 - Nothing new in Settings: `showChatReplay` and Hide cover live chat too
   *(proposal; the toggle's label becomes "Show live chat")*.
+
+### Calls made after the builder check
+
+- **Lining chat up with the picture** *(builder's call)*. The player's live
+  edge trails real time: Horde's playlists end three segment durations before
+  the newest segment (`LiveSession.broadcast_seconds`), and YouTube's picture
+  runs a few seconds behind real time. The cutoff is therefore
+  `server_now - behind_ms - edge_lag_ms`, where `edge_lag_ms` is three target
+  durations of the broadcast's live session (0 if none is open). YouTube's own
+  encoder delay (a few seconds) is left as a small lead, as on YouTube. The
+  response also carries `cutoff_ms` (the send time it filtered at), so the
+  "isn't available" note compares `cutoff_ms` with `earliest_ms` without
+  trusting the browser's clock.
+- **Deleted messages disappear** *(builder's call)*. The response carries
+  `removed`: ids deleted since `after` (deletions get sequence numbers like
+  messages); the hook drops them from the list.
+- **The buffer outlives the poller** *(builder's call)*. Polling stops when no
+  viewer has read for 60 s, when the broadcast ends, or on a rate limit; the
+  buffer stays and keeps being served until no viewer has read for 10 minutes
+  (as the live session's idle close). A read after polling stopped for lack of
+  readers starts it again and appends to the same buffer, so sequence numbers
+  keep increasing. After the broadcast ends, reads keep getting the buffer
+  (`ok`) while the viewer watches the DVR window. During the rate-limit pause,
+  reads get the buffer too, without polling.
+- **Top chat** *(builder's call)*: the watch page's default token, as chat
+  replay uses. It keeps volume within the buffer bounds and matches what
+  YouTube shows by default.
 
 ## Testing
 
