@@ -264,27 +264,27 @@ export default function CommentsPanel({
   const liveFailed = !loadingLive && current?.isError === true;
 
   let note: string | null = null;
-  // Settled with nothing to show: off on YouTube, hidden there, or none yet
-  // (not while loading, and not a failure, which says what went wrong).
-  let nothing = false;
   const refused = liveSteps.find((q) => q.data && q.data.status !== "ok")?.data;
   if (refused && items.length === 0) {
     note =
       refused.status === "disabled"
         ? "Comments are turned off for this video."
         : UNAVAILABLE_NOTE;
-    nothing = true;
   } else if (saved.data && latestOk === null && !loadingLive) {
     note = savedNote(saved.data, items.length === 0);
-    nothing =
-      items.length === 0 &&
-      saved.data.status !== "pending" &&
-      saved.data.status !== "failed";
   } else if (latestOk && items.length === 0 && !loadingLive) {
     note = NONE_NOTE;
-    nothing = true;
   }
-  nothing = nothing && !refresh.isPending;
+  // Nothing to show, yet or at all (still loading, off or hidden on YouTube,
+  // none): the box stays folded, so it never opens on a spinner only to fold
+  // again, and opening it says why it is empty. A failure is worth showing,
+  // so it follows the preference like a list of comments does.
+  const failed =
+    saved.isError ||
+    refresh.isError ||
+    liveFailed ||
+    (saved.data?.status === "failed" && latestOk === null && !loadingLive);
+  const nothing = items.length === 0 && !failed;
   const expanded = nothing ? openedEmpty : settings.commentsExpanded;
   const toggle = () => {
     if (nothing) setOpenedEmpty((v) => !v);

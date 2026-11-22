@@ -23,7 +23,7 @@ Past the 100 saved comments, scrolling to the end of the box reads more from You
 
 A video you are only streaming (`/watch?url=…`) has nothing saved; its top 100 are read from YouTube as soon as you open it.
 
-When comments are turned off on YouTube, or YouTube no longer shows them (the video is private, removed, members-only, or age-restricted and Horde has no YouTube cookies), the section says so and shows the comments saved before, with the date they were saved. With none saved (or a video that has no comments yet), the section starts folded; opening it says why it is empty. A broadcast that is live right now has no Comments section: YouTube keeps what viewers say during it in the live chat, which Horde does not show. A later fetch that finds no comments never removes saved ones.
+When comments are turned off on YouTube, or YouTube no longer shows them (the video is private, removed, members-only, or age-restricted and Horde has no YouTube cookies), the section says so and shows the comments saved before, with the date they were saved. With none saved (or a video that has no comments yet), the section starts folded, and stays folded while they are still being read from YouTube; opening it says why it is empty (an error reading them opens it). A broadcast that is live right now has no Comments section: YouTube keeps what viewers say during it in the live chat, which Horde does not show. A later fetch that finds no comments never removes saved ones.
 
 ## In search and chat
 

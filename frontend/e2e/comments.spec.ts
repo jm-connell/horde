@@ -184,8 +184,86 @@ test("comments turned off start folded and say so when opened", async ({
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   const note = panel.getByText("Comments are turned off for this video.");
   await expect(note).not.toBeInViewport();
+
+  // Fetching them again keeps it folded while the fetch runs.
+  const before = await (
+    await page.request.get(`/api/videos/${id}/comments`)
+  ).json();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(
+    new RegExp(`/api/videos/${id}/comments/refresh$`),
+    async (route) => {
+      await held;
+      await route.fulfill({
+        json: {
+          ...before,
+          status: "disabled",
+          items: [],
+          total_count: null,
+          next_limit: null,
+        },
+      });
+    }
+  );
+  const refresh = panel.getByRole("button", { name: "Refresh comments" });
+  await refresh.click();
+  await expect(refresh).toBeDisabled();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  release();
+  await expect(refresh).toBeEnabled();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+
   await toggle.click();
   await expect(note).toBeInViewport();
+});
+
+test("a stream whose comments are off never opens on its loading spinner", async ({
+  page,
+}) => {
+  const url = "https://www.youtube.com/watch?v=strmoff0001";
+  await page.route(/\/api\/preview\/meta\?/, (route) =>
+    route.fulfill({
+      json: {
+        id: "strmoff0001",
+        title: "Quiet walk",
+        channel: "Test Channel",
+        channel_url: null,
+        description: "",
+        duration: 600,
+        thumbnail_url: null,
+        source_url: url,
+        library_video_id: null,
+        subtitles: [],
+        available_presets: [],
+        view_count: 10,
+      },
+    })
+  );
+  await page.route(/\/api\/preview\/(manifest|stream|subtitles)\?/, (route) =>
+    route.fulfill({ status: 404, json: { detail: "no media", code: "x" } })
+  );
+  await page.route(/\/api\/preview\/related\?/, (route) =>
+    route.fulfill({ json: { items: [], next_cursor: null } })
+  );
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/api\/comments\/youtube\/strmoff0001\?/, async (route) => {
+    await held;
+    await route.fulfill({
+      json: { status: "disabled", total_count: null, items: [] },
+    });
+  });
+  await page.goto(`/watch?url=${encodeURIComponent(url)}`);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  const toggle = panel.getByRole("button", { name: "Comments", exact: true });
+  // Still reading from YouTube: folded, not open on a spinner.
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  release();
+  await expect(
+    panel.getByText("Comments are turned off for this video.")
+  ).toBeAttached();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
 });
 
 test("a video without a YouTube id has no comments section", async ({
