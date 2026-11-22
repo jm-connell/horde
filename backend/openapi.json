@@ -4702,6 +4702,203 @@
         "title": "ChapterRead",
         "type": "object"
       },
+      "ChatReplayItem": {
+        "description": "One chat replay message, at ``offset_ms`` into the video.",
+        "properties": {
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "badges": {
+            "default": [],
+            "items": {
+              "enum": [
+                "owner",
+                "moderator",
+                "member",
+                "verified"
+              ],
+              "type": "string"
+            },
+            "title": "Badges",
+            "type": "array"
+          },
+          "color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color"
+          },
+          "header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Header"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "text",
+              "paid",
+              "sticker",
+              "membership",
+              "gift"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "offset_ms": {
+            "title": "Offset Ms",
+            "type": "integer"
+          },
+          "runs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChatReplayRun"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "sticker_alt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sticker Alt"
+          },
+          "sticker_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sticker Url"
+          }
+        },
+        "required": [
+          "id",
+          "offset_ms",
+          "kind"
+        ],
+        "title": "ChatReplayItem",
+        "type": "object"
+      },
+      "ChatReplayRead": {
+        "description": "A stretch of a past stream's chat, read from YouTube now (never saved).\n\n``status``: ``ok``; ``none`` (the video has no chat replay); ``unavailable``\n(private, removed, members-only or age-restricted without cookies). Pass\n``next_cursor`` back as ``cursor`` for the stretch after this one; null at\nthe end of the chat.",
+        "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChatReplayItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "none",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ChatReplayRead",
+        "type": "object"
+      },
+      "ChatReplayRun": {
+        "description": "A piece of a chat message: text, or a custom emoji image with its shortcut.",
+        "properties": {
+          "emoji_alt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emoji Alt"
+          },
+          "emoji_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Emoji Url"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "ChatReplayRun",
+        "type": "object"
+      },
       "ClipCreate": {
         "description": "Save part of a video (a live or finished stream) as its own library video.\n\nA finished stream gives ``start_sec`` / ``end_sec`` (its own timeline). A\nstream that is still live gives how far behind the live edge each end is\n(``start_behind_live_sec`` > ``end_behind_live_sec``), measured when the\nrequest is sent; the server turns those into broadcast times.",
         "properties": {
@@ -8548,6 +8745,62 @@
         "title": "LiveChannelRead",
         "type": "object"
       },
+      "LiveChatRead": {
+        "description": "A live broadcast's chat at the viewer's moment, read from Horde's buffer.\n\n``items`` were sent at or before ``cutoff_ms`` (the moment being watched,\nepoch ms) and arrived after ``after``; pass ``next_after`` back as ``after``.\n``removed`` lists messages YouTube deleted since ``after``. ``earliest_ms``\nis the send time of the oldest message Horde holds: chat from before it is\nnot available. ``status``: ``ok``; ``none`` (no chat, or not live);\n``unavailable`` (private, members-only or age-restricted without cookies).",
+        "properties": {
+          "cutoff_ms": {
+            "title": "Cutoff Ms",
+            "type": "integer"
+          },
+          "earliest_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Earliest Ms"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChatReplayItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_after": {
+            "default": 0,
+            "title": "Next After",
+            "type": "integer"
+          },
+          "removed": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "none",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "cutoff_ms"
+        ],
+        "title": "LiveChatRead",
+        "type": "object"
+      },
       "LiveCommentsRead": {
         "description": "The top ``limit`` comments of a YouTube video, read now (not saved).",
         "properties": {
@@ -11437,6 +11690,17 @@
             ],
             "title": "Last Watched At"
           },
+          "live_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Status"
+          },
           "match_reason": {
             "anyOf": [
               {
@@ -12372,6 +12636,17 @@
               }
             ],
             "title": "Library Video Id"
+          },
+          "live_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Status"
           },
           "preview_height": {
             "anyOf": [
@@ -15076,6 +15351,17 @@
               }
             ],
             "title": "Last Watched At"
+          },
+          "live_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Status"
           },
           "match_reason": {
             "anyOf": [
@@ -19549,6 +19835,93 @@
         ]
       }
     },
+    "/api/chat-replay/youtube/{youtube_id}": {
+      "get": {
+        "description": "The stretch of a past stream's chat around ``at_ms`` (default 0), or after\n``cursor`` (an earlier page's ``next_cursor``). Not saved; stretches are kept\nin memory for 30 minutes.",
+        "operationId": "chat_replay_api_chat_replay_youtube__youtube_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "youtube_id",
+            "required": true,
+            "schema": {
+              "title": "Youtube Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "at_ms",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 86400000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "At Ms"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatReplayRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Chat Replay",
+        "tags": [
+          "chat-replay"
+        ]
+      }
+    },
     "/api/comments/youtube/{youtube_id}": {
       "get": {
         "description": "The top ``limit`` comments of any YouTube video, read from YouTube now.\n\n``limit`` is one of 100, 300 or 1000 (follow ``next_limit``). Not saved; a\nresult is kept in memory for 30 minutes.",
@@ -22726,6 +23099,83 @@
           }
         },
         "summary": "Channel Live",
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/api/live/{video_id}/chat": {
+      "get": {
+        "description": "A live broadcast's chat at the moment being watched (``behind_ms`` behind\nthe player's live edge), after ``after``. Read from YouTube once per\nbroadcast for every viewer; kept in memory, never saved.",
+        "operationId": "live_chat_api_live__video_id__chat_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{11}$",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "behind_ms",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 86400000,
+              "minimum": 0,
+              "title": "Behind Ms",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveChatRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Live Chat",
         "tags": [
           "live"
         ]

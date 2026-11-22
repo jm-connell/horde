@@ -109,6 +109,12 @@ export interface VideoPlayerProps {
   /** Fires with the pillarbox inset (px) when the picture doesn't fill its box. */
   onFrameInsetChange?: (inset: number) => void;
   /**
+   * Fires with an empty element beside the picture while the player is in
+   * element fullscreen on a touch screen (Android, iPad), and null otherwise:
+   * the watch page shows a past stream's live chat there.
+   */
+  onFullscreenAside?: (el: HTMLElement | null) => void;
+  /**
    * Unload live media (abort DASH fetches) while keeping the player shell.
    * Used so a newly clicked preview can load without waiting on the current one.
    */

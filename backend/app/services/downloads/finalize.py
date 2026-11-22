@@ -42,7 +42,7 @@ from ..paths import (
 )
 from ..thumbnails import save_from_url
 from ..video_delete import delete_video_cascade, remove_files
-from ..ytdlp_extract import list_thumbnail_url
+from ..ytdlp_extract import entry_live_status, list_thumbnail_url
 from ..ytdlp_formats import accepts_audio_only, compat_copy_cap, is_audio_preset
 from . import artifacts, dbwrite, postprocess, subtitles
 from .errors import DownloadCancelled
@@ -635,6 +635,7 @@ def _apply_remote_metadata(
     video.view_count = info.get("view_count")
     video.channel_subscriber_count = info.get("channel_follower_count")
     video.platform = info.get("extractor_key")
+    video.live_status = entry_live_status(info)
 
 
 def _apply_file_facts(video: Video, request: CommitRequest) -> None:

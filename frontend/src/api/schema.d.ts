@@ -1295,6 +1295,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat-replay/youtube/{youtube_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Chat Replay
+         * @description The stretch of a past stream's chat around ``at_ms`` (default 0), or after
+         *     ``cursor`` (an earlier page's ``next_cursor``). Not saved; stretches are kept
+         *     in memory for 30 minutes.
+         */
+        get: operations["chat_replay_api_chat_replay_youtube__youtube_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/comments/youtube/{youtube_id}": {
         parameters: {
             query?: never;
@@ -2281,6 +2303,28 @@ export interface paths {
          *     after YouTube rate-limited them.
          */
         get: operations["channel_live_api_live_channel_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live/{video_id}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Chat
+         * @description A live broadcast's chat at the moment being watched (``behind_ms`` behind
+         *     the player's live edge), after ``after``. Read from YouTube once per
+         *     broadcast for every viewer; kept in memory, never saved.
+         */
+        get: operations["live_chat_api_live__video_id__chat_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6225,6 +6269,78 @@ export interface components {
             title: string;
         };
         /**
+         * ChatReplayItem
+         * @description One chat replay message, at ``offset_ms`` into the video.
+         */
+        ChatReplayItem: {
+            /** Amount */
+            amount?: string | null;
+            /** Author */
+            author?: string | null;
+            /**
+             * Badges
+             * @default []
+             */
+            badges: ("owner" | "moderator" | "member" | "verified")[];
+            /** Color */
+            color?: string | null;
+            /** Header */
+            header?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "paid" | "sticker" | "membership" | "gift";
+            /** Offset Ms */
+            offset_ms: number;
+            /**
+             * Runs
+             * @default []
+             */
+            runs: components["schemas"]["ChatReplayRun"][];
+            /** Sticker Alt */
+            sticker_alt?: string | null;
+            /** Sticker Url */
+            sticker_url?: string | null;
+        };
+        /**
+         * ChatReplayRead
+         * @description A stretch of a past stream's chat, read from YouTube now (never saved).
+         *
+         *     ``status``: ``ok``; ``none`` (the video has no chat replay); ``unavailable``
+         *     (private, removed, members-only or age-restricted without cookies). Pass
+         *     ``next_cursor`` back as ``cursor`` for the stretch after this one; null at
+         *     the end of the chat.
+         */
+        ChatReplayRead: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ChatReplayItem"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "none" | "unavailable";
+        };
+        /**
+         * ChatReplayRun
+         * @description A piece of a chat message: text, or a custom emoji image with its shortcut.
+         */
+        ChatReplayRun: {
+            /** Emoji Alt */
+            emoji_alt?: string | null;
+            /** Emoji Url */
+            emoji_url?: string | null;
+            /** Text */
+            text?: string | null;
+        };
+        /**
          * ClipCreate
          * @description Save part of a video (a live or finished stream) as its own library video.
          *
@@ -7511,6 +7627,43 @@ export interface components {
             watch_url: string;
         };
         /**
+         * LiveChatRead
+         * @description A live broadcast's chat at the viewer's moment, read from Horde's buffer.
+         *
+         *     ``items`` were sent at or before ``cutoff_ms`` (the moment being watched,
+         *     epoch ms) and arrived after ``after``; pass ``next_after`` back as ``after``.
+         *     ``removed`` lists messages YouTube deleted since ``after``. ``earliest_ms``
+         *     is the send time of the oldest message Horde holds: chat from before it is
+         *     not available. ``status``: ``ok``; ``none`` (no chat, or not live);
+         *     ``unavailable`` (private, members-only or age-restricted without cookies).
+         */
+        LiveChatRead: {
+            /** Cutoff Ms */
+            cutoff_ms: number;
+            /** Earliest Ms */
+            earliest_ms?: number | null;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["ChatReplayItem"][];
+            /**
+             * Next After
+             * @default 0
+             */
+            next_after: number;
+            /**
+             * Removed
+             * @default []
+             */
+            removed: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "none" | "unavailable";
+        };
+        /**
          * LiveCommentsRead
          * @description The top ``limit`` comments of a YouTube video, read now (not saved).
          */
@@ -8573,6 +8726,8 @@ export interface components {
             last_position_sec: number;
             /** Last Watched At */
             last_watched_at: string | null;
+            /** Live Status */
+            live_status?: string | null;
             match_reason?: components["schemas"]["SearchMatchReason"] | null;
             /** Metadata Synced At */
             metadata_synced_at: string | null;
@@ -8934,6 +9089,8 @@ export interface components {
             is_live: boolean;
             /** Library Video Id */
             library_video_id?: number | null;
+            /** Live Status */
+            live_status?: string | null;
             /** Preview Height */
             preview_height?: number | null;
             /**
@@ -9966,6 +10123,8 @@ export interface components {
             last_position_sec: number;
             /** Last Watched At */
             last_watched_at: string | null;
+            /** Live Status */
+            live_status?: string | null;
             match_reason?: components["schemas"]["SearchMatchReason"] | null;
             /** Metadata Synced At */
             metadata_synced_at: string | null;
@@ -13132,6 +13291,49 @@ export interface operations {
             };
         };
     };
+    chat_replay_api_chat_replay_youtube__youtube_id__get: {
+        parameters: {
+            query?: {
+                at_ms?: number | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                youtube_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatReplayRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     live_comments_api_comments_youtube__youtube_id__get: {
         parameters: {
             query?: {
@@ -15574,6 +15776,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelLiveResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_chat_api_live__video_id__chat_get: {
+        parameters: {
+            query?: {
+                behind_ms?: number;
+                after?: number;
+            };
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveChatRead"];
                 };
             };
             /** @description Validation error */

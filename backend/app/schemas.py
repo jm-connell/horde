@@ -113,6 +113,8 @@ class VideoRead(BaseModel):
     last_watched_at: datetime | None
     needs_review: bool
     platform: str | None
+    #: yt-dlp live_status: ``was_live`` for a past stream (chat replay); None until known.
+    live_status: str | None = None
     status: VideoStatus
     metadata_synced_at: datetime | None
     source_title: str | None
@@ -345,6 +347,9 @@ class StreamPreviewMeta(BaseModel):
     is_live: bool = False
     #: A recording of a finished live stream (often hours long).
     was_live: bool = False
+    #: yt-dlp live_status. ``was_live`` above is also true for ``post_live`` (still
+    #: processing, on a timeline of its own); this tells the two apart.
+    live_status: str | None = None
     #: YouTube's thumbnails for scrubbing; None for live or when there are none.
     storyboard: StoryboardRead | None = None
     #: Where this user left the stream (seconds); 0 plays from the start.
@@ -1955,6 +1960,66 @@ class LiveCommentsRead(BaseModel):
     items: list[CommentRead] = []
     #: The next, larger ``limit``; null when there are no more comments to read.
     next_limit: int | None = None
+
+
+class ChatReplayRun(BaseModel):
+    """A piece of a chat message: text, or a custom emoji image with its shortcut."""
+
+    text: str | None = None
+    emoji_url: str | None = None
+    emoji_alt: str | None = None
+
+
+class ChatReplayItem(BaseModel):
+    """One chat replay message, at ``offset_ms`` into the video."""
+
+    id: str
+    offset_ms: int
+    kind: Literal["text", "paid", "sticker", "membership", "gift"]
+    author: str | None = None
+    badges: list[Literal["owner", "moderator", "member", "verified"]] = []
+    runs: list[ChatReplayRun] = []
+    #: Super Chat / Super Sticker amount as YouTube shows it ("$5.00").
+    amount: str | None = None
+    #: YouTube's tier colour, ``#rrggbb``.
+    color: str | None = None
+    sticker_url: str | None = None
+    sticker_alt: str | None = None
+    #: Membership or gift line ("Member for 6 months", "Gifted 5 memberships").
+    header: str | None = None
+
+
+class ChatReplayRead(BaseModel):
+    """A stretch of a past stream's chat, read from YouTube now (never saved).
+
+    ``status``: ``ok``; ``none`` (the video has no chat replay); ``unavailable``
+    (private, removed, members-only or age-restricted without cookies). Pass
+    ``next_cursor`` back as ``cursor`` for the stretch after this one; null at
+    the end of the chat.
+    """
+
+    status: Literal["ok", "none", "unavailable"]
+    items: list[ChatReplayItem] = []
+    next_cursor: str | None = None
+
+
+class LiveChatRead(BaseModel):
+    """A live broadcast's chat at the viewer's moment, read from Horde's buffer.
+
+    ``items`` were sent at or before ``cutoff_ms`` (the moment being watched,
+    epoch ms) and arrived after ``after``; pass ``next_after`` back as ``after``.
+    ``removed`` lists messages YouTube deleted since ``after``. ``earliest_ms``
+    is the send time of the oldest message Horde holds: chat from before it is
+    not available. ``status``: ``ok``; ``none`` (no chat, or not live);
+    ``unavailable`` (private, members-only or age-restricted without cookies).
+    """
+
+    status: Literal["ok", "none", "unavailable"]
+    items: list[ChatReplayItem] = []
+    removed: list[str] = []
+    next_after: int = 0
+    earliest_ms: int | None = None
+    cutoff_ms: int
 
 
 class ImportSuggestion(BaseModel):

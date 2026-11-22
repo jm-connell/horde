@@ -193,6 +193,8 @@
      "key": "showDescription", "type": "bool", "about": "The video description on the Watch page"},
     {"id": "show-related", "label": "Show related videos in sidebar", "tab": "playback", "anchor": "watch-page", "chat": "change", "scope": "personal",
      "key": "showRelatedVideos", "type": "bool", "about": "Related videos beside the player"},
+    {"id": "show-chat-replay", "label": "Show live chat", "tab": "playback", "anchor": "watch-page", "chat": "change", "scope": "personal",
+     "key": "showChatReplay", "type": "bool", "about": "Live chat beside livestreams, live or replayed", "keywords": "live chat replay stream"},
     {"id": "autoplay-related", "label": "Autoplay related", "tab": "playback", "anchor": "watch-page", "chat": "change", "scope": "personal",
      "key": "autoplayRelated", "type": "bool", "about": "Count down to the next part or a related video when one ends", "keywords": "up next autoplay"},
     {"id": "preview-on-hover", "label": "Autoplay previews on hover", "tab": "playback", "chat": "change", "scope": "personal",

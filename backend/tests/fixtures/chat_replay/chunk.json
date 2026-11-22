@@ -1,0 +1,412 @@
+{
+ "continuations": [
+  {
+   "liveChatReplayContinuationData": {
+    "timeUntilLastMessageMsec": 5000,
+    "continuation": "REPLAY"
+   }
+  },
+  {
+   "playerSeekContinuationData": {
+    "continuation": "SEEK"
+   }
+  }
+ ],
+ "actions": [
+  {
+   "replayChatItemAction": {
+    "actions": [
+     {
+      "clickTrackingParams": "CAEQl98BIhMI",
+      "addChatItemAction": {
+       "item": {
+        "liveChatSponsorshipsGiftPurchaseAnnouncementRenderer": {
+         "id": "gift-1",
+         "timestampUsec": "1",
+         "authorExternalChannelId": "UCgift",
+         "header": {
+          "liveChatSponsorshipsHeaderRenderer": {
+           "authorName": {
+            "simpleText": "Gus"
+           },
+           "primaryText": {
+            "runs": [
+             {
+              "text": "Gifted "
+             },
+             {
+              "text": "5"
+             },
+             {
+              "text": " memberships"
+             }
+            ]
+           },
+           "authorBadges": [
+            {
+             "liveChatAuthorBadgeRenderer": {
+              "customThumbnail": {
+               "thumbnails": [
+                {
+                 "url": "https://yt3.ggpht.com/badge=s16-c-k"
+                }
+               ]
+              },
+              "tooltip": "Member (6 months)"
+             }
+            }
+           ],
+           "image": {
+            "thumbnails": [
+             {
+              "url": "https://www.gstatic.com/youtube/img/sponsorships/gift.png"
+             }
+            ]
+           }
+          }
+         }
+        }
+       },
+       "clientId": "c"
+      }
+     }
+    ],
+    "videoOffsetTimeMsec": "4000"
+   }
+  },
+  {
+   "replayChatItemAction": {
+    "actions": [
+     {
+      "clickTrackingParams": "CAEQl98BIhMI",
+      "addChatItemAction": {
+       "item": {
+        "liveChatTextMessageRenderer": {
+         "id": "text-1",
+         "timestampUsec": "1",
+         "authorName": {
+          "simpleText": "Ada"
+         },
+         "authorPhoto": {
+          "thumbnails": [
+           {
+            "url": "https://yt3.ggpht.com/photo=s32",
+            "width": 32,
+            "height": 32
+           }
+          ]
+         },
+         "authorBadges": [
+          {
+           "liveChatAuthorBadgeRenderer": {
+            "icon": {
+             "iconType": "MODERATOR"
+            },
+            "tooltip": "Moderator",
+            "accessibility": {
+             "accessibilityData": {
+              "label": "Moderator"
+             }
+            }
+           }
+          }
+         ],
+         "message": {
+          "runs": [
+           {
+            "text": "hello "
+           },
+           {
+            "emoji": {
+             "emojiId": "😀",
+             "shortcuts": [
+              ":grinning:"
+             ],
+             "image": {
+              "thumbnails": [
+               {
+                "url": "https://www.youtube.com/s/gaming/emoji/grinning.svg"
+               }
+              ]
+             }
+            }
+           },
+           {
+            "emoji": {
+             "emojiId": "UCchan/wave",
+             "shortcuts": [
+              ":wave:"
+             ],
+             "isCustomEmoji": true,
+             "image": {
+              "thumbnails": [
+               {
+                "url": "https://yt3.ggpht.com/wave=w24-h24-c-k-nd",
+                "width": 24
+               },
+               {
+                "url": "https://yt3.ggpht.com/wave=w48-h48-c-k-nd",
+                "width": 48
+               }
+              ]
+             }
+            }
+           },
+           {
+            "text": " see https://example.com",
+            "navigationEndpoint": {
+             "urlEndpoint": {
+              "url": "https://example.com"
+             }
+            }
+           }
+          ]
+         },
+         "authorExternalChannelId": "UCada"
+        }
+       },
+       "clientId": "c"
+      }
+     }
+    ],
+    "videoOffsetTimeMsec": "1000"
+   }
+  },
+  {
+   "replayChatItemAction": {
+    "actions": [
+     {
+      "clickTrackingParams": "CAEQl98BIhMI",
+      "addChatItemAction": {
+       "item": {
+        "liveChatPlaceholderItemRenderer": {
+         "id": "ph-1",
+         "timestampUsec": "1"
+        }
+       },
+       "clientId": "c"
+      }
+     }
+    ],
+    "videoOffsetTimeMsec": "1500"
+   }
+  },
+  {
+   "replayChatItemAction": {
+    "actions": [
+     {
+      "clickTrackingParams": "CAEQl98BIhMI",
+      "addChatItemAction": {
+       "item": {
+        "liveChatPaidMessageRenderer": {
+         "id": "paid-1",
+         "timestampUsec": "1",
+         "authorName": {
+          "simpleText": "Bo"
+         },
+         "purchaseAmountText": {
+          "simpleText": "$5.00"
+         },
+         "message": {
+          "runs": [
+           {
+            "text": "great stream"
+           }
+          ]
+         },
+         "headerBackgroundColor": 4278239141,
+         "bodyBackgroundColor": 4280150454,
+         "authorExternalChannelId": "UCbo"
+        }
+       },
+       "clientId": "c"
+      }
+     }
+    ],
+    "videoOffsetTimeMsec": "2000"
+   }
+  },
+  {
+   "replayChatItemAction": {
+    "actions": [
+     {
+      "clickTrackingParams": "CAEQl98BIhMI",
+      "addLiveChatTickerItemAction": {
+       "item": {
+        "liveChatTickerPaidMessageItemRenderer": {
+         "id": "tick-1"
+        }
+       },
+       "durationSec": "60"
+      }
+     }
+    ],
+    "videoOffsetTimeMsec": "2500"
+   }
+  },
+  {
+   "replayChatItemAction": {
+    "actions": [
+     {
+      "clickTrackingParams": "CAEQl98BIhMI",
+      "addChatItemAction": {
+       "item": {
+        "liveChatViewerEngagementMessageRenderer": {
+         "id": "eng-1",
+         "message": {
+          "runs": [
+           {
+            "text": "Chat replay is on"
+           }
+          ]
+         }
+        }
+       },
+       "clientId": "c"
+      }
+     }
+    ],
+    "videoOffsetTimeMsec": "2600"
+   }
+  },
+  {
+   "replayChatItemAction": {
+    "actions": [
+     {
+      "clickTrackingParams": "CAEQl98BIhMI",
+      "addChatItemAction": {
+       "item": {
+        "liveChatSomethingNewRenderer": {
+         "id": "new-1",
+         "authorName": {
+          "simpleText": "X"
+         }
+        }
+       },
+       "clientId": "c"
+      }
+     }
+    ],
+    "videoOffsetTimeMsec": "2700"
+   }
+  },
+  {
+   "replayChatItemAction": {
+    "actions": [
+     {
+      "clickTrackingParams": "CAEQl98BIhMI",
+      "addChatItemAction": {
+       "item": {
+        "liveChatPaidStickerRenderer": {
+         "id": "sticker-1",
+         "timestampUsec": "1",
+         "authorName": {
+          "simpleText": "Cy"
+         },
+         "sticker": {
+          "thumbnails": [
+           {
+            "url": "//yt3.ggpht.com/sticker=s40",
+            "width": 40
+           },
+           {
+            "url": "//yt3.ggpht.com/sticker=s80",
+            "width": 80
+           }
+          ],
+          "accessibility": {
+           "accessibilityData": {
+            "label": "Waving hand sticker"
+           }
+          }
+         },
+         "purchaseAmountText": {
+          "simpleText": "€2.00"
+         },
+         "moneyChipBackgroundColor": 4294953512,
+         "backgroundColor": 4294947584,
+         "authorExternalChannelId": "UCcy"
+        }
+       },
+       "clientId": "c"
+      }
+     }
+    ],
+    "videoOffsetTimeMsec": "3000"
+   }
+  },
+  {
+   "replayChatItemAction": {
+    "actions": [
+     {
+      "clickTrackingParams": "CAEQl98BIhMI",
+      "addChatItemAction": {
+       "item": {
+        "liveChatMembershipItemRenderer": {
+         "id": "member-1",
+         "timestampUsec": "1",
+         "authorName": {
+          "simpleText": "Dee"
+         },
+         "headerPrimaryText": {
+          "runs": [
+           {
+            "text": "Member for "
+           },
+           {
+            "text": "6"
+           },
+           {
+            "text": " months"
+           }
+          ]
+         },
+         "headerSubtext": {
+          "simpleText": "The Channel"
+         },
+         "message": {
+          "runs": [
+           {
+            "text": "half a year!"
+           }
+          ]
+         },
+         "authorBadges": [
+          {
+           "liveChatAuthorBadgeRenderer": {
+            "customThumbnail": {
+             "thumbnails": [
+              {
+               "url": "https://yt3.ggpht.com/badge=s16-c-k"
+              }
+             ]
+            },
+            "tooltip": "Member (6 months)"
+           }
+          },
+          {
+           "liveChatAuthorBadgeRenderer": {
+            "icon": {
+             "iconType": "VERIFIED"
+            },
+            "tooltip": "Verified",
+            "accessibility": {
+             "accessibilityData": {
+              "label": "Verified"
+             }
+            }
+           }
+          }
+         ],
+         "authorExternalChannelId": "UCdee"
+        }
+       },
+       "clientId": "c"
+      }
+     }
+    ],
+    "videoOffsetTimeMsec": "3500"
+   }
+  }
+ ]
+}

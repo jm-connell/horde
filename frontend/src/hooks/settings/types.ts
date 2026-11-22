@@ -240,6 +240,8 @@ export interface Settings {
   /** A member closed the first-sign-in welcome on Home. */
   memberWelcomeDone: boolean;
   showRelatedVideos: boolean;
+  /** Live chat replay beside past livestreams (Hide turns it off). */
+  showChatReplay: boolean;
   /**
    * When true, show an up-next countdown after a video ends (the queue still
    * advances immediately): the channel's next upload when it clearly continues

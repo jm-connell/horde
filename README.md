@@ -94,6 +94,8 @@ Interactive API reference: `/docs`.
   popular discussions' replies, are saved with it, show under the video,
   count in search and tell Ask what viewers thought. More load from YouTube
   on request.
+- **Live chat replay**: a past livestream replays its chat beside the video,
+  in step with playback, read from YouTube while you watch (never saved).
 - **Player**: standard, theater and windowed modes, mini player,
   picture-in-picture, Chromecast, AirPlay, SponsorBlock, chapters and
   subtitles. Videos play as stored, without live transcoding; devices that

@@ -26,7 +26,7 @@ from .ytdlp_common import (
     is_members_only_error,
     youtube_extractor_args,
 )
-from .ytdlp_extract import _best_thumbnail_url
+from .ytdlp_extract import _best_thumbnail_url, entry_live_status
 from .ytdlp_formats import _available_presets, pick_original_audio_format
 
 logger = logging.getLogger(__name__)
@@ -714,6 +714,7 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
         "is_live": info.get("is_live") is True or info.get("live_status") == "is_live",
         "was_live": info.get("was_live") is True
         or info.get("live_status") in ("was_live", "post_live"),
+        "live_status": entry_live_status(info),
         "storyboard": _storyboard(info),
     }
 

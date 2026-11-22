@@ -19,6 +19,7 @@ from .api import (
     ask,
     backgrounds,
     channels,
+    chat_replay,
     comments,
     compat,
     discover,
@@ -318,6 +319,7 @@ async def lifespan(app: FastAPI):
             if stuck:
                 logger.error("shutdown left running: %s", ", ".join(stuck))
             ctx.live.sessions.close_all()
+            await asyncio.to_thread(ctx.live_chat.stop_all)
             await preview.close_preview_client()
         finally:
             if restore_signals is not None:
@@ -559,6 +561,7 @@ def include_api(target: FastAPI) -> None:
         video_ai,
         video_media,
         comments,
+        chat_replay,
         compat,
         channels,
         downloads,

@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api";
 import LoadingIndicator from "../../components/LoadingIndicator";
@@ -30,6 +30,8 @@ export default function WatchInfoPanels({
   sidebarShown,
   columnBounded,
   onVideoUpdated,
+  chatInline,
+  chatBeside,
 }: {
   source: WatchSource;
   ai: WatchAi;
@@ -38,6 +40,10 @@ export default function WatchInfoPanels({
   /** The page column already has a readable width (sidebar or theater). */
   columnBounded: boolean;
   onVideoUpdated: (video: Video) => void;
+  /** Live chat first in the column, above the AI panel (phones, narrow windows). */
+  chatInline?: ReactNode;
+  /** Live chat in the right-hand column, above the queue (theater). */
+  chatBeside?: ReactNode;
 }) {
   const { can } = useAuth();
   // Comments are one switch (Settings → Library → Comments) for everyone.
@@ -53,15 +59,16 @@ export default function WatchInfoPanels({
   const descriptionBody = stripChapterLines(description);
   const showAi = Boolean(ai.target && ai.showAiSection && can("use_ai"));
   const queueBeside = !sidebarShown && queueVisible;
+  const besideShown = queueBeside || chatBeside != null;
   // An unbounded column is ~116rem wide on 2xl screens: put the AI panel and
   // the description side by side there instead of one narrow column hugging
   // the left edge. Narrower screens keep one column at a readable width.
-  const sideBySide = !columnBounded && !queueBeside && showAi;
+  const sideBySide = !columnBounded && !besideShown && showAi;
 
   return (
     <div
       className={
-        queueBeside
+        besideShown
           ? "mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
           : sideBySide
             ? "mt-4 grid max-w-5xl items-start gap-4 2xl:max-w-none 2xl:grid-cols-2"
@@ -69,6 +76,7 @@ export default function WatchInfoPanels({
       }
     >
       <div className={sideBySide ? "contents" : "min-w-0 space-y-4"}>
+        {chatInline}
         {showAi && ai.target && (
           <Suspense fallback={<LoadingIndicator className="py-4" />}>
             <VideoAiPanel
@@ -145,8 +153,15 @@ export default function WatchInfoPanels({
         )}
       </div>
 
-      {queueBeside && (
-        <PlaybackQueue className="lg:sticky lg:top-20 lg:self-start" />
+      {chatBeside != null ? (
+        <div className="min-w-0 space-y-4 lg:self-start">
+          {chatBeside}
+          {queueBeside && <PlaybackQueue />}
+        </div>
+      ) : (
+        queueBeside && (
+          <PlaybackQueue className="lg:sticky lg:top-20 lg:self-start" />
+        )
       )}
     </div>
   );

@@ -119,6 +119,12 @@ export const queryKeys = {
     live: (youtubeId: string, limit: number) =>
       ["comments", "live", youtubeId, limit] as const,
   },
+  chatReplay: {
+    at: (youtubeId: string, bucket: number) =>
+      ["chatReplay", "at", youtubeId, bucket] as const,
+    next: (youtubeId: string, cursor: string) =>
+      ["chatReplay", "next", youtubeId, cursor] as const,
+  },
   users: {
     list: ["users", "list"] as const,
   },

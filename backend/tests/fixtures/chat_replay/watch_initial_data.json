@@ -1,0 +1,19 @@
+{
+ "contents": {
+  "twoColumnWatchNextResults": {
+   "conversationBar": {
+    "liveChatRenderer": {
+     "continuations": [
+      {
+       "reloadContinuationData": {
+        "continuation": "RELOAD",
+        "clickTrackingParams": "x"
+       }
+      }
+     ],
+     "isReplay": true
+    }
+   }
+  }
+ }
+}
