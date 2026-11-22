@@ -132,7 +132,7 @@ interface Props {
   pageDetail: () => PageDetail | null;
   /** Focus the question box (false when restored open after a reload). */
   focusOnOpen: boolean;
-  /** "Ask <channel>" or the watch page's "Chat": a new conversation about it. */
+  /** "Ask <channel>": a new conversation about it. */
   sourceRequest?: SourceRequest | null;
   /** The channel (and video) the current page is about. */
   pageChannel?: PageChannel | null;

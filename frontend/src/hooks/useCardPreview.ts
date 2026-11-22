@@ -124,15 +124,18 @@ function evaluateCenter() {
   const candidates = [];
   for (const [id, card] of cards) {
     if (card.blocked) continue;
-    // The picture, not the whole card: its title must not keep it playing.
+    // Up and down, the picture, not the whole card: its title must not keep
+    // it playing. Across, the card, so a list row's small picture still
+    // counts as full width.
     const frame =
       card.el.querySelector<HTMLElement>("[data-preview-frame]") ?? card.el;
     const r = frame.getBoundingClientRect();
+    const box = card.el.getBoundingClientRect();
     candidates.push({
       id,
       top: r.top,
-      left: r.left,
-      width: r.width,
+      left: box.left,
+      width: box.width,
       height: r.height,
     });
   }
