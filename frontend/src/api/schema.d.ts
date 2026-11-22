@@ -8573,6 +8573,8 @@ export interface components {
             last_position_sec: number;
             /** Last Watched At */
             last_watched_at: string | null;
+            /** Live Status */
+            live_status?: string | null;
             match_reason?: components["schemas"]["SearchMatchReason"] | null;
             /** Metadata Synced At */
             metadata_synced_at: string | null;
@@ -8934,6 +8936,8 @@ export interface components {
             is_live: boolean;
             /** Library Video Id */
             library_video_id?: number | null;
+            /** Live Status */
+            live_status?: string | null;
             /** Preview Height */
             preview_height?: number | null;
             /**
@@ -9966,6 +9970,8 @@ export interface components {
             last_position_sec: number;
             /** Last Watched At */
             last_watched_at: string | null;
+            /** Live Status */
+            live_status?: string | null;
             match_reason?: components["schemas"]["SearchMatchReason"] | null;
             /** Metadata Synced At */
             metadata_synced_at: string | null;

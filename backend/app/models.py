@@ -120,6 +120,9 @@ class Video(SQLModel, table=True):
 
     needs_review: bool = Field(default=False, index=True)
     platform: str | None = None
+    # yt-dlp live_status (not_live | was_live | post_live | ...); None until known.
+    # A past stream (was_live) gets chat replay on the watch page.
+    live_status: str | None = None
     status: VideoStatus = Field(default=VideoStatus.ready)
 
     frame_rate: float | None = None

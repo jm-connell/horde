@@ -113,6 +113,8 @@ class VideoRead(BaseModel):
     last_watched_at: datetime | None
     needs_review: bool
     platform: str | None
+    #: yt-dlp live_status: ``was_live`` for a past stream (chat replay); None until known.
+    live_status: str | None = None
     status: VideoStatus
     metadata_synced_at: datetime | None
     source_title: str | None
@@ -345,6 +347,9 @@ class StreamPreviewMeta(BaseModel):
     is_live: bool = False
     #: A recording of a finished live stream (often hours long).
     was_live: bool = False
+    #: yt-dlp live_status. ``was_live`` above is also true for ``post_live`` (still
+    #: processing, on a timeline of its own); this tells the two apart.
+    live_status: str | None = None
     #: YouTube's thumbnails for scrubbing; None for live or when there are none.
     storyboard: StoryboardRead | None = None
     #: Where this user left the stream (seconds); 0 plays from the start.

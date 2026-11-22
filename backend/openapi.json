@@ -11437,6 +11437,17 @@
             ],
             "title": "Last Watched At"
           },
+          "live_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Status"
+          },
           "match_reason": {
             "anyOf": [
               {
@@ -12372,6 +12383,17 @@
               }
             ],
             "title": "Library Video Id"
+          },
+          "live_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Status"
           },
           "preview_height": {
             "anyOf": [
@@ -15076,6 +15098,17 @@
               }
             ],
             "title": "Last Watched At"
+          },
+          "live_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Status"
           },
           "match_reason": {
             "anyOf": [

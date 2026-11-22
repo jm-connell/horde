@@ -20,7 +20,7 @@ from .ytdlp_common import (
     is_network_error,
     youtube_extractor_args,
 )
-from .ytdlp_extract import list_thumbnail_url
+from .ytdlp_extract import entry_live_status, list_thumbnail_url
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +172,11 @@ def refresh_video_metadata(
         from .chapters import apply_source_chapters
 
         apply_source_chapters(video, info, replace_empty=False)
+
+        # Whether it was a livestream (chat replay), whatever fields were asked for.
+        live_status = entry_live_status(info)
+        if live_status is not None and live_status != video.live_status:
+            video.live_status = live_status
 
         video.metadata_synced_at = datetime.now(UTC)
         session.add(video)
