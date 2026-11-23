@@ -90,6 +90,10 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- **The page no longer shows through menus that open from the top bar.**
+  With panel transparency on, the recent searches list and the account
+  menu blurred only the bar behind them, so the text of the page underneath
+  showed through them sharp. They now blur the page like every other menu.
 - **A video that isn't downloaded no longer stops with errors when it was
   opened twice at once** (in two tabs, say). Each opening prepared the video
   separately, and the second threw away what the first was playing from.

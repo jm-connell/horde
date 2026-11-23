@@ -365,6 +365,70 @@ test("the recent searches stay on a narrow phone's screen", async ({
   expect(r.x + r.width).toBeLessThanOrEqual(360);
 });
 
+/**
+ * Ancestors of `el` that are a backdrop root: a blurred menu inside one blurs
+ * only that element, and the page shows through the menu sharp. These are
+ * the triggers in Filter Effects 2 (backdrop-filter, filter, opacity, mask,
+ * clip-path, mix-blend-mode, and will-change naming one of them).
+ */
+async function backdropRootAncestors(el: import("@playwright/test").Locator) {
+  return el.evaluate((node) => {
+    const found: string[] = [];
+    for (let n = node.parentElement; n; n = n.parentElement) {
+      const cs = getComputedStyle(n);
+      if (
+        cs.backdropFilter !== "none" ||
+        cs.filter !== "none" ||
+        Number(cs.opacity) < 1 ||
+        cs.maskImage !== "none" ||
+        cs.clipPath !== "none" ||
+        cs.mixBlendMode !== "normal" ||
+        /filter|opacity|mask|clip-path|mix-blend-mode/.test(cs.willChange)
+      ) {
+        found.push(n.dataset.horde ?? n.tagName.toLowerCase());
+      }
+    }
+    return found;
+  });
+}
+
+test("menus from the top bar blur the page behind them, not just the bar", async ({
+  page,
+}) => {
+  const saved = await page.request.patch("/api/settings", {
+    headers: CSRF_HEADERS,
+    data: { ui: { search_history: ["aurora"] } },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.goto("/");
+  await expect(videoCard(page, "Cedar Notes").first()).toBeVisible();
+
+  const box = await openSearchBox(page);
+  await box.focus();
+  const recent = page.locator("[data-horde='search-history']");
+  await expect(recent).toBeVisible();
+  expect(
+    await recent.evaluate((el) => getComputedStyle(el).backdropFilter)
+  ).toContain("blur");
+  expect(await backdropRootAncestors(recent)).toEqual([]);
+
+  // A wide screen's account menu hangs from the bar too (a phone lists the
+  // account in the ☰ menu, which is outside the bar).
+  if (test.info().project.name === "app") {
+    await page.locator("[data-horde='account-menu']").click();
+    const menu = page.getByRole("menu", { name: "Account" });
+    await expect(menu).toBeVisible();
+    expect(await backdropRootAncestors(menu)).toEqual([]);
+  }
+
+  // The bar still blurs what scrolls under it, from a layer behind its
+  // contents rather than the header itself.
+  const bar = page.locator("header[data-horde='nav']");
+  expect(
+    await bar.evaluate((h) => getComputedStyle(h, "::before").backdropFilter)
+  ).toContain("blur");
+});
+
 test("going Back to a video does not keep a half-typed search", async ({
   page,
 }) => {

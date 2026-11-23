@@ -253,6 +253,14 @@ user's hover motion setting asks for it (lift shadow or accent glow).
 **The Flat-At-Rest Rule.** Surfaces in the page flow carry no shadow at rest.
 Shadow means "floating above the page" or "responding to you".
 
+**The No-Nested-Glass Rule.** A blurred menu never sits inside an element that
+is a backdrop root (one with a backdrop blur, a filter, opacity below 1, a
+mask, a clip-path or a blend mode) when it hangs outside that element: it would
+blur only that element, and the page would show through it sharp. Portal such
+a menu out (`FlipMenuPanel` in `useFlipMenu.tsx`), or keep the effect off the
+ancestor: the top bar blurs from a `::before` layer behind its contents, not
+from the `header` itself.
+
 ## Shapes
 
 Rounded rectangles throughout. Controls and rows `rounded-lg` (8px), panels and
@@ -354,8 +362,7 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
 - **Panels.** `ui-panel` sections with a section label header, optional
   collapse (the `Collapse` component, grid-rows 0fr→1fr) and a rotating arrow.
   Actions sit at the right of the header as small outlined buttons, like
-  the watch page's Summary section: Regenerate, and Chat with a ↗ arrow,
-  the mark for an action that opens something elsewhere (here Ask).
+  the watch page's Summary section's Regenerate.
 - **Live chat replay.** A fixed-height `ui-panel` (heading "Live chat", a
   quiet **Hide** button) whose message list (`role="log"`) keeps the newest
   message at the bottom. Rows are compact: author in `text-muted` (the owner in

@@ -135,10 +135,11 @@ test("settings search finds a background by name", async ({ page }) => {
 test("the panel blur slider changes the blur on panels", async ({ page }) => {
   await page.goto("/settings?tab=appearance");
   const slider = page.getByRole("slider", { name: "Panel blur" });
-  // The header also carries Tailwind's `backdrop-blur-sm`, which the slider must beat.
+  // The top bar blurs from a layer behind its contents (`::before`), so the
+  // menus that hang below it blur the page; the slider must reach that layer.
   const header = page.locator("header.ui-panel").first();
   const backdrop = () =>
-    header.evaluate((el) => getComputedStyle(el).backdropFilter);
+    header.evaluate((el) => getComputedStyle(el, "::before").backdropFilter);
 
   await slider.fill("1");
   await expect.poll(backdrop).toBe("blur(24px)");
@@ -445,4 +446,23 @@ test("a short top bar still gives way to the menu on a landscape phone", async (
   await expect(
     page.getByRole("banner").getByRole("link", { name: "History" })
   ).toHaveCount(0);
+});
+
+test("a section's Reset button keeps clear of the text under it", async ({
+  page,
+}) => {
+  const saved = await page.request.patch("/api/settings", {
+    headers: { "X-Horde-Request": "1" },
+    data: { ui: { nav_bar_items: ["home", "settings"] } },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.goto("/settings?tab=appearance");
+  const section = page.locator("[data-setting='nav-bar']");
+  const reset = section.getByRole("button", { name: "Reset" });
+  const description = section.getByText("On a wider screen, the top bar");
+  await expect(reset).toBeVisible();
+  const button = (await reset.boundingBox())!;
+  const text = (await description.boundingBox())!;
+  // The description used to start on the button's bottom edge.
+  expect(text.y - (button.y + button.height)).toBeGreaterThanOrEqual(6);
 });

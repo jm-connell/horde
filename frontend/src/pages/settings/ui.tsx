@@ -148,7 +148,13 @@ export function Section({
         heading
       )}
       {description && (
-        <p className={`mb-3 text-xs text-muted ${title ? "" : "mt-0"}`}>
+        // Clear of the action's bottom edge (a Reset button is taller than
+        // the title): without it the text starts on the button's border.
+        <p
+          className={`mb-3 text-xs text-muted ${
+            action ? "mt-2" : title ? "" : "mt-0"
+          }`}
+        >
           {description}
         </p>
       )}
