@@ -354,8 +354,7 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
 - **Panels.** `ui-panel` sections with a section label header, optional
   collapse (the `Collapse` component, grid-rows 0fr→1fr) and a rotating arrow.
   Actions sit at the right of the header as small outlined buttons, like
-  the watch page's Summary section: Regenerate, and Chat with a ↗ arrow,
-  the mark for an action that opens something elsewhere (here Ask).
+  the watch page's Summary section's Regenerate.
 - **Live chat replay.** A fixed-height `ui-panel` (heading "Live chat", a
   quiet **Hide** button) whose message list (`role="log"`) keeps the newest
   message at the bottom. Rows are compact: author in `text-muted` (the owner in
