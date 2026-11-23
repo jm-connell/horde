@@ -477,6 +477,52 @@ test("related videos of a stream mark downloaded ones and link to the right page
   await expect(page).toHaveURL(new RegExp(`/watch/${library.id}$`));
 });
 
+test("hovering a not-downloaded related video warms it", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "hover is a pointer feature");
+  const rem1 = "https://video.example.test/watch?v=rem1";
+  await mockStream(page, [
+    {
+      id: "rem1",
+      url: rem1,
+      title: "Not yet downloaded clip",
+      duration: 75,
+      thumbnail_url: null,
+      channel: "Other Channel",
+      in_library: false,
+      video_id: null,
+    },
+  ]);
+  // Registered after mockStream, so these answer first.
+  const meta: Record<string, number> = {};
+  const manifest: Record<string, number> = {};
+  const urlOf = (request: Request) =>
+    new URL(request.url()).searchParams.get("url") ?? "";
+  await page.route(/\/api\/preview\/meta\?/, (route) => {
+    const url = urlOf(route.request());
+    meta[url] = (meta[url] ?? 0) + 1;
+    return route.fulfill({ json: { ...META, source_url: url } });
+  });
+  await page.route(/\/api\/preview\/manifest\?/, (route) => {
+    const url = urlOf(route.request());
+    manifest[url] = (manifest[url] ?? 0) + 1;
+    return route.fulfill({
+      status: 404,
+      json: { detail: "no media", code: "x" },
+    });
+  });
+  await page.goto(WATCH);
+
+  await page
+    .locator("aside [data-horde='related-item']")
+    .filter({ hasText: "Not yet downloaded clip" })
+    .hover();
+  await expect.poll(() => meta[rem1] ?? 0).toBe(1);
+  await expect.poll(() => manifest[rem1] ?? 0).toBe(1);
+});
+
 test("a not-downloaded related video can be queued and played from the queue", async ({
   page,
 }) => {

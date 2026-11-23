@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api";
 import { queryKeys } from "../../queries/keys";
+import { WARM_REPEAT_MS } from "../../queries/streamWarmup";
 import { replaceVideoInLists, videoDetailQuery } from "../../queries/videos";
 import { usePlaybackActions } from "../../context/PlaybackContext";
 import type { StreamPreviewMeta, Video } from "../../types";
@@ -127,7 +128,21 @@ export function useWatchVideo({
     queryKey: queryKeys.preview.meta(streamUrlParam),
     queryFn: ({ signal }) => api.getPreviewMeta(streamUrlParam, { signal }),
     enabled: streamMode,
+    // Details a hover warm-up just loaded are used as they are: a refetch on
+    // mount would hand the player the stream a second time.
+    staleTime: WARM_REPEAT_MS,
   });
+  // Leaving marks them stale, so the next visit asks again (resume point).
+  useEffect(() => {
+    if (!streamMode) return;
+    return () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.preview.meta(streamUrlParam),
+        exact: true,
+        refetchType: "none",
+      });
+    };
+  }, [streamMode, streamUrlParam, queryClient]);
 
   useEffect(() => {
     if (libraryValid) return;

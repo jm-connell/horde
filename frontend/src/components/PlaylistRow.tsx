@@ -42,6 +42,7 @@ import {
   safeHref,
 } from "../utils";
 import { playlistEntryView } from "./playlistEntries";
+import { useStreamWarmup } from "../hooks/useStreamWarmup";
 import PlaylistAddVideo from "./PlaylistAddVideo";
 import PlaylistVisibilityPicker from "./PlaylistVisibilityPicker";
 import { CloseIcon, ExternalIcon } from "./icons";
@@ -81,6 +82,7 @@ export default function PlaylistRow({
   const nameInputRef = useRef<HTMLInputElement>(null);
   const skipNameSaveRef = useRef(false);
   const queryClient = useQueryClient();
+  const warmup = useStreamWarmup();
   const detailQuery = usePlaylistDetail(playlist.id, open);
   const loadError = detailQuery.isError ? "Could not load playlist" : null;
   const loading = detailQuery.isFetching;
@@ -837,6 +839,7 @@ export default function PlaylistRow({
                         {v.href ? (
                           <Link
                             to={v.href}
+                            {...warmup(v.href)}
                             className="flex min-w-0 flex-1 items-center gap-3"
                           >
                             {body}

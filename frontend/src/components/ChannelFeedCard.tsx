@@ -5,6 +5,7 @@ import { api, streamUrl } from "../api";
 import { usePlaybackSession } from "../context/PlaybackContext";
 import type { QueueEntry } from "../context/playbackQueue";
 import { useCardPreview } from "../hooks/useCardPreview";
+import { useStreamWarmup } from "../hooks/useStreamWarmup";
 import { maxPresetLabel } from "../presets";
 import type { ChannelFeedEntry } from "../types";
 import {
@@ -320,6 +321,7 @@ export default function ChannelFeedCard({
   const libraryVideoId = videoId ?? entry.video_id ?? null;
   const previewSrc =
     inLibrary && libraryVideoId != null ? streamUrl(libraryVideoId) : null;
+  const warmup = useStreamWarmup();
   const { ref: previewRef, active: previewActive } = useCardPreview({
     enabled: Boolean(previewSrc),
     blocked: libraryVideoId != null && current?.id === libraryVideoId,
@@ -569,6 +571,7 @@ export default function ChannelFeedCard({
   return (
     <div
       ref={setRootRef}
+      {...warmup(href)}
       data-horde="feed-card"
       data-preview-active={previewActive ? "true" : undefined}
       className={
