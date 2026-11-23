@@ -135,10 +135,11 @@ test("settings search finds a background by name", async ({ page }) => {
 test("the panel blur slider changes the blur on panels", async ({ page }) => {
   await page.goto("/settings?tab=appearance");
   const slider = page.getByRole("slider", { name: "Panel blur" });
-  // The header also carries Tailwind's `backdrop-blur-sm`, which the slider must beat.
+  // The top bar blurs from a layer behind its contents (`::before`), so the
+  // menus that hang below it blur the page; the slider must reach that layer.
   const header = page.locator("header.ui-panel").first();
   const backdrop = () =>
-    header.evaluate((el) => getComputedStyle(el).backdropFilter);
+    header.evaluate((el) => getComputedStyle(el, "::before").backdropFilter);
 
   await slider.fill("1");
   await expect.poll(backdrop).toBe("blur(24px)");
