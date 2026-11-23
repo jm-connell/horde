@@ -26,6 +26,7 @@ import { usePlayerKeyboard } from "./player/usePlayerKeyboard";
 import SubtitleOverlay from "./SubtitleOverlay";
 import { useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useShakaDashLoad } from "../hooks/useShakaDash";
 import { clipBarRange, clipMarkAtBar } from "./player/clipMarkers";
 import { useLiveResume } from "./player/useLiveResume";
@@ -89,6 +90,7 @@ export default function VideoPlayer({
   hotkeys = DEFAULT_HOTKEYS,
   onAutoplayRelatedChange,
   onFrameInsetChange,
+  onFullscreenAside,
   mediaSuspended = false,
   blockingOverlay,
   onSourceError,
@@ -503,6 +505,17 @@ export default function VideoPlayer({
     onSourceError,
   });
 
+  // A touch screen in element fullscreen keeps room beside the picture for the
+  // page to fill (a past stream's live chat); desktop fullscreen stays video only.
+  const coarsePointer = useMediaQuery("(pointer: coarse)");
+  const asideRef = useRef<HTMLDivElement>(null);
+  const showAside = !isMini && isNativeFullscreen && coarsePointer;
+  useEffect(() => {
+    if (!onFullscreenAside) return;
+    onFullscreenAside(showAside ? asideRef.current : null);
+    return () => onFullscreenAside(null);
+  }, [showAside, onFullscreenAside]);
+
   const { wrapperClass, innerClass, miniStyle, videoClass, subtitleClass } =
     playerLayout({
       isMini,
@@ -563,7 +576,7 @@ export default function VideoPlayer({
       onPointerDown={isMini && onMiniMove ? onMiniMovePointerDown : undefined}
     >
       <div
-        className={`${innerClass}${
+        className={`${innerClass}${showAside ? " min-w-0" : ""}${
           !isMini && playing && !controlsVisible ? " cursor-none" : ""
         }`}
         style={{ touchAction: "manipulation" }}
@@ -746,6 +759,13 @@ export default function VideoPlayer({
           />
         )}
       </div>
+      {showAside && (
+        <div
+          ref={asideRef}
+          data-horde="player-fullscreen-aside"
+          className="flex h-full shrink-0 py-2 pr-2 empty:hidden"
+        />
+      )}
     </div>
   );
 }

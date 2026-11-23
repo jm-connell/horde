@@ -29,6 +29,8 @@ async function openPlayer(page: Page, opts: PlayerOptions = {}) {
     body.subtitles = [{ lang: "en", auto: false }];
     if (opts.sponsor) {
       body.source_url = `https://www.youtube.com/watch?v=${YT_ID}`;
+      // Not a past stream: no chat replay to ask YouTube for.
+      body.live_status = "not_live";
     }
     return route.fulfill({ response: res, json: body });
   });

@@ -13,6 +13,7 @@ const EDGE_PX = 24;
 function pageScrollLocked() {
   if (document.fullscreenElement) return true;
   if (document.body.classList.contains("player-fullscreen")) return true;
+  if (document.body.classList.contains("watch-sideways")) return true;
   return document.body.style.overflow === "hidden";
 }
 

@@ -54,6 +54,14 @@ When the probe finds nothing (a broadcast with DVR turned off, or a URL layout w
 
 The seek bar maps onto Shaka's seek range (`useLiveWindow`), so it grows as the broadcast goes on. Hovering shows the time behind live. The readout shows **LIVE** with a red dot at the edge, or `LIVE -12:34` in grey when behind; clicking it jumps back to live.
 
+## Live chat
+
+`GET /api/live/{id}/chat?behind_ms=&after=` serves a broadcast's live chat from a buffer Horde fills while anyone reads it (`services/chat_replay/live.py`, `live_runtime.py`, `AppContext.live_chat`). The first read opens the chat (the watch page, then YouTube's `live_chat` page: about the last 75 messages and a continuation token) and starts one daemon thread per broadcast that posts to `youtubei/v1/live_chat/get_live_chat` at the pace YouTube asks (`timeoutMs`, clamped to 2–30 s). Each message keeps its send time; the buffer holds at most the DVR window of send time and 20 000 messages, with sequence numbers for `after`.
+
+- **Following the viewer.** The cutoff is `now - behind_ms - 3 target durations`: the player's live edge trails the newest segment by the HLS hold-back (`LiveSession.edge_lag_sec`). YouTube's own encoder delay remains as a lead of a few seconds. The browser reads every 2 s and reads afresh (`after=0`) when it moves more than 5 s further behind live (a scrub back). `earliest_ms` against `cutoff_ms` gives the "not available" note.
+- **Stopping.** Polling stops 60 s after the last read, when YouTube sends no further token (the broadcast ended), on a rate limit (which pauses every chat read for 30 minutes) and at shutdown. The buffer is still served, and a later read restarts polling with the same sequence; a buffer nobody has read for 10 minutes is dropped. Deleted messages (`removeChatItemAction`) are removed and reported in `removed`.
+- Top chat (YouTube's default view), as chat replay. Under `HORDE_E2E` the route answers `none`.
+
 ## Limits
 
 - **Extraction can break.** When YouTube changes something, starting a stream can fail until yt-dlp is updated (the same is true of normal stream previews). Once a stream plays, playback no longer goes through yt-dlp, except for the URL refreshes described above.

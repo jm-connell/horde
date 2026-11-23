@@ -110,7 +110,7 @@ Library watch and streaming share the same player.
 | **Theater** | Wider player, reduced chrome (desktop) |
 | **Windowed** | Immersive layout, page scroll locked (desktop) |
 
-Also: mini player, PiP, Chromecast / AirPlay, SponsorBlock, chapters (description, yt-dlp, or optional AI), draggable VTT subtitles, seek previews, hold-to-2×, a session play queue, autoplay of related videos or the next part of a series, and hotkeys you can rebind. Videos play without YouTube's ads. Under the video, YouTube's top comments are saved with it, popular discussions included, and count in search and in Ask's answers about the video ([Comments](guides/comments.md)). Mobile forces standard mode.
+Also: mini player, PiP, Chromecast / AirPlay, SponsorBlock, chapters (description, yt-dlp, or optional AI), draggable VTT subtitles, seek previews, hold-to-2×, a session play queue, autoplay of related videos or the next part of a series, and hotkeys you can rebind. Videos play without YouTube's ads. Under the video, YouTube's top comments are saved with it, popular discussions included, and count in search and in Ask's answers about the video ([Comments](guides/comments.md)). A past livestream replays its chat beside the video, in step with playback, read from YouTube while you watch ([Live chat replay](guides/watching.md#live-chat-replay)). Mobile forces standard mode.
 
 Keyboard shortcuts live in the [player guide](guides/player.md) and the [shortcuts reference](reference/keyboard-shortcuts.md). Watch/resume behavior: [Watching](guides/watching.md). On a TV: [Watch on your TV](guides/tv.md).
 

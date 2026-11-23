@@ -432,6 +432,8 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
             file_path="Northwind/2024/Cedar Notes.mp4",
             # A YouTube link: removed from the server, it stays in its playlist.
             source_url="https://www.youtube.com/watch?v=e2ecedar001",
+            # Known not to be a stream, so no spec asks YouTube for its chat replay.
+            live_status="not_live",
             duration_sec=200,
             height_px=1080,
         )

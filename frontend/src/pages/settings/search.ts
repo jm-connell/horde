@@ -121,7 +121,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "playback",
     keywords:
-      "watch page description related videos autoplay sidebar next part series",
+      "watch page description related videos autoplay sidebar next part series live chat replay stream",
   },
   {
     tab: "playback",

@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from "react";
+import { useEffect, type ReactNode, type RefObject } from "react";
 import type { Video } from "../../types";
 import SourceChangeBanners from "./SourceChangeBanners";
 import WatchHeader from "./WatchHeader";
@@ -18,6 +18,7 @@ export default function WatchPlayerSection({
   onVideoUpdated,
   dockRef,
   belowPlayer,
+  sideways,
   children,
 }: {
   source: WatchSource;
@@ -30,8 +31,24 @@ export default function WatchPlayerSection({
   dockRef: RefObject<HTMLDivElement | null>;
   /** Shown right under the player, above the title (the clip picker). */
   belowPlayer?: ReactNode;
+  /**
+   * A phone turned sideways on a past stream: the player and this (the live
+   * chat, or the button that brings it back) fill the screen side by side.
+   */
+  sideways?: ReactNode;
   children: ReactNode;
 }) {
+  const isSideways = sideways != null;
+  // Nothing behind the full-screen layout scrolls, and the nav bars step aside.
+  useEffect(() => {
+    if (!isSideways) return;
+    // A class, not inline styles: dialogs save and restore inline overflow,
+    // and restoring out of order would leave the page stuck unscrollable.
+    document.body.classList.add("watch-sideways");
+    window.scrollTo(0, 0);
+    return () => document.body.classList.remove("watch-sideways");
+  }, [isSideways]);
+
   const playerOuterClass = isMobile
     ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
     : `relative left-1/2 -translate-x-1/2 bg-black transition-[width] duration-300 ease-fluid motion-reduce:transition-none ${
@@ -45,10 +62,26 @@ export default function WatchPlayerSection({
 
   return (
     <div className="min-w-0">
-      <div className={playerOuterClass}>
-        <div className={playerInnerClass}>
+      {/* The same elements in both layouts: the dock must not remount, or
+          the player would lose its host. */}
+      <div
+        className={
+          isSideways
+            ? "fixed inset-0 z-40 flex bg-black pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+            : playerOuterClass
+        }
+        data-horde={isSideways ? "watch-sideways" : undefined}
+      >
+        <div
+          className={
+            isSideways ? "flex min-w-0 flex-1 items-center" : playerInnerClass
+          }
+        >
           <div ref={dockRef} className="w-full" />
         </div>
+        {isSideways && (
+          <div className="flex h-full shrink-0 py-2 pr-2">{sideways}</div>
+        )}
       </div>
 
       <div className={playerMetaClass}>

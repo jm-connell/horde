@@ -43,6 +43,23 @@ A **stream preview** (a video you watch without downloading it) resumes too: whe
 
 Under the description, a YouTube video shows its saved top comments, with the most popular discussions' replies; more can be read from YouTube on request, and a stream loads its comments when asked. See [Comments](comments.md).
 
+## Live chat replay
+
+A past livestream from YouTube shows its chat replay, in step with the video: messages appear as the moment they were sent comes up, pause when the video pauses and jump when you seek. It works for downloaded videos and for streams you watch without downloading. Chat is read from YouTube while you watch and never saved, so it needs YouTube to be reachable and is gone once YouTube stops showing the video.
+
+- **Where it shows.** In the normal view, at the top of the right-hand column, with related videos under it. In theater mode, beside the description. On a phone, or a window too narrow for the right column, in a box under the title, above the AI section.
+- **Phone turned sideways.** The video and the chat fill the screen side by side. Opened from the home screen icon there are no browser bars, so it looks like fullscreen; on Android and iPad, the player's fullscreen button also keeps the chat beside the picture. (iPhone Safari's own fullscreen player cannot show anything beside the video.)
+- **Reading back.** Chat follows the newest message. Scroll up to read and it stops moving; the down-arrow button (or scrolling back to the bottom) picks up again.
+- **Hide.** **Hide** removes it on every past stream until you bring it back with **Show live chat**, or with **Show live chat** in [Settings → Playback](../settings/playback.md).
+- **What it shows.** Messages, Super Chats and Super Stickers with their amount, new members and membership gifts. No profile pictures; links show as text.
+- **Not shown** for a stream YouTube is still processing (right after it ends; chat appears once the recording is finished), for clips, for other sites' past streams, or offline. If YouTube is limiting requests, chat says so and waits for **Retry**.
+
+Comments stay under the description. How chat is read: [ADR 0036](../adr/0036-chat-replay-read-around-the-position.md).
+
+## Live chat
+
+A YouTube broadcast that is live right now shows its live chat in the same places, with the same **Hide** and reading back. It follows where you are: at the live edge you see the newest messages; scrub back and you see what was said at the moment you are watching. Horde collects a broadcast's chat while anyone watches it (one read of YouTube every few seconds, shared by everyone watching) and keeps it in memory only. When you first open a broadcast it starts with roughly the last 75 messages, so going back further than Horde has seen shows a note instead: *Chat from before HH:MM isn't available.* Messages deleted on YouTube disappear. When the broadcast ends the chat already collected stays while you keep watching; once YouTube has finished the recording, the past stream gets [chat replay](#live-chat-replay). How it works: [ADR 0037](../adr/0037-live-chat-follows-the-viewer.md).
+
 ## Related videos
 
 When enabled in [Settings → Playback](../settings/playback.md), the watch page shows a **related videos** sidebar (library recommendations / neighbors). Related suggestions improve when AI embeddings are available ([AI features](ai-features.md)): they rank by how similar the videos are as a whole (title, description, tags, then captions), favour the same channel and shared distinctive tags, and push down videos you have already watched.

@@ -829,6 +829,17 @@ body.player-fullscreen header {
   display: none;
 }
 
+/* A phone turned sideways on a past stream: video and live chat fill the
+   screen (WatchPlayerSection), so the nav bars step aside. */
+body.watch-sideways header,
+body.watch-sideways [data-horde="tab-bar"] {
+  display: none;
+}
+html:has(body.watch-sideways),
+body.watch-sideways {
+  overflow: hidden;
+}
+
 /* ─── UI motion (driven by data-* on <html>) ─── */
 
 html[data-page-fade="on"] .page-shell.page-shell--animate {
