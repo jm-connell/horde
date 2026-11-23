@@ -10,7 +10,10 @@ import {
 } from "react";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 import { usePlaybackHealth } from "../../hooks/usePlaybackHealth";
-import { useApplyShakaQuality } from "../../hooks/useShakaDash";
+import {
+  selectQualityTrack,
+  useApplyShakaQuality,
+} from "../../hooks/useShakaDash";
 import type { StreamQuality } from "../../hooks/useSettings";
 import { clearDowngrade, trackQuality } from "../../utils/decodeCapability";
 import {
@@ -187,7 +190,7 @@ export function useStreamQuality({
             return (b.bandwidth ?? 0) - (a.bandwidth ?? 0);
           });
           if (candidates[0]) {
-            p.selectVariantTrack(candidates[0], true);
+            selectQualityTrack(p, candidates[0]);
           }
         }
       } catch (err) {

@@ -16,6 +16,7 @@ import type {
   ShakaError,
   ShakaNamespace,
   ShakaPlayer,
+  ShakaVariantTrack,
 } from "shaka-player/dist/shaka-player.dash.js";
 import {
   probeDecodeSupport,
@@ -68,13 +69,22 @@ const LIVE_STREAMING_CONFIG = {
   },
 };
 
-const LIVE_MANIFEST_CONFIG = {
+export const LIVE_MANIFEST_CONFIG = {
   retryParameters: {
     maxAttempts: 6,
     baseDelay: 500,
     backoffFactor: 2,
     fuzzFactor: 0.5,
     timeout: 15_000,
+  },
+  hls: {
+    // Append each segment where the last one ended. Segments mode pins every
+    // audio segment to its playlist start, 5.000 s apart, while YouTube's AAC
+    // segments hold 215 or 216 frames (4.992 or 5.016 s). The gaps left by the
+    // short ones make Chrome's audio clock drift ahead of the picture (about
+    // 1 s every 10 minutes) until a seek. Shaka still realigns both tracks to
+    // the playlist after a seek. See selectQualityTrack for quality switches.
+    sequenceMode: true,
   },
 };
 
@@ -107,6 +117,17 @@ function preferVideoCodecs(codecs: string[]) {
     hdrLevel: "AUTO",
     layout: "",
   }));
+}
+
+/**
+ * Play `track` from now on. A video drops what it has buffered so the new
+ * quality shows at once. A live stream keeps its buffer and switches where it
+ * ends (a few segments ahead), as Shaka's own ABR does: in sequence mode Shaka
+ * appends after a manual clear where the cleared segments ended, away from the
+ * playhead, and playback stalls.
+ */
+export function selectQualityTrack(p: ShakaPlayer, track: ShakaVariantTrack) {
+  p.selectVariantTrack(track, /* clearBuffer */ !p.isLive());
 }
 
 /** HTTP status of a Shaka BAD_HTTP_STATUS (1001) error: `data[1]`. */
@@ -431,7 +452,7 @@ export function useShakaDashLoad({
                   preferredVideo: preferVideoCodecs(["av01", "avc1"]),
                 });
               }
-              p.selectVariantTrack(candidates[0], /* clearBuffer */ true);
+              selectQualityTrack(p, candidates[0]);
             }
             if (target !== initialChoice) {
               setQualityChoice(target);
@@ -536,7 +557,7 @@ export function useApplyShakaQuality(
               preferredVideo: preferVideoCodecs(["av01", "avc1"]),
             });
           }
-          p.selectVariantTrack(candidates[0], /* clearBuffer */ true);
+          selectQualityTrack(p, candidates[0]);
         }
         if (target !== choice) setQualityChoice(target);
       } catch (err) {
