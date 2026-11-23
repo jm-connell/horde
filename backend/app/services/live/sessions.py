@@ -294,6 +294,10 @@ class LiveSession:
         #: a separate audio rendition the player reads two playlists at once, and
         #: they must start at the same segment for the timelines to line up.
         self.start_floor: int | None = None
+        #: Segments YouTube marks as starting a new timeline (an encoder
+        #: reconnect), from any variant: every playlist marks the same ones.
+        #: Kept for the whole session so the discontinuity count stays right.
+        self.discontinuities: set[int] = set()
         self.template_ok: bool | None = None
         self.generation = 0
         self._fetch = fetcher
@@ -477,6 +481,8 @@ class LiveSession:
             variant.target_duration = playlist.target_duration
         for seg in playlist.segments:
             variant.known[seg.sq] = _KnownSegment(seg, self.generation)
+            if seg.discontinuity:
+                self.discontinuities.add(seg.sq)
         head = playlist.head_sq
         if head is not None and (variant.head_sq is None or head > variant.head_sq):
             variant.head_sq = head
@@ -558,6 +564,7 @@ class LiveSession:
             segment_uri=f"../seg/{variant.upstream.info.key}/{{sq}}.{ext}",
             ended=self.ended,
             target_duration=target,
+            discontinuities=self.discontinuities,
         )
 
     # --- segments ----------------------------------------------------------

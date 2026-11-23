@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from urllib.parse import urljoin
 
@@ -30,6 +31,9 @@ class Segment:
     sq: int
     duration: float
     uri: str
+    #: Preceded by ``#EXT-X-DISCONTINUITY``: a new timeline starts here (the
+    #: broadcaster's encoder reconnected).
+    discontinuity: bool = False
 
 
 @dataclass
@@ -89,6 +93,7 @@ def parse_media_playlist(text: str, base_url: str) -> MediaPlaylist:
     """
     out = MediaPlaylist()
     pending_duration: float | None = None
+    pending_discontinuity = False
     position = 0
     for raw in text.splitlines():
         line = raw.strip()
@@ -103,6 +108,8 @@ def parse_media_playlist(text: str, base_url: str) -> MediaPlaylist:
             pending_duration = _float(line.split(":", 1)[1].split(",", 1)[0])
         elif line.startswith("#EXT-X-ENDLIST"):
             out.ended = True
+        elif line == "#EXT-X-DISCONTINUITY":
+            pending_discontinuity = True
         elif line.startswith("#"):
             continue
         else:
@@ -113,8 +120,16 @@ def parse_media_playlist(text: str, base_url: str) -> MediaPlaylist:
             duration = pending_duration
             if duration is None or duration <= 0:
                 duration = out.target_duration or 5.0
-            out.segments.append(Segment(sq=sq, duration=duration, uri=uri))
+            out.segments.append(
+                Segment(
+                    sq=sq,
+                    duration=duration,
+                    uri=uri,
+                    discontinuity=pending_discontinuity,
+                )
+            )
             pending_duration = None
+            pending_discontinuity = False
             position += 1
     if not out.target_duration and out.segments:
         out.target_duration = max(s.duration for s in out.segments)
@@ -166,20 +181,31 @@ def render_media(
     segment_uri: str,
     ended: bool,
     target_duration: float,
+    discontinuities: Collection[int] = (),
 ) -> str:
     """A media playlist of contiguous ``(sq, duration)`` entries.
 
     ``segment_uri`` is a format string with ``{sq}``. HLS numbers segments by
     position after ``EXT-X-MEDIA-SEQUENCE``, so the entries must not have gaps.
+
+    ``discontinuities`` are the segments that start a new timeline. Each listed
+    one gets ``#EXT-X-DISCONTINUITY``, and ``EXT-X-DISCONTINUITY-SEQUENCE``
+    counts those before the first entry, so a segment keeps its timeline number
+    as the window slides past the marker (RFC 8216 4.3.3.3).
     """
     longest = max([target_duration or 5.0, *(d for _sq, d in entries)])
+    first = entries[0][0] if entries else 0
     lines = [
         "#EXTM3U",
         "#EXT-X-VERSION:3",
         f"#EXT-X-TARGETDURATION:{max(1, math.ceil(longest))}",
-        f"#EXT-X-MEDIA-SEQUENCE:{entries[0][0] if entries else 0}",
+        f"#EXT-X-MEDIA-SEQUENCE:{first}",
+        "#EXT-X-DISCONTINUITY-SEQUENCE:"
+        f"{sum(1 for sq in discontinuities if sq < first)}",
     ]
     for sq, duration in entries:
+        if sq in discontinuities:
+            lines.append("#EXT-X-DISCONTINUITY")
         lines.append(f"#EXTINF:{duration:.3f},")
         lines.append(segment_uri.format(sq=sq))
     if ended:
