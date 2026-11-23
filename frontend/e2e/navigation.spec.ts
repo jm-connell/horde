@@ -365,6 +365,60 @@ test("the recent searches stay on a narrow phone's screen", async ({
   expect(r.x + r.width).toBeLessThanOrEqual(360);
 });
 
+/**
+ * Ancestors of `el` that blur what is behind them. An element with a
+ * backdrop-filter is the backdrop root of everything inside it, so a blurred
+ * menu in such an element blurs only that element: the page shows through it
+ * sharp.
+ */
+async function blurringAncestors(el: import("@playwright/test").Locator) {
+  return el.evaluate((node) => {
+    const found: string[] = [];
+    for (let n = node.parentElement; n; n = n.parentElement) {
+      if (getComputedStyle(n).backdropFilter !== "none") {
+        found.push(n.dataset.horde ?? n.tagName.toLowerCase());
+      }
+    }
+    return found;
+  });
+}
+
+test("menus from the top bar blur the page behind them, not just the bar", async ({
+  page,
+}) => {
+  const saved = await page.request.patch("/api/settings", {
+    headers: CSRF_HEADERS,
+    data: { ui: { search_history: ["aurora"] } },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.goto("/");
+  await expect(videoCard(page, "Cedar Notes").first()).toBeVisible();
+
+  const box = await openSearchBox(page);
+  await box.focus();
+  const recent = page.locator("[data-horde='search-history']");
+  await expect(recent).toBeVisible();
+  expect(
+    await recent.evaluate((el) => getComputedStyle(el).backdropFilter)
+  ).toContain("blur");
+  expect(await blurringAncestors(recent)).toEqual([]);
+
+  const account = page.locator("[data-horde='account-menu']");
+  if (await account.isVisible()) {
+    await account.click();
+    const menu = page.getByRole("menu", { name: "Account" });
+    await expect(menu).toBeVisible();
+    expect(await blurringAncestors(menu)).toEqual([]);
+  }
+
+  // The bar still blurs what scrolls under it, from a layer behind its
+  // contents rather than the header itself.
+  const bar = page.locator("header[data-horde='nav']");
+  expect(
+    await bar.evaluate((h) => getComputedStyle(h, "::before").backdropFilter)
+  ).toContain("blur");
+});
+
 test("going Back to a video does not keep a half-typed search", async ({
   page,
 }) => {

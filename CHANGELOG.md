@@ -85,6 +85,10 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- **The page no longer shows through menus that open from the top bar.**
+  With panel transparency on, the recent searches list and the account
+  menu blurred only the bar behind them, so the text of the page underneath
+  showed through them sharp. They now blur the page like every other menu.
 - **A card's preview on a phone stops when it leaves the middle of the
   screen.** It kept playing until another card's preview started, and it
   counted as centred while only its title was in the middle. A preview now

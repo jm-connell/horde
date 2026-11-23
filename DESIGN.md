@@ -253,6 +253,12 @@ user's hover motion setting asks for it (lift shadow or accent glow).
 **The Flat-At-Rest Rule.** Surfaces in the page flow carry no shadow at rest.
 Shadow means "floating above the page" or "responding to you".
 
+**The No-Nested-Glass Rule.** A blurred surface never wraps a blurred menu that
+hangs outside it. An element with a backdrop blur is the backdrop root of
+everything inside it, so the menu would blur only that element and the page
+would show through it sharp. The top bar therefore blurs from a `::before`
+layer behind its contents, not from the `header` itself.
+
 ## Shapes
 
 Rounded rectangles throughout. Controls and rows `rounded-lg` (8px), panels and

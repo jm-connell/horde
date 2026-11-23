@@ -1034,6 +1034,24 @@ html[data-translucent-panels="on"] header.ui-panel {
   ) !important;
 }
 
+/* The top bar blurs from a layer behind its contents, not from the header:
+   an element with a backdrop-filter is the backdrop root of everything in
+   it, so the recent searches and account menu that hang below the bar
+   blurred only the bar, and the page showed through them sharp. */
+html[data-translucent-panels="on"] header.ui-panel {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html[data-translucent-panels="on"] header.ui-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(var(--ui-panel-blur, 12px));
+  backdrop-filter: blur(var(--ui-panel-blur, 12px));
+}
+
 /* Phones: no gray flash over a tapped control (button press and :hover
    already acknowledge the tap), no double-tap-zoom wait before a click, and
    no text selection when a control is long-pressed. */
