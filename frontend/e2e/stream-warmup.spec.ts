@@ -63,6 +63,12 @@ async function stubChannel(
   await page.route(/\/api\/preview\/(stream|subtitles|ai)\?/, (route) =>
     route.fulfill({ status: 404, json: { detail: "no media", code: "x" } })
   );
+  // Otherwise the server asks YouTube for the made-up videos' comments.
+  await page.route(/\/api\/comments\/youtube\//, (route) =>
+    route.fulfill({
+      json: { status: "disabled", total_count: null, items: [] },
+    })
+  );
   await page.route(/\/api\/preview\/manifest\?/, (route) => {
     const url = new URL(route.request().url()).searchParams.get("url") ?? "";
     manifest[url] = (manifest[url] ?? 0) + 1;
@@ -144,6 +150,44 @@ test("a live card warms its details but not a manifest", async ({ page }) => {
   await expect.poll(() => counts.meta[L.url] ?? 0).toBe(1);
   await page.waitForTimeout(300);
   expect(counts.manifest[L.url] ?? 0).toBe(0);
+});
+
+test("sweeping across cards warms only the one the pointer rests on", async ({
+  page,
+}) => {
+  const counts = await stubChannel(page);
+  await page.goto("/?channel=Kiln");
+
+  // Centres first: the moves between them must be quicker than the dwell.
+  const centre = async (title: string) => {
+    const box = await feedCard(page, title).boundingBox();
+    if (!box) throw new Error(`no card for ${title}`);
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  const a = await centre(A.title);
+  const b = await centre(B.title);
+  await page.mouse.move(a.x, a.y);
+  await page.mouse.move(b.x, b.y);
+
+  await expect.poll(() => counts.meta[B.url] ?? 0).toBe(1);
+  await page.waitForTimeout(300);
+  expect(counts.meta[A.url] ?? 0).toBe(0);
+});
+
+test("keyboard focus on a card warms it", async ({ page }) => {
+  const counts = await stubChannel(page);
+  await page.goto("/?channel=Kiln");
+
+  const link = feedCard(page, A.title)
+    .locator("a[href^='/watch?url=']")
+    .first();
+  await expect(link).toBeVisible();
+  // A key press first, so the focus that follows shows as keyboard focus.
+  await page.keyboard.press("Tab");
+  await link.focus();
+
+  await expect.poll(() => counts.meta[A.url] ?? 0).toBe(1);
+  await expect.poll(() => counts.manifest[A.url] ?? 0).toBe(1);
 });
 
 test("touch does not warm", async ({ page }) => {
