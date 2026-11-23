@@ -10,6 +10,7 @@ import { button } from "../buttons";
 import Collapse from "../Collapse";
 import { ChevronIcon } from "../icons";
 import { useSettings } from "../../hooks/useSettings";
+import { useStreamWarmup } from "../../hooks/useStreamWarmup";
 
 function lastWatched(iso: string): string {
   const d = new Date(iso);
@@ -30,6 +31,7 @@ export default function RewatchedSuggestions() {
   const [settings] = useSettings();
   const { showToast, showError } = useToast();
   const [queued, setQueued] = useState<Set<string>>(new Set());
+  const warmup = useStreamWarmup();
   const items = query.data?.pages.flatMap((p) => p.items) ?? [];
   if (items.length === 0) return null;
 
@@ -88,6 +90,7 @@ export default function RewatchedSuggestions() {
               return (
                 <li
                   key={entry.id ?? entry.url}
+                  {...warmup(href)}
                   className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-ink-800"
                 >
                   {thumb && (

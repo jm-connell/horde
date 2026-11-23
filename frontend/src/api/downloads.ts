@@ -8,7 +8,8 @@ import type {
   StreamPreviewMeta,
   Video,
 } from "../types";
-import { type ReadOptions, request } from "./client";
+import { type ReadOptions, request, send } from "./client";
+import { previewManifestUrl } from "./urls";
 
 export const downloadsApi = {
   listPresets(opts?: ReadOptions): Promise<string[]> {
@@ -33,6 +34,13 @@ export const downloadsApi = {
       `/api/preview/meta?url=${encodeURIComponent(url)}`,
       opts
     );
+  },
+
+  /** Have the server build a stream's DASH manifest ahead of playback (a hover
+   *  warm-up); the manifest itself is not needed here. */
+  async warmPreviewManifest(url: string): Promise<void> {
+    const resp = await send(previewManifestUrl(url));
+    await resp.body?.cancel();
   },
 
   createDownload(

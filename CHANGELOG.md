@@ -9,6 +9,11 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Streams start sooner.** Rest the mouse on a video that isn't
+  downloaded (a feed card, a related video, a playlist entry), or tab to it,
+  and Horde starts loading it, so it plays sooner when you click. It loads
+  one video at a time and never on phones or tablets, where touching a card
+  also starts a scroll.
 - **Recent searches.** Click into the empty search box and your recent
   searches open under it (four at a time, scrolling for more): pick one to
   search again, or remove it with ×. They are saved with your account, so
@@ -89,6 +94,10 @@ All notable changes to Horde are documented here. The format follows
   With panel transparency on, the recent searches list and the account
   menu blurred only the bar behind them, so the text of the page underneath
   showed through them sharp. They now blur the page like every other menu.
+- **A video that isn't downloaded no longer stops with errors when it was
+  opened twice at once** (in two tabs, say). Each opening prepared the video
+  separately, and the second threw away what the first was playing from.
+  It is now prepared once and shared.
 - **A card's preview on a phone stops when it leaves the middle of the
   screen.** It kept playing until another card's preview started, and it
   counted as centred while only its title was in the middle. A preview now
