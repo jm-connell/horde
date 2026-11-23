@@ -446,3 +446,22 @@ test("a short top bar still gives way to the menu on a landscape phone", async (
     page.getByRole("banner").getByRole("link", { name: "History" })
   ).toHaveCount(0);
 });
+
+test("a section's Reset button keeps clear of the text under it", async ({
+  page,
+}) => {
+  const saved = await page.request.patch("/api/settings", {
+    headers: { "X-Horde-Request": "1" },
+    data: { ui: { nav_bar_items: ["home", "settings"] } },
+  });
+  expect(saved.ok()).toBe(true);
+  await page.goto("/settings?tab=appearance");
+  const section = page.locator("[data-setting='nav-bar']");
+  const reset = section.getByRole("button", { name: "Reset" });
+  const description = section.getByText("On a wider screen, the top bar");
+  await expect(reset).toBeVisible();
+  const button = (await reset.boundingBox())!;
+  const text = (await description.boundingBox())!;
+  // The description used to start on the button's bottom edge.
+  expect(text.y - (button.y + button.height)).toBeGreaterThanOrEqual(6);
+});
