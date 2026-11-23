@@ -781,17 +781,20 @@ def resolve_preview_stream(url: str, *, force: bool = False) -> dict[str, Any]:
 
 
 def _trim_manifest_cache_locked() -> None:
-    """Drop the least recently used sessions once there are too many.
+    """Drop sessions once there are too many: unplayed ones first, then the
+    least recently used.
 
-    Least recently used, not soonest to expire: hover warm-ups build manifests
-    while a stream plays, and the playing one (built first, but touched by every
-    media request) must not be the one that goes.
+    Hover warm-ups build manifests that no player may ever use, while a stream
+    plays or sits paused. A session a player has fetched media from (playing,
+    or paused and so fetching nothing) must outlast them, so those that never
+    served media go first. Least recently used, not soonest to expire, among
+    the rest.
     """
     if len(_preview_manifest_by_url) <= 48:
         return
     oldest = sorted(
         _preview_manifest_by_url.items(),
-        key=lambda item: item[1].get("used_at", 0),
+        key=lambda item: (bool(item[1].get("played")), item[1].get("used_at", 0)),
     )[:16]
     for key, entry in oldest:
         _preview_manifest_by_url.pop(key, None)
@@ -1175,6 +1178,7 @@ def lookup_preview_media(
         session = _preview_manifest_by_token.get(token)
         if session is not None:
             session["used_at"] = time.time()
+            session["played"] = True
         attempts = _preview_refresh_attempts.get(
             str(session.get("source_url") or "") if session else "", 0
         )

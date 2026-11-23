@@ -157,3 +157,20 @@ def test_browsing_does_not_evict_the_stream_being_played(builds):
 
     media = stream_preview.lookup_preview_media("playing", "299")
     assert media["direct_url"] == "https://cdn.example/playing.mp4"
+
+
+def test_browsing_does_not_evict_a_paused_stream(builds):
+    """A paused player fetches nothing, but its session must outlast warm-ups."""
+
+    def entry(url: str, token: str) -> dict:
+        return {**_entry(token), "source_url": url}
+
+    paused = "https://youtu.be/paused"
+    stream_preview._store_manifest_entry(paused, entry(paused, "paused"))
+    stream_preview.lookup_preview_media("paused", "299")
+    for i in range(60):
+        hovered = f"https://youtu.be/hovered-{i}"
+        stream_preview._store_manifest_entry(hovered, entry(hovered, f"tok-{i}"))
+
+    media = stream_preview.lookup_preview_media("paused", "299")
+    assert media["direct_url"] == "https://cdn.example/paused.mp4"
