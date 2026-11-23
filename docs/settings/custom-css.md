@@ -89,7 +89,7 @@ html[data-page="watch"] [data-horde="nav"] {
 
 | Attribute | Element |
 |-----------|---------|
-| `nav` | Top navigation `<header>`. With panel transparency on, its blur is on `[data-horde="nav"]::before`, not the header itself |
+| `nav` | Top navigation `<header>`. With panel transparency on, its blur is on `[data-horde="nav"]::before` (set `backdrop-filter` there), not the header itself |
 | `main` | Centered page `<main>` |
 | `tab-bar` | Floating tab bar of the installed app on a phone (`<nav>`) |
 | `sidebar` | Library channel sidebar rail |

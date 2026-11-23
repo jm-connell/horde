@@ -1028,21 +1028,19 @@ html[data-translucent-panels="on"] .ui-card {
   backdrop-filter: blur(var(--ui-panel-blur, 12px));
 }
 
+/* The top bar blurs from a layer behind its contents, not from the header:
+   an element with a backdrop-filter is the backdrop root of everything in
+   it, so the recent searches and account menu that hang below the bar
+   blurred only the bar, and the page showed through them sharp. The layer's
+   rule is in :where() so custom CSS on [data-horde="nav"]::before wins. */
 html[data-translucent-panels="on"] header.ui-panel {
   background-color: rgb(
     var(--ink-950) / var(--ui-panel-header-alpha, 0.52)
   ) !important;
-}
-
-/* The top bar blurs from a layer behind its contents, not from the header:
-   an element with a backdrop-filter is the backdrop root of everything in
-   it, so the recent searches and account menu that hang below the bar
-   blurred only the bar, and the page showed through them sharp. */
-html[data-translucent-panels="on"] header.ui-panel {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
-html[data-translucent-panels="on"] header.ui-panel::before {
+:where(html[data-translucent-panels="on"] header.ui-panel)::before {
   content: "";
   position: absolute;
   inset: 0;

@@ -366,16 +366,25 @@ test("the recent searches stay on a narrow phone's screen", async ({
 });
 
 /**
- * Ancestors of `el` that blur what is behind them. An element with a
- * backdrop-filter is the backdrop root of everything inside it, so a blurred
- * menu in such an element blurs only that element: the page shows through it
- * sharp.
+ * Ancestors of `el` that are a backdrop root: a blurred menu inside one blurs
+ * only that element, and the page shows through the menu sharp. These are
+ * the triggers in Filter Effects 2 (backdrop-filter, filter, opacity, mask,
+ * clip-path, mix-blend-mode, and will-change naming one of them).
  */
-async function blurringAncestors(el: import("@playwright/test").Locator) {
+async function backdropRootAncestors(el: import("@playwright/test").Locator) {
   return el.evaluate((node) => {
     const found: string[] = [];
     for (let n = node.parentElement; n; n = n.parentElement) {
-      if (getComputedStyle(n).backdropFilter !== "none") {
+      const cs = getComputedStyle(n);
+      if (
+        cs.backdropFilter !== "none" ||
+        cs.filter !== "none" ||
+        Number(cs.opacity) < 1 ||
+        cs.maskImage !== "none" ||
+        cs.clipPath !== "none" ||
+        cs.mixBlendMode !== "normal" ||
+        /filter|opacity|mask|clip-path|mix-blend-mode/.test(cs.willChange)
+      ) {
         found.push(n.dataset.horde ?? n.tagName.toLowerCase());
       }
     }
@@ -401,14 +410,15 @@ test("menus from the top bar blur the page behind them, not just the bar", async
   expect(
     await recent.evaluate((el) => getComputedStyle(el).backdropFilter)
   ).toContain("blur");
-  expect(await blurringAncestors(recent)).toEqual([]);
+  expect(await backdropRootAncestors(recent)).toEqual([]);
 
-  const account = page.locator("[data-horde='account-menu']");
-  if (await account.isVisible()) {
-    await account.click();
+  // A wide screen's account menu hangs from the bar too (a phone lists the
+  // account in the ☰ menu, which is outside the bar).
+  if (test.info().project.name === "app") {
+    await page.locator("[data-horde='account-menu']").click();
     const menu = page.getByRole("menu", { name: "Account" });
     await expect(menu).toBeVisible();
-    expect(await blurringAncestors(menu)).toEqual([]);
+    expect(await backdropRootAncestors(menu)).toEqual([]);
   }
 
   // The bar still blurs what scrolls under it, from a layer behind its
