@@ -82,6 +82,57 @@ def test_render_media_is_contiguous_and_points_at_the_proxy():
     assert "#EXT-X-ENDLIST" in ended
 
 
+def test_parse_marks_the_segment_after_a_discontinuity():
+    text = "\n".join(
+        [
+            "#EXTM3U",
+            "#EXT-X-TARGETDURATION:5",
+            "#EXT-X-MEDIA-SEQUENCE:100",
+            "#EXT-X-DISCONTINUITY-SEQUENCE:59",
+            "#EXTINF:5.0,",
+            SEG.format(sq=100),
+            "#EXT-X-DISCONTINUITY",
+            "#EXTINF:5.0,",
+            SEG.format(sq=101),
+            "#EXTINF:5.0,",
+            SEG.format(sq=102),
+        ]
+    )
+    pl = hls.parse_media_playlist(text, "https://manifest.example/x.m3u8")
+    assert [(s.sq, s.discontinuity) for s in pl.segments] == [
+        (100, False),
+        (101, True),
+        (102, False),
+    ]
+
+
+def test_render_media_marks_discontinuities_and_counts_the_ones_before_it():
+    body = hls.render_media(
+        [(10, 5.0), (11, 5.0), (12, 5.0)],
+        segment_uri="{sq}.ts",
+        ended=False,
+        target_duration=5,
+        discontinuities={4, 7, 11, 20},
+    )
+    lines = body.splitlines()
+    # Two discontinuities (4 and 7) left the window: the first segment is on
+    # the third timeline, and the tag sits right before segment 11.
+    assert "#EXT-X-DISCONTINUITY-SEQUENCE:2" in lines
+    tag = lines.index("#EXT-X-DISCONTINUITY")
+    assert lines[tag + 1 : tag + 3] == ["#EXTINF:5.000,", "11.ts"]
+    assert lines.count("#EXT-X-DISCONTINUITY") == 1
+    # The same timeline numbers once the window slides past segment 11.
+    later = hls.render_media(
+        [(12, 5.0)],
+        segment_uri="{sq}.ts",
+        ended=False,
+        target_duration=5,
+        discontinuities={4, 7, 11, 20},
+    )
+    assert "#EXT-X-DISCONTINUITY-SEQUENCE:3" in later.splitlines()
+    assert "#EXT-X-DISCONTINUITY\n" not in later
+
+
 def test_render_master_lists_each_variant():
     body = hls.render_master(
         [

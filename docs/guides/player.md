@@ -77,6 +77,10 @@ Stream preview uses adaptive **DASH** (Shaka) when available. Quality choices:
 
 Library files typically play as progressive local media; if DASH fails on a stream, Horde falls back to a progressive URL when possible.
 
+On a live broadcast a new quality takes over a few seconds after you pick it, where the already buffered part ends.
+
+When the browser keeps dropping frames for several seconds, Horde lowers the quality ceiling one step ("Reduced quality for smooth playback") and keeps that ceiling for later streams for a day; picking a quality other than **Auto** in the menu clears it. This only happens while Horde's window has focus: frames dropped while you are in another window, such as a fullscreen game on the other monitor, say nothing about what your device can play. Shaka's own bandwidth-based quality changes on **Auto** still apply.
+
 A stream that freezes restarts itself. When it should be playing but the clock has stood still (5 seconds with video buffered, 20 seconds while it waits for video and none arrives), the player reloads the stream at the same position, staying in fullscreen; after two reloads that do not get it moving it switches to the progressive URL. This covers Safari on iPad and iPhone leaving a stream stuck after the sound moves between devices (AirPods switching to a phone and back).
 
 ## Picture-in-Picture

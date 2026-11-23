@@ -47,6 +47,8 @@ class FakeYouTube:
         self.resolves: list[bool] = []
         self.fetches: list[str] = []
         self.playlist_status: int | None = None
+        #: Segments that start a new timeline (a reconnect of the encoder).
+        self.discontinuities: set[int] = set()
 
     # yt-dlp
     def info(self) -> dict[str, Any]:
@@ -104,7 +106,11 @@ class FakeYouTube:
             lines = ["#EXTM3U", "#EXT-X-TARGETDURATION:5"]
             first = max(0, self.head - self.window + 1)
             lines.append(f"#EXT-X-MEDIA-SEQUENCE:{first}")
+            past = sum(1 for d in self.discontinuities if d < first)
+            lines.append(f"#EXT-X-DISCONTINUITY-SEQUENCE:{59 + past}")
             for sq in range(first, self.head + 1):
+                if sq in self.discontinuities:
+                    lines.append("#EXT-X-DISCONTINUITY")
                 lines += ["#EXTINF:5.0,", self.seg_url(sq, gen)]
             if self.ended_playlist:
                 lines.append("#EXT-X-ENDLIST")
@@ -261,6 +267,56 @@ def test_split_audio_and_video_playlists_start_at_the_same_segment():
         assert first[0] == first[1] == s.dvr_floor
         assert "../seg/234/1000.aac" in audio
         assert "../seg/232/1000.ts" in video
+
+    run(go())
+
+
+def _tagged(playlist: str) -> list[int]:
+    """Segments the playlist marks with ``#EXT-X-DISCONTINUITY``."""
+    lines = playlist.splitlines()
+    return [
+        int(re.search(r"/(\d+)\.(?:ts|aac)$", lines[i + 2]).group(1))  # type: ignore[union-attr]  # rendered segment lines end in <sq>.<ext>
+        for i, ln in enumerate(lines)
+        if ln == "#EXT-X-DISCONTINUITY"
+    ]
+
+
+def _discontinuity_sequence(playlist: str) -> int:
+    return next(
+        int(ln.split(":")[1])
+        for ln in playlist.splitlines()
+        if ln.startswith("#EXT-X-DISCONTINUITY-SEQUENCE:")
+    )
+
+
+def test_audio_and_video_carry_youtubes_discontinuity_at_the_same_segment():
+    async def go():
+        yt, clock = SplitYouTube(head=1000, window=4, dvr_floor=600), Clock()
+        yt.discontinuities = {999}
+        s = _session(yt, clock, dvr_sec=3600)
+        video, audio = await asyncio.gather(s.media("232"), s.media("234"))
+        assert _tagged(video) == _tagged(audio) == [999]
+        assert _discontinuity_sequence(video) == _discontinuity_sequence(audio) == 0
+
+    run(go())
+
+
+def test_discontinuity_sequence_counts_the_markers_the_window_slid_past():
+    async def go():
+        # A 50 s window (10 segments) slides on as the broadcast goes.
+        yt, clock = FakeYouTube(head=1000, window=4, dvr_floor=0), Clock()
+        yt.discontinuities = {1000}
+        s = _session(yt, clock, dvr_sec=50)
+        first = await s.media("95")
+        assert _tagged(first) == [1000]
+        assert _discontinuity_sequence(first) == 0
+        yt.head += 60
+        clock.now += 10
+        later = await s.media("95")
+        assert _media_sequence(later) > 1000
+        assert _tagged(later) == []
+        # The segments after the marker keep their timeline number.
+        assert _discontinuity_sequence(later) == 1
 
     run(go())
 
