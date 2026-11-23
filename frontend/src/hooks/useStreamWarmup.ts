@@ -1,4 +1,4 @@
-import { useCallback, useEffect, type HTMLAttributes } from "react";
+import { useCallback, useEffect, useState, type HTMLAttributes } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { streamWarmer } from "../queries/streamWarmup";
 import { streamUrlFromHref } from "../utils/watchHref";
@@ -20,9 +20,11 @@ export function useStreamWarmup(): (
   href: string | null
 ) => StreamWarmupHandlers {
   const client = useQueryClient();
+  // Marks this component's dwells, so another one unmounting leaves them be.
+  const [owner] = useState(() => ({}));
 
   // A card that unmounts mid-dwell (scrolled away, page left) does not warm.
-  useEffect(() => () => streamWarmer(client).leave(), [client]);
+  useEffect(() => () => streamWarmer(client).leave(owner), [client, owner]);
 
   return useCallback(
     (href: string | null): StreamWarmupHandlers => {
@@ -31,9 +33,9 @@ export function useStreamWarmup(): (
       const warmer = streamWarmer(client);
       return {
         onPointerEnter: (e) => {
-          if (e.pointerType === "mouse") warmer.rest(url);
+          if (e.pointerType === "mouse") warmer.rest(url, owner);
         },
-        onPointerLeave: () => warmer.leave(),
+        onPointerLeave: () => warmer.leave(owner),
         onPointerDown: (e) => {
           if (e.pointerType === "mouse") warmer.warm(url);
         },
@@ -42,12 +44,12 @@ export function useStreamWarmup(): (
             e.target instanceof Element &&
             e.target.matches(":focus-visible")
           ) {
-            warmer.rest(url);
+            warmer.rest(url, owner);
           }
         },
-        onBlur: () => warmer.leave(),
+        onBlur: () => warmer.leave(owner),
       };
     },
-    [client]
+    [client, owner]
   );
 }

@@ -30,6 +30,8 @@ export interface WarmDeps {
 export class StreamWarmer {
   private readonly deps: WarmDeps;
   private dwell: ReturnType<typeof setTimeout> | null = null;
+  /** Who started the dwell: only they may cancel it (see ``leave``). */
+  private dweller: unknown = undefined;
   private running: string | null = null;
   private pending: string | null = null;
   private readonly recent = new Map<string, number>();
@@ -39,18 +41,26 @@ export class StreamWarmer {
     this.deps = deps;
   }
 
-  /** Warm ``url`` once the pointer or focus has rested on it long enough. */
-  rest(url: string): void {
-    this.leave();
+  /**
+   * Warm ``url`` once the pointer or focus has rested on it long enough. It
+   * replaces any other dwell; ``owner`` is who may cancel it with ``leave``.
+   */
+  rest(url: string, owner?: unknown): void {
+    this.leave(this.dweller);
+    this.dweller = owner;
     this.dwell = setTimeout(() => {
       this.dwell = null;
       this.warm(url);
     }, WARM_DWELL_MS);
   }
 
-  /** The pointer or focus moved off before the dwell ended. */
-  leave(): void {
-    if (this.dwell == null) return;
+  /**
+   * The pointer or focus moved off ``owner``'s card before the dwell ended. A
+   * dwell another owner started stays: a card unmounting elsewhere (an
+   * infinite list, a refreshed feed) must not cancel the one under the pointer.
+   */
+  leave(owner?: unknown): void {
+    if (this.dwell == null || owner !== this.dweller) return;
     clearTimeout(this.dwell);
     this.dwell = null;
   }

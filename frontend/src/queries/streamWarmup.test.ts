@@ -72,6 +72,18 @@ describe("StreamWarmer", () => {
     expect(h.metaCalls()).toEqual([]);
   });
 
+  it("another card leaving keeps the dwell", async () => {
+    // A card that unmounts (an infinite list, a refreshed feed) must not
+    // cancel the card the pointer is resting on.
+    const h = harness();
+    const resting = {};
+    h.warmer.rest("A", resting);
+    await vi.advanceTimersByTimeAsync(60);
+    h.warmer.leave({});
+    await vi.advanceTimersByTimeAsync(60);
+    expect(h.metaCalls()).toEqual(["A"]);
+  });
+
   it("a second rest replaces the first", async () => {
     const h = harness();
     h.warmer.rest("A");
