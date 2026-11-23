@@ -6,6 +6,7 @@ import PlaybackQueue from "../../components/PlaybackQueue";
 import QueueButton from "../../components/QueueButton";
 import VideoCard from "../../components/VideoCard";
 import { formatDuration } from "../../utils";
+import { useStreamWarmup } from "../../hooks/useStreamWarmup";
 import type { RelatedItem } from "./relatedItems";
 import type { RelatedFeed } from "./useRelatedFeed";
 import { PlayIcon } from "../../components/icons";
@@ -38,6 +39,7 @@ export function WatchSidebar({
   /** Live chat (or the bar that brings it back), first in the column. */
   chat?: ReactNode;
 }) {
+  const warmup = useStreamWarmup();
   return (
     <aside className="hidden space-y-6 xl:block">
       {chat}
@@ -54,6 +56,7 @@ export function WatchSidebar({
               {items.map((v) => (
                 <div
                   key={v.key}
+                  {...warmup(v.href)}
                   data-horde="related-item"
                   className="group relative flex gap-2 rounded-lg p-1 transition-colors hover:bg-ink-800"
                 >
@@ -143,6 +146,7 @@ export function RelatedGrid({ related }: { related: RelatedFeed }) {
 
 /** "More like this" for a stream, as a grid under the video when there is no sidebar. */
 export function StreamRelatedGrid({ items }: { items: RelatedItem[] }) {
+  const warmup = useStreamWarmup();
   return (
     <div className="mt-6">
       <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -153,6 +157,7 @@ export function StreamRelatedGrid({ items }: { items: RelatedItem[] }) {
           <Link
             key={v.key}
             to={v.href}
+            {...warmup(v.href)}
             data-horde="related-item"
             className="group block min-w-0 rounded-lg transition-colors hover:bg-ink-800"
           >

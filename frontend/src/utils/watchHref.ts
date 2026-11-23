@@ -19,3 +19,11 @@ export function watchHref(
   }
   return null;
 }
+
+/** The video link a stream watch href (`/watch?url=…`) opens, else null. */
+export function streamUrlFromHref(
+  href: string | null | undefined
+): string | null {
+  if (!href?.startsWith("/watch?")) return null;
+  return new URLSearchParams(href.slice("/watch?".length)).get("url") || null;
+}
