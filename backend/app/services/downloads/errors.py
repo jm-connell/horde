@@ -3,7 +3,11 @@
 import logging
 
 from ..url_clean import youtube_video_id
-from ..ytdlp_common import is_disk_full_message, is_members_only_message
+from ..ytdlp_common import (
+    is_disk_full_message,
+    is_members_only_message,
+    needs_js_client,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +42,9 @@ class YtdlpLogger:
         #: yt-dlp ran out of disk (it reports that through the logger when told
         #: to ignore errors, so the exception never reaches the runner).
         self.disk_full = False
+        #: YouTube's "not available" for a video only its JS clients may play
+        #: (made-for-kids), reported the same way.
+        self.js_client_only: str | None = None
 
     def debug(self, msg: str) -> None:
         pass
@@ -59,6 +66,9 @@ class YtdlpLogger:
         if is_members_only_message(msg):
             self.members_only = True
             self.last_members_only_msg = msg
+            return
+        if needs_js_client(msg):
+            self.js_client_only = msg
             return
         # Fall through: leave other errors to raised exceptions / default silence.
 

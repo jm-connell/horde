@@ -15,6 +15,7 @@ from typing import Any
 from ..config import (
     YTDLP_COOKIE_FILE,
     YTDLP_COOKIES_FROM_BROWSER,
+    YTDLP_JS_RUNTIME,
     YTDLP_POT_BASE_URL,
 )
 
@@ -644,6 +645,48 @@ def js_runtimes_option(spec: str) -> dict[str, dict[str, str]] | None:
     return {name.lower(): {"path": path} if path else {}}
 
 
+#: What YouTube tells the JS-less clients about a video only its JS clients may
+#: play (made-for-kids videos, as of 2026-11), as yt-dlp words it. Deleted and
+#: private videos, and geo blocks ("…not available from your location"), say
+#: other things.
+_JS_CLIENT_ONLY_MESSAGE = re.compile(
+    r"\[youtube\][^\n]*: This video is not available\.?\s*$"
+)
+
+
+def needs_js_client(message: str) -> bool:
+    """True for YouTube's answer to a video only its JS clients may play."""
+    return _JS_CLIENT_ONLY_MESSAGE.search(message) is not None
+
+
+def should_retry_with_js(opts: dict[str, Any], exc: BaseException) -> bool:
+    """True when a JS-less extraction hit a video only YouTube's JS clients open
+    and ``YTDLP_JS_RUNTIME`` can run one.
+
+    The player client tells a retry apart: yt-dlp writes its own default
+    ``js_runtimes`` into every options dict it is given.
+    """
+    youtube = (opts.get("extractor_args") or {}).get("youtube") or {}
+    return (
+        youtube.get("player_client") != ["tv_samsung"]
+        and js_runtimes_option(YTDLP_JS_RUNTIME) is not None
+        and needs_js_client(str(exc))
+    )
+
+
+def with_js_client(opts: dict[str, Any]) -> dict[str, Any]:
+    """``opts`` for YouTube's ``tv_samsung`` client, run in ``YTDLP_JS_RUNTIME``.
+
+    Its media URLs answer 403 for a few seconds after extraction (yt-dlp's
+    ``available_at``); yt-dlp's downloader waits, and so must anything else
+    that fetches them.
+    """
+    runtimes = js_runtimes_option(YTDLP_JS_RUNTIME) or {}
+    args = dict(opts.get("extractor_args") or {})
+    args["youtube"] = {**(args.get("youtube") or {}), "player_client": ["tv_samsung"]}
+    return {**opts, "js_runtimes": runtimes, "extractor_args": args}
+
+
 _AUTH_CACHE_SUFFIX = ":auth"
 
 _extract_tls = threading.local()
@@ -1116,8 +1159,18 @@ def extract_info_gated(
                 except Exception as retry_exc:
                     _record_failure(retry_exc)
                     raise retry_exc from exc
-            _record_failure(exc)
-            raise
+            if not should_retry_with_js(opts, exc):
+                _record_failure(exc)
+                raise
+            logger.info("Retrying extract with YouTube's JS client: %s", url)
+            try:
+                info = _ytdlp_extract(url, with_js_client(opts))
+            except Exception as retry_exc:
+                # Report YouTube's answer, not the retry's: callers (the channel
+                # catalog's skip list) recognise an unavailable video by it.
+                logger.warning("JS client retry failed for %s", url, exc_info=retry_exc)
+                _record_failure(exc)
+                raise exc from retry_exc
 
         if (
             cookie_retry

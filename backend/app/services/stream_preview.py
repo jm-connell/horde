@@ -87,6 +87,30 @@ class PreviewRefreshError(RuntimeError):
         self.retry_after = retry_after
 
 
+#: Longest wait for a fresh media URL to start working (``seconds_until_available``).
+_AVAILABLE_WAIT_MAX_SEC = 60.0
+
+
+def seconds_until_available(item: dict[str, Any]) -> float:
+    """How long until a fresh media URL works: 0 when it already does.
+
+    URLs from YouTube's JS client (the retry for made-for-kids videos,
+    ``ytdlp_common.with_js_client``) answer 403 until the pre-roll ads YouTube
+    would have shown are over; yt-dlp says when (``available_at``). Other
+    clients' are already past it.
+    """
+    at = item.get("available_at")
+    if not isinstance(at, int | float):
+        return 0.0
+    return max(0.0, min(float(at) - time.time(), _AVAILABLE_WAIT_MAX_SEC))
+
+
+def _wait_until_available(fmt: dict[str, Any]) -> None:
+    delay = seconds_until_available(fmt)
+    if delay > 0:
+        time.sleep(delay)
+
+
 def _pick_progressive_format(info: dict[str, Any]) -> dict[str, Any] | None:
     """Best muxed progressive format at or below preview height cap."""
     formats = info.get("formats") or []
@@ -414,6 +438,7 @@ def _build_representation(
     if not direct:
         raise RuntimeError("Adaptive format has no URL")
     headers = _format_http_headers(fmt, info)
+    _wait_until_available(fmt)
     init_range, index_range, sidx = _probe_mp4_ranges(direct, headers)
     itag = str(fmt.get("format_id") or fmt.get("format") or "")
     if not itag:
@@ -766,6 +791,8 @@ def resolve_preview_stream(url: str, *, force: bool = False) -> dict[str, Any]:
             "height": int(fmt["height"]) if fmt.get("height") else None,
             "content_type": content_type,
             "expires_at": now + _PREVIEW_CACHE_TTL_SEC,
+            # The proxy waits for it (``seconds_until_available``), holding no lock.
+            "available_at": fmt.get("available_at"),
         }
         with _preview_stream_lock:
             _preview_stream_cache[url] = entry

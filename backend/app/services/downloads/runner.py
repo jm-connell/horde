@@ -43,7 +43,9 @@ from ..ytdlp_common import (
     record_extract_failure,
     remember_cookie_required,
     should_retry_with_cookies,
+    should_retry_with_js,
     url_cookie_required,
+    with_js_client,
     youtube_extractor_args,
 )
 from ..ytdlp_extract import estimate_download_bytes, is_youtube_short_entry
@@ -139,6 +141,8 @@ class DownloadRun:
         self.last_exc: Exception | None = None
         self.ytdlp_logger = YtdlpLogger()
         self.used_cookies = False
+        #: The video opened only with YouTube's JS client (``with_js_client``).
+        self.used_js = False
         self.base_opts: dict[str, Any] = {}
         self.fmt = ""
         self.handed_off = False
@@ -384,6 +388,8 @@ class DownloadRun:
 
     def _opts_for(self, fmt: str) -> dict[str, Any]:
         opts = {**self.base_opts, "format": fmt}
+        if self.used_js:
+            opts = with_js_client(opts)
         return apply_cookie_opts(opts) if self.used_cookies else opts
 
     def _fetch_metadata(self) -> Any:
@@ -533,6 +539,9 @@ class DownloadRun:
         downloaded = ydl.extract_info(self.spec.url, download=True)
         self._members_only_check()
         self._disk_full_check()
+        if self.ytdlp_logger.js_client_only is not None:
+            # Logged, not raised (ignoreerrors): hand it to the retry.
+            raise RuntimeError(self.ytdlp_logger.js_client_only)
         self._absorb(downloaded)
 
     def _absorb(self, downloaded: Any) -> None:
@@ -548,6 +557,8 @@ class DownloadRun:
             self._retry_with_cookies(exc, ydl_opts)
         elif self.ytdlp_logger.members_only or is_members_only_error(exc):
             raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED) from exc
+        elif should_retry_with_js(ydl_opts, exc):
+            self._retry_with_js_client(ydl_opts)
         elif not is_recoverable_download_error(exc):
             raise exc
         else:
@@ -574,6 +585,20 @@ class DownloadRun:
             downloaded = ydl_auth.extract_info(url, download=True)
             if self.ytdlp_logger.members_only:
                 raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED) from exc
+            self._absorb(downloaded)
+
+    def _retry_with_js_client(self, ydl_opts: dict[str, Any]) -> None:
+        """Run the download again with YouTube's JS client (made-for-kids videos)."""
+        import yt_dlp
+
+        logger.info("Retrying download with YouTube's JS client: %s", self.spec.url)
+        self.used_js = True
+        self.ytdlp_logger.js_client_only = None
+        with yt_dlp.YoutubeDL(with_js_client(ydl_opts)) as ydl_js:
+            self._register_outputs(ydl_js)
+            downloaded = ydl_js.extract_info(self.spec.url, download=True)
+            self._members_only_check()
+            self._disk_full_check()
             self._absorb(downloaded)
 
     def _locate_output(self, ydl: Any) -> None:

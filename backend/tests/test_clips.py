@@ -192,6 +192,24 @@ def test_a_finished_stream_clip_becomes_its_own_video(init_db, fake, add_video):
     assert "download_ranges" in download["opts"]
 
 
+def test_a_clip_retried_with_the_js_client_keeps_its_range(
+    init_db, fake, monkeypatch, add_video
+):
+    # A made-for-kids video downloads only through YouTube's JS client; the
+    # retry must still ask for the clip, not the whole video.
+    monkeypatch.setattr(ytdlp_common, "YTDLP_JS_RUNTIME", "deno")
+    add_video(source_url=URL, file_path=f"Chan/2024/Stream [{YT}].mp4")
+    fake.add(URL, make_info(YT, "Stream", live_status="was_live"))
+    fake.unavailable_without_js = True
+    run_job_inline(_add_clip_job(init_db, 60, 120))
+
+    (download,) = fake.downloads
+    assert download["opts"]["extractor_args"]["youtube"]["player_client"] == [
+        "tv_samsung"
+    ]
+    assert "download_ranges" in download["opts"]
+
+
 def test_a_clip_retried_with_cookies_keeps_its_range(
     init_db, fake, monkeypatch, add_video, tmp_path
 ):

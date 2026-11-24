@@ -174,7 +174,8 @@ YTDLP_COOKIES_FROM_BROWSER: str = os.environ.get(
 ).strip()
 # A JavaScript runtime for yt-dlp, in its --js-runtimes syntax (``deno`` or
 # ``deno:/path/to/deno``). Only the lookup of a live stream's 1440p and 2160p
-# formats uses it; every other extraction stays JS-less. Set in the Docker image.
+# formats and the retry of made-for-kids videos use it; every other extraction
+# stays JS-less. Set in the Docker image.
 YTDLP_JS_RUNTIME: str = os.environ.get("YTDLP_JS_RUNTIME", "").strip()
 
 # Legacy Ollama URL: the AI provider URL is a setting now (Settings → AI). Used

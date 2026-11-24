@@ -98,7 +98,8 @@ COPY backend/requirements.lock ./
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 # Off PATH on purpose: yt-dlp would use a deno it finds on PATH for every
-# extraction, and Horde runs it only for the live 1440p/2160p lookup.
+# extraction, and Horde runs it only for the live 1440p/2160p lookup and the
+# retry of made-for-kids videos (docs/adr/0039-deno-only-as-a-fallback.md).
 COPY --from=deno /deno /opt/deno/deno
 ENV YTDLP_JS_RUNTIME=deno:/opt/deno/deno
 

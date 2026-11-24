@@ -19,6 +19,6 @@ Horde plays live broadcasts through its HLS proxy ([ADR 0009](0009-live-streams-
 - Opening a broadcast for the first time takes about 2 seconds longer, while the second extraction runs.
 - Auto quality can pick 1440p or 2160p where the browser reports it can decode that size; a viewer pulls 9 or 18 Mbit/s through the server, and a device that drops frames is stepped down by the existing health check.
 - A yt-dlp release that needs newer solver scripts refuses the pinned `yt-dlp-ejs` until it is bumped too; live streams then stop at 1080p in the meantime.
-- Running Deno for all of yt-dlp (yt-dlp's recommended setup) is a separate question; this record does not decide it.
+- Running Deno for all of yt-dlp (yt-dlp's recommended setup) was measured afterwards and rejected; it runs only as a fallback ([ADR 0039](0039-deno-only-as-a-fallback.md)).
 
 Detail: [Live streams → 1440p and 2160p](../design/live-streams.md#1440p-and-2160p).

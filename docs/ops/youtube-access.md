@@ -49,6 +49,14 @@ Downloads, stream preview, metadata refresh, and that description pass try anony
 
 You will not get those videos without valid cookies for an entitled account. After an anonymous block, Horde retries **that video** once with cookies (if configured) and then records a skip so indexing does not hammer YouTube.
 
+## Made-for-kids videos
+
+YouTube answers "This video is not available" to the JS-less client Horde normally uses (`visionos`) for made-for-kids videos; only its clients that run YouTube's player JavaScript may play them. With `YTDLP_JS_RUNTIME` set (the Docker image sets it to its bundled Deno), a download, stream preview or metadata lookup that gets exactly that answer is retried once with yt-dlp's `tv_samsung` client in Deno (`ytdlp_common.with_js_client`). Every other video keeps the JS-less path; running Deno for everything was measured and rejected ([ADR 0039](../adr/0039-deno-only-as-a-fallback.md)).
+
+That client's media URLs answer 403 until the pre-roll ads YouTube would have shown are over (about 4 seconds in tests; yt-dlp reports the time as `available_at`). yt-dlp waits that out for downloads; stream preview waits for it too, up to a minute, before reading a new URL (`stream_preview.seconds_until_available`), so such a preview starts that much later. If the Deno retry itself fails, the error shown is still YouTube's "not available".
+
+Subtitles of a made-for-kids video are not fetched yet: that path does not retry with the JS client.
+
 ## Extract gate (bot-check hygiene)
 
 All metadata `extract_info` calls (feed cards, download preview, stream preview, catalog) share a global gate:

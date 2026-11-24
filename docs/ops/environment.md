@@ -42,7 +42,7 @@ In Compose, Horde maps host **8686** → container **8080**. See [Ports & networ
 | `YTDLP_POT_BASE_URL` | *(empty)*; Compose: `http://bgutil-pot:4416` | Base URL for the [bgutil POT](youtube-access.md) HTTP provider. |
 | `YTDLP_COOKIE_FILE` | *(empty)* | Path to a Netscape cookie file. Attached only after a per-video age-restricted or members-only block. |
 | `YTDLP_COOKIES_FROM_BROWSER` | *(empty)* | Browser cookies via yt-dlp (`browser` or `browser:profile`). Used only if `YTDLP_COOKIE_FILE` is unset or missing. Same per-video fallback as the cookie file. |
-| `YTDLP_JS_RUNTIME` | *(empty)*; image: `deno:/opt/deno/deno` | JavaScript runtime for yt-dlp, in its `--js-runtimes` syntax (`deno` or `deno:/path/to/deno`). Used only to find a live stream's 1440p and 2160p formats ([Live streams](../design/live-streams.md#1440p-and-2160p)); unset, live streams go up to 1080p. |
+| `YTDLP_JS_RUNTIME` | *(empty)*; image: `deno:/opt/deno/deno` | JavaScript runtime for yt-dlp, in its `--js-runtimes` syntax (`deno` or `deno:/path/to/deno`). Used only to find a live stream's 1440p and 2160p formats ([Live streams](../design/live-streams.md#1440p-and-2160p)) and to retry [made-for-kids videos](youtube-access.md#made-for-kids-videos); unset, live streams go up to 1080p and those videos cannot be opened. |
 
 Cookie file wins over browser cookies when the file exists. Details: [YouTube access](youtube-access.md).
 

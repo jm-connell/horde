@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -867,4 +868,7 @@ async def preview_stream(request: Request, url: str = Query(...)):
             status_code=400, detail=f"Could not open preview stream: {exc}"
         ) from exc
 
+    delay = stream_preview.seconds_until_available(resolved)
+    if delay > 0:
+        await asyncio.sleep(delay)
     return await _proxy_upstream(request, resolved, stream_url=cleaned)
