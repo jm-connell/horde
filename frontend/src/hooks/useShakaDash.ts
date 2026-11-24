@@ -120,6 +120,19 @@ function preferVideoCodecs(codecs: string[]) {
 }
 
 /**
+ * Shaka's codec preference: AV1 first where it decodes well, else H.264. Live
+ * keeps Shaka's default (no preference): its ladder is H.264 up to 1080p and
+ * VP9 above, since YouTube serves 1440p and 2160p live only as VP9, and a
+ * preference drops every variant in another codec.
+ */
+export function videoCodecConfig(live: boolean, preferAv1: boolean) {
+  if (live) return {};
+  return {
+    preferredVideo: preferVideoCodecs(preferAv1 ? ["av01", "avc1"] : ["avc1"]),
+  };
+}
+
+/**
  * Play `track` from now on. A video drops what it has buffered so the new
  * quality shows at once. A live stream keeps its buffer and switches where it
  * ends (a few segments ahead), as Shaka's own ABR does: in sequence mode Shaka
@@ -329,9 +342,7 @@ export function useShakaDashLoad({
             defaultBandwidthEstimate: bwEstimate,
             switchInterval: 8,
           },
-          preferredVideo: preferVideoCodecs(
-            preferAv1 ? ["av01", "avc1"] : ["avc1"]
-          ),
+          ...videoCodecConfig(live, preferAv1),
           restrictions: {
             maxHeight: abrEnabled ? maxHeight : 8192,
             maxWidth: 8192,

@@ -7,6 +7,7 @@ import {
   LIVE_MANIFEST_CONFIG,
   applyQualityPick,
   selectQualityTrack,
+  videoCodecConfig,
 } from "./useShakaDash";
 
 describe("live stream config", () => {
@@ -16,6 +17,19 @@ describe("live stream config", () => {
     // The few-ms gaps that leaves make Chrome's audio clock drift ahead of
     // the picture, about 1 s every 10 minutes, until a seek.
     expect(LIVE_MANIFEST_CONFIG.hls.sequenceMode).toBe(true);
+  });
+
+  it("keeps every codec of a live ladder (1440p and 2160p are VP9 only)", () => {
+    // Preferring avc1 would make Shaka drop the VP9 variants.
+    expect(videoCodecConfig(true, false)).toEqual({});
+    expect(videoCodecConfig(true, true)).toEqual({});
+  });
+
+  it("prefers AV1 then H.264 for a video, or H.264 alone", () => {
+    const codecs = (av1: boolean) =>
+      videoCodecConfig(false, av1).preferredVideo?.map((p) => p.codec);
+    expect(codecs(true)).toEqual(["av01", "avc1"]);
+    expect(codecs(false)).toEqual(["avc1"]);
   });
 });
 

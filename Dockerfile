@@ -26,6 +26,11 @@ COPY mkdocs.yml ./
 COPY docs/ ./docs/
 RUN mkdocs build -d /docs-out --strict
 
+# --- Deno: the JavaScript runtime yt-dlp needs to find a live stream's 1440p
+# and 2160p formats (docs/adr/0038-live-1440p-and-2160p-need-deno.md). Built
+# for the target platform. ---
+FROM denoland/deno:bin-2.9.8@sha256:b507583d3c68ba69f3ed2ce5969ae5b8b70f43421c781279c7aea06435263543 AS deno
+
 # --- Stage 3: python runtime serving API + static build + wiki ---
 FROM python:3.14.10-slim-bookworm@sha256:3fe1a0b6c2d6b2ebb572906cdabeca75aeb558c0c17db5ffefbcf8094871c32b AS runtime
 WORKDIR /app
@@ -91,6 +96,11 @@ RUN pip install --no-cache-dir --require-hashes -r pip.lock
 # Hash-checked, fully pinned Python deps (regenerate: docs/development/dependencies.md).
 COPY backend/requirements.lock ./
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
+
+# Off PATH on purpose: yt-dlp would use a deno it finds on PATH for every
+# extraction, and Horde runs it only for the live 1440p/2160p lookup.
+COPY --from=deno /deno /opt/deno/deno
+ENV YTDLP_JS_RUNTIME=deno:/opt/deno/deno
 
 COPY backend/app ./app
 COPY --from=frontend /build/dist ./static

@@ -30,12 +30,22 @@ YouTube serves live broadcasts as HLS. Older broadcasts come as MPEG-TS variants
 
 | URL | Served from |
 |---|---|
-| `/api/live/{id}/master.m3u8` | A master playlist Horde writes from yt-dlp's HLS formats, one variant per height |
+| `/api/live/{id}/master.m3u8` | A master playlist Horde writes from yt-dlp's HLS formats, one variant per height, plus the 1440p and 2160p variants (below) |
 | `/api/live/{id}/v/{key}.m3u8` | YouTube's variant playlist, re-rendered with Horde segment URIs and the DVR window |
 | `/api/live/{id}/seg/{key}/{sq}.ts` | A video (or muxed) segment, streamed through from googlevideo |
 | `/api/live/{id}/seg/{key}/{sq}.aac` | A segment of the separate audio rendition (`audio/aac`) |
+| `/api/live/{id}/seg/{key}/{sq}.webm` | A segment of a 1440p or 2160p variant (`video/webm`); HEAD answers the type without fetching it |
 
 One `LiveSession` per broadcast is shared by every viewer. Sessions live on `AppContext.live` and are closed after 10 idle minutes. The player is Shaka's HLS build (`useShakaDash` with `live`), which transmuxes TS and packed AAC in the browser.
+
+### 1440p and 2160p
+
+YouTube's live HLS ladder stops at 1080p (H.264). Taller live formats exist only as adaptive VP9 streams in WebM, and YouTube lists those only to clients that run its player JavaScript ([ADR 0038](../adr/0038-live-1440p-and-2160p-need-deno.md)). When `YTDLP_JS_RUNTIME` names a JavaScript runtime (the Docker image ships Deno for this), opening a session runs a second extraction with yt-dlp's `tv_samsung` client, which needs no PO token (`services/live/extract.py`, cached on its own). The session adds its VP9 formats taller than the HLS ladder as extra variants:
+
+- **No playlist of their own.** Segment `n` of such a format is its signed URL plus `&sq=n`, numbered and timed like the HLS segments. So a VP9 variant's playlist lists the tallest HLS variant's segments (DVR window and discontinuities included) under `.webm` URIs, and the session fetches `url&sq=n`. Past the newest segment YouTube answers 204, which the session reports as a missing segment.
+- **Video only.** They play beside the HLS audio rendition, so only broadcasts with split audio get them; a muxed ladder stays as it is.
+- **The player.** HLS has no way to name WebM, so Shaka asks for the type with HEAD once. Shaka switches between the H.264 TS and VP9 WebM variants like any others. Live keeps Shaka's default codec preference, since preferring H.264 would drop the VP9 variants. A browser that cannot decode VP9 never sees them.
+- **Falling back.** If the extra extraction fails, the stream plays as before, up to 1080p. A later URL refresh tries again, but the player reads the master playlist only once, so variants found then reach only viewers who open the stream afterwards. A VP9 variant that a refresh does not list keeps its old URLs, and a 403 on those no longer starts a refresh of its own. HDR formats are left out. Clips are cut from the HLS variants.
 
 ### What keeps it stable
 
@@ -67,7 +77,8 @@ The seek bar maps onto Shaka's seek range (`useLiveWindow`), so it grows as the 
 
 - **Extraction can break.** When YouTube changes something, starting a stream can fail until yt-dlp is updated (the same is true of normal stream previews). Once a stream plays, playback no longer goes through yt-dlp, except for the URL refreshes described above.
 - **Members-only and age-restricted** broadcasts need cookies (`YTDLP_COOKIE_FILE`), as for downloads.
-- **Bandwidth.** Each viewer pulls the stream through the server: about 3 to 6 Mbit/s at 720p to 1080p.
+- **Bandwidth.** Each viewer pulls the stream through the server: about 3 to 6 Mbit/s at 720p to 1080p, 9 Mbit/s at 1440p60 and 18 Mbit/s at 2160p60.
+- **1440p and 2160p** need `YTDLP_JS_RUNTIME`, which the Docker image sets. The extra extraction adds about 2 seconds the first time a broadcast is opened.
 - **Casting is off for live streams.** A Chromecast cannot reach the proxied playlist the way it reaches a library file.
 - Live playback does not touch watch history.
 

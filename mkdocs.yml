@@ -150,6 +150,7 @@ nav:
       - 0035 Ask indexes subscriptions up to a limit: adr/0035-ask-indexes-subscriptions-up-to-a-limit.md
       - 0036 Chat replay read around the position: adr/0036-chat-replay-read-around-the-position.md
       - 0037 Live chat follows the viewer: adr/0037-live-chat-follows-the-viewer.md
+      - 0038 Live 1440p and 2160p need Deno: adr/0038-live-1440p-and-2160p-need-deno.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

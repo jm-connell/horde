@@ -636,6 +636,14 @@ def youtube_extractor_args() -> dict[str, Any]:
     return args
 
 
+def js_runtimes_option(spec: str) -> dict[str, dict[str, str]] | None:
+    """yt-dlp's ``js_runtimes`` for a ``RUNTIME[:PATH]`` setting; None when unset."""
+    name, _, path = spec.strip().partition(":")
+    if not name:
+        return None
+    return {name.lower(): {"path": path} if path else {}}
+
+
 _AUTH_CACHE_SUFFIX = ":auth"
 
 _extract_tls = threading.local()

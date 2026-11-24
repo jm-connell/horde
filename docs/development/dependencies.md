@@ -73,6 +73,13 @@ yt-dlp is the one dependency that has to move quickly when YouTube changes. See
 updater (`YTDLP_AUTO_UPDATE=1`) in [Environment variables](../ops/environment.md).
 Dependabot checks yt-dlp daily.
 
+`yt-dlp-ejs` holds the challenge-solver scripts yt-dlp runs in Deno for live
+1440p and 2160p. A yt-dlp release accepts only the scripts its `default` extra
+pins (`Requires-Dist: yt-dlp-ejs==…` on its PyPI page). The yt-dlp bump workflow
+changes only yt-dlp, and Dependabot proposes `yt-dlp-ejs` weekly, so after a
+yt-dlp release that moves the scripts, live streams stop at 1080p until the
+`yt-dlp-ejs` pin catches up. Bump both together when you can.
+
 ## Frontend
 
 ```bash

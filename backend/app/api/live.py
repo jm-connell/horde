@@ -40,6 +40,7 @@ from ..services import follows, stream_preview
 from ..services.auth.accounts import AuthUser
 from ..services.chat_replay.youtube import ChatReplayError
 from ..services.comments.fetch import LATER, RETRY
+from ..services.live import extract as live_extract
 from ..services.live.directory import (
     RATE_LIMIT_BACKOFF_SEC,
     STALE_LIVE_SEC,
@@ -51,6 +52,7 @@ from ..services.live.sessions import (
     LiveSegmentMissing,
     LiveSession,
     LiveUpstreamError,
+    is_live_info,
 )
 from ..services.url_safety import UnsafeUrlError, UrlFetchError
 from ..services.ytdlp_extract import is_youtube_url
@@ -66,6 +68,7 @@ HLS_PLAYLIST = media_response(
 )
 TS_SEGMENT = media_response("video/mp2t", description="MPEG-TS media segment")
 AAC_SEGMENT = media_response("audio/aac", description="Packed AAC audio segment")
+WEBM_SEGMENT = media_response("video/webm", description="WebM (VP9) media segment")
 _PLAYLIST_TYPE = "application/vnd.apple.mpegurl"
 _CHUNK = 256 * 1024
 
@@ -189,9 +192,23 @@ def _resolver(request: Request):
 
     async def resolve(url: str, force: bool) -> dict[str, Any]:
         async with app.state.ytdlp_slots.slot():
-            return await run_in_threadpool(
+            info = await run_in_threadpool(
                 stream_preview._extract_preview_info, url, force=force
             )
+        if not (live_extract.enabled() and is_live_info(info)):
+            return info
+        try:
+            async with app.state.ytdlp_slots.slot():
+                tall = await run_in_threadpool(
+                    live_extract.extract_tall_formats, url, force=force
+                )
+        except Exception:
+            # A full yt-dlp slot queue (429) and the like: the stream plays on
+            # without its 1440p and 2160p variants.
+            logger.warning("live 1440p/2160p lookup skipped for %s", url, exc_info=True)
+            return info
+        # A copy: ``info`` is the preview cache's entry.
+        return {**info, "formats": [*(info.get("formats") or []), *tall]}
 
     return resolve
 
@@ -306,6 +323,30 @@ async def live_audio_segment(
 ):
     """A segment of the separate audio rendition (packed AAC with an ID3 timestamp)."""
     return await _segment(request, video_id, key, sq, "audio/aac")
+
+
+# One handler serves both verbs; HEAD stays out of the schema (one operation id).
+@router.head("/{video_id}/seg/{key}/{sq}.webm", include_in_schema=False)
+@router.get(
+    "/{video_id}/seg/{key}/{sq}.webm", response_class=RAW, responses=WEBM_SEGMENT
+)
+async def live_webm_segment(
+    request: Request,
+    video_id: str = VideoId,
+    key: str = VariantKey,
+    sq: int = Path(..., ge=0),
+):
+    """A segment of a 1440p or 2160p variant (VP9 in WebM, which HLS cannot name).
+
+    The player asks for the type with HEAD once; that answers without fetching
+    the segment.
+    """
+    if request.method == "HEAD":
+        session = await _session(request, video_id)
+        if key not in session.variants:
+            raise CodedHTTPException(404, "Unknown stream variant", "not_found")
+        return Response(media_type="video/webm")
+    return await _segment(request, video_id, key, sq, "video/webm")
 
 
 # --- live chat -------------------------------------------------------------

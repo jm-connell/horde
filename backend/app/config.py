@@ -172,6 +172,10 @@ YTDLP_COOKIE_FILE: Path | None = _optional_env_path("YTDLP_COOKIE_FILE")
 YTDLP_COOKIES_FROM_BROWSER: str = os.environ.get(
     "YTDLP_COOKIES_FROM_BROWSER", ""
 ).strip()
+# A JavaScript runtime for yt-dlp, in its --js-runtimes syntax (``deno`` or
+# ``deno:/path/to/deno``). Only the lookup of a live stream's 1440p and 2160p
+# formats uses it; every other extraction stays JS-less. Set in the Docker image.
+YTDLP_JS_RUNTIME: str = os.environ.get("YTDLP_JS_RUNTIME", "").strip()
 
 # Legacy Ollama URL: the AI provider URL is a setting now (Settings → AI). Used
 # when that is empty, and to convert settings from before connection_version 2.

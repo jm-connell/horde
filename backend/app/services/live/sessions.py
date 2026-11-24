@@ -96,6 +96,9 @@ class _Upstream:
     info: hls.VariantInfo
     #: An audio-only rendition (packed AAC segments) played beside the video.
     audio: bool = False
+    #: A live adaptive format (1440p, 2160p VP9): no playlist; segment ``sq`` is
+    #: ``url`` plus ``&sq=<sq>``, on the HLS ladder's timeline.
+    adaptive: bool = False
 
 
 def _hls_formats(info: dict[str, Any]) -> list[dict[str, Any]]:
@@ -112,13 +115,76 @@ def _has(codec: Any) -> bool:
     return bool(codec) and str(codec) != "none"
 
 
-def _upstream(fmt: dict[str, Any], info: hls.VariantInfo, *, audio: bool) -> _Upstream:
+def _upstream(
+    fmt: dict[str, Any], info: hls.VariantInfo, *, audio: bool, adaptive: bool = False
+) -> _Upstream:
     return _Upstream(
         url=str(fmt["url"]),
         headers={str(k): str(v) for k, v in (fmt.get("http_headers") or {}).items()},
         info=info,
         audio=audio,
+        adaptive=adaptive,
     )
+
+
+def _vp9_codecs(fmt: dict[str, Any]) -> str:
+    """An RFC 6381 codec string for a VP9 format (yt-dlp reports just ``vp9``):
+    profile 0, 8 bit, at the level its size and frame rate need."""
+    vcodec = str(fmt.get("vcodec"))
+    if "." in vcodec:
+        return vcodec
+    sample_rate = int(fmt["width"]) * int(fmt["height"]) * float(fmt.get("fps") or 30)
+    return "vp09.00.51.08" if sample_rate > 311_951_360 else "vp09.00.50.08"
+
+
+def _tall_variants(info: dict[str, Any], above: int) -> dict[str, _Upstream]:
+    """Live adaptive VP9 (WebM) formats taller than the HLS ladder, one per height.
+
+    YouTube serves 1440p and 2160p live only this way, to clients that run
+    YouTube's player JavaScript (see ``live.extract``). Each is video only and
+    plays beside the HLS audio rendition.
+    """
+    by_height: dict[int, dict[str, Any]] = {}
+    for fmt in info.get("formats") or []:
+        if not (
+            isinstance(fmt, dict)
+            and fmt.get("url")
+            and fmt.get("protocol") in ("http", "https")
+            and fmt.get("ext") == "webm"
+            and str(fmt.get("vcodec") or "").startswith(("vp9", "vp09"))
+            # HDR (profile 2, 10 bit) would need another codec string and
+            # display; the SDR format of each height is the one declared.
+            and fmt.get("dynamic_range") in (None, "SDR")
+            and not _has(fmt.get("acodec"))
+            and fmt.get("width")
+            and int(fmt.get("height") or 0) > above
+        ):
+            continue
+        height = int(fmt["height"])
+        current = by_height.get(height)
+        if current is None or float(fmt.get("tbr") or 0) > float(
+            current.get("tbr") or 0
+        ):
+            by_height[height] = fmt
+    out: dict[str, _Upstream] = {}
+    for height, fmt in sorted(by_height.items()):
+        key = _key(fmt, height)
+        tbr = float(fmt.get("tbr") or 0)
+        fps = fmt.get("fps")
+        out[key] = _upstream(
+            fmt,
+            hls.VariantInfo(
+                key=key,
+                bandwidth=int(tbr * 1000) if tbr else height * 8000,
+                width=int(fmt["width"]),
+                height=height,
+                fps=float(fps) if fps else None,
+                codecs=_vp9_codecs(fmt),
+            ),
+            audio=False,
+            adaptive=True,
+        )
+    return out
 
 
 def _key(fmt: dict[str, Any], fallback: int) -> str:
@@ -131,7 +197,8 @@ def _variants_from_info(info: dict[str, Any]) -> dict[str, _Upstream]:
     YouTube used to serve muxed (audio + video) TS variants; many broadcasts now
     come as video-only TS variants plus audio-only packed-AAC ones. Muxed
     variants are used when there are any, otherwise the video-only ones with
-    the best audio-only format as their shared audio rendition.
+    the best audio-only format as their shared audio rendition. The latter also
+    get any VP9 formats taller than the HLS ladder (``_tall_variants``).
     """
     if not is_live_info(info):
         raise LiveNotAvailable("This video is not live")
@@ -202,6 +269,8 @@ def _variants_from_info(info: dict[str, Any]) -> dict[str, _Upstream]:
             ),
             audio=True,
         )
+        for key, upstream in _tall_variants(info, max(by_height)).items():
+            out.setdefault(key, upstream)
     return out
 
 
@@ -216,13 +285,13 @@ class ClipSource:
 
 
 def clip_source(info: dict[str, Any]) -> ClipSource:
-    """The tallest video variant (and its audio rendition) of a live broadcast.
+    """The tallest HLS video variant (and its audio rendition) of a live broadcast.
 
     Raises LiveNotAvailable when the video is not live or has no HLS stream.
     """
     upstreams = list(_variants_from_info(info).values())
     video = max(
-        (u for u in upstreams if not u.audio),
+        (u for u in upstreams if not u.audio and not u.adaptive),
         key=lambda u: (u.info.height or 0, u.info.bandwidth),
     )
     audio = next((u for u in upstreams if u.audio), None)
@@ -264,6 +333,9 @@ class _Variant:
     rendered: str | None = None
     #: Consecutive stall refreshes without the head moving (backs the watchdog off).
     stalls: int = 0
+    #: An adaptive variant the last refresh did not list (its lookup failed): the
+    #: old URLs stay in use, but a 403 on them no longer starts a refresh.
+    stale: bool = False
 
 
 class LiveSession:
@@ -407,6 +479,8 @@ class LiveSession:
     async def media(self, key: str) -> str:
         """The media playlist for one variant. Raises KeyError for an unknown key."""
         variant = self.variants[key]
+        if variant.upstream.adaptive:
+            return await self._adaptive_media(variant)
         self.touch()
         async with variant.lock:
             now = self._clock()
@@ -453,6 +527,29 @@ class LiveSession:
             variant.rendered = self._render(variant)
             variant.fetched_at = now
             return variant.rendered
+
+    def _timeline(self) -> _Variant:
+        """The HLS video variant whose segments the adaptive variants list."""
+        return max(
+            (
+                v
+                for v in self.variants.values()
+                if not v.upstream.audio and not v.upstream.adaptive
+            ),
+            key=lambda v: v.upstream.info.height or 0,
+        )
+
+    async def _adaptive_media(self, variant: _Variant) -> str:
+        """An adaptive variant's playlist: the HLS ladder's segments, which YouTube
+        numbers and times alike, served from this variant's own stream."""
+        timeline = self._timeline()
+        await self.media(timeline.upstream.info.key)
+        # Each viewer asks every few seconds; render again only when the
+        # timeline did (a day-long playlist takes tens of milliseconds).
+        if variant.rendered is None or variant.fetched_at != timeline.fetched_at:
+            variant.rendered = self._render(variant, timeline)
+            variant.fetched_at = timeline.fetched_at
+        return variant.rendered
 
     async def _fetch_playlist(self, variant: _Variant) -> hls.MediaPlaylist | None:
         """Fetch and parse the upstream playlist; None once the broadcast ended."""
@@ -528,15 +625,17 @@ class LiveSession:
         ):
             self._spawn(self.reresolve(reason="URLs expiring"))
 
-    def _render(self, variant: _Variant) -> str:
-        target = variant.target_duration or 5.0
-        head = variant.head_sq
+    def _render(self, variant: _Variant, timeline: _Variant | None = None) -> str:
+        """``variant``'s playlist, listing ``timeline``'s segments (default: its own)."""
+        source = timeline or variant
+        target = source.target_duration or 5.0
+        head = source.head_sq
         entries: list[tuple[int, float]] = []
         if head is not None:
             floor = (
                 min(self.start_floor, head) if self.start_floor is not None else None
             )
-            if self.template_ok and self.dvr_floor is not None and variant.template:
+            if self.template_ok and self.dvr_floor is not None and source.template:
                 window = self._window_segments(target)
                 if floor is None or head - floor > window + _WINDOW_SLACK_SEGMENTS:
                     floor = max(floor or 0, head - window)
@@ -544,21 +643,22 @@ class LiveSession:
                 entries = [
                     (
                         sq,
-                        variant.known[sq].segment.duration
-                        if sq in variant.known
+                        source.known[sq].segment.duration
+                        if sq in source.known
                         else target,
                     )
                     for sq in range(start, head + 1)
                 ]
             else:
                 sq = head
-                while sq in variant.known and (floor is None or sq >= floor):
-                    entries.append((sq, variant.known[sq].segment.duration))
+                while sq in source.known and (floor is None or sq >= floor):
+                    entries.append((sq, source.known[sq].segment.duration))
                     sq -= 1
                 entries.reverse()
         if entries:
             self.start_floor = max(self.start_floor or 0, entries[0][0])
-        ext = "aac" if variant.upstream.audio else "ts"
+        upstream = variant.upstream
+        ext = "aac" if upstream.audio else "webm" if upstream.adaptive else "ts"
         return hls.render_media(
             entries,
             segment_uri=f"../seg/{variant.upstream.info.key}/{{sq}}.{ext}",
@@ -570,6 +670,9 @@ class LiveSession:
     # --- segments ----------------------------------------------------------
 
     def _segment_url(self, variant: _Variant, sq: int) -> str | None:
+        if variant.upstream.adaptive:
+            # Appended as is: the query is signed.
+            return f"{variant.upstream.url}&sq={sq}"
         known = variant.known.get(sq)
         if known is not None and known.generation == self.generation:
             return known.segment.uri
@@ -590,17 +693,23 @@ class LiveSession:
                 raise LiveSegmentMissing(f"segment {sq} is not available")
             resp = await self._fetch(url, variant.upstream.headers, True)
             status = resp.status_code
+            if status == 204:
+                # An adaptive stream answers past its head with no content.
+                await resp.aclose()
+                raise LiveSegmentMissing(f"segment {sq} is not available yet")
             if status < 400:
                 return resp
             await resp.aclose()
             if (
                 status in (401, 403)
                 and attempt == 0
+                and not variant.stale
                 and await self.reresolve(reason=f"segment {status}")
             ):
                 # Segment URLs (and the template) come from the playlist, so
                 # read it again with the fresh playlist URL before retrying.
-                await self._refresh_playlist(variant)
+                if not variant.upstream.adaptive:
+                    await self._refresh_playlist(variant)
                 continue
             if status in (404, 410):
                 if (
@@ -670,6 +779,9 @@ class LiveSession:
                 )
                 return True
             self.generation += 1
+            for key, variant in self.variants.items():
+                if variant.upstream.adaptive:
+                    variant.stale = key not in fresh
             for key, upstream in fresh.items():
                 existing = self.variants.get(key)
                 if existing is None:
