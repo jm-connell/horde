@@ -496,7 +496,9 @@ class DownloadRun:
     def _download(self, ydl_opts: dict[str, Any]) -> None:
         import yt_dlp
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        # A copy: yt-dlp writes its defaults into the dict it is given, and a
+        # retry starts again from these options (clip range, audio track).
+        with yt_dlp.YoutubeDL(dict(ydl_opts)) as ydl:
             self._members_only_check()
             self._register_outputs(ydl)
             progress_store[self.spec.job_id] = {
@@ -543,7 +545,7 @@ class DownloadRun:
         if should_retry_with_cookies(
             ydl_opts, exc, logger_members_only=self.ytdlp_logger.members_only
         ):
-            self._retry_with_cookies(exc)
+            self._retry_with_cookies(exc, ydl_opts)
         elif self.ytdlp_logger.members_only or is_members_only_error(exc):
             raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED) from exc
         elif not is_recoverable_download_error(exc):
@@ -558,7 +560,7 @@ class DownloadRun:
             if self.final_path is None:
                 raise exc
 
-    def _retry_with_cookies(self, exc: Exception) -> None:
+    def _retry_with_cookies(self, exc: Exception, ydl_opts: dict[str, Any]) -> None:
         """Run the download again once with cookies, after an age/members gate."""
         import yt_dlp
 
@@ -567,8 +569,7 @@ class DownloadRun:
         remember_cookie_required(url)
         self.ytdlp_logger.members_only = False
         logger.info("Retrying download with cookies after age/members gate: %s", url)
-        cookie_opts = apply_cookie_opts({**self.base_opts, "format": self.fmt})
-        with yt_dlp.YoutubeDL(cookie_opts) as ydl_auth:
+        with yt_dlp.YoutubeDL(apply_cookie_opts(ydl_opts)) as ydl_auth:
             self._register_outputs(ydl_auth)
             downloaded = ydl_auth.extract_info(url, download=True)
             if self.ytdlp_logger.members_only:

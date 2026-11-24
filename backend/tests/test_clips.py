@@ -12,7 +12,7 @@ from sqlmodel import Session, select
 from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
 from app.models import DownloadJob, JobStatus, Video
-from app.services import url_safety
+from app.services import url_safety, ytdlp_common
 from app.services.downloads import clips
 from app.services.downloads import jobs as download_jobs
 from app.services.live import sessions as live_sessions
@@ -190,6 +190,28 @@ def test_a_finished_stream_clip_becomes_its_own_video(init_db, fake, add_video):
     # Only the range was asked of yt-dlp.
     (download,) = fake.downloads
     assert "download_ranges" in download["opts"]
+
+
+def test_a_clip_retried_with_cookies_keeps_its_range(
+    init_db, fake, monkeypatch, add_video, tmp_path
+):
+    cookies = tmp_path / "cookies.txt"
+    cookies.write_text("# Netscape HTTP Cookie File\n")
+    monkeypatch.setattr(ytdlp_common, "YTDLP_COOKIE_FILE", cookies)
+    monkeypatch.setattr(ytdlp_common, "_cookie_required_until", {})
+    add_video(source_url=URL, file_path=f"Chan/2024/Stream [{YT}].mp4")
+    fake.add(URL, make_info(YT, "Stream", live_status="was_live"))
+
+    def age_gate_once(_path, _info):
+        if len(fake.downloads) == 1:
+            raise RuntimeError("Sign in to confirm your age")
+
+    fake.before_merge = age_gate_once
+    run_job_inline(_add_clip_job(init_db, 60, 120))
+
+    first, second = (d["opts"] for d in fake.downloads)
+    assert second["cookiefile"] == str(cookies)
+    assert "download_ranges" in first and "download_ranges" in second
 
 
 def test_a_live_clip_is_cut_from_the_broadcast(init_db, fake, monkeypatch):
