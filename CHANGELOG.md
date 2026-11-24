@@ -7,6 +7,8 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-11-24
+
 ### Added
 
 - **Streams start sooner.** Rest the mouse on a video that isn't
@@ -27,6 +29,17 @@ All notable changes to Horde are documented here. The format follows
   started as a non-root user (`user:` in Compose, `docker run --user`),
   as TrueNAS Apps does: Horde then runs as that user and `PUID`/`PGID`
   do not apply. The default root start with `PUID`/`PGID` is unchanged.
+- **Live chat on live streams.** A broadcast that is live now shows its
+  live chat beside the video, where a past stream's chat replay shows. It
+  follows the moment you are watching: scrub back and it shows the chat
+  from then, deleted messages drop out, and a note says when chat from that
+  far back is not held. Settings → Playback → **Show live chat** (formerly
+  **Show live chat on past streams**) covers both.
+- **Live streams at 1440p and 2160p.** When YouTube has a broadcast in
+  higher quality than 1080p, the quality menu now offers it. This needs a
+  JavaScript runtime for yt-dlp: the Docker image ships Deno and sets
+  `YTDLP_JS_RUNTIME`; other installs set it themselves (see
+  `.env.example`), or live streams stay at 1080p as before.
 
 ### Changed
 
@@ -87,6 +100,17 @@ All notable changes to Horde are documented here. The format follows
   and feature list introduce Ask earlier and say plainly that Horde can be
   restyled without coding: through Settings, and by asking Ask to write the
   custom CSS.
+- **Rewind a live stream to its start.** The seek bar of a long broadcast
+  reached back only about 30 minutes; it now reaches back to the start of
+  the broadcast, up to 24 hours (`HORDE_LIVE_DVR_HOURS`).
+- **One list per choice in Settings → Appearance.** The **New** section
+  added in 1.4.1 is merged into the existing pickers: one alphabetical list
+  of fourteen backgrounds, each showing only the sliders it uses (plus one
+  of its own, such as rain angle or snowfall wind), and one list of
+  thirteen loading animations. Options that were dropped (some backgrounds
+  and loaders, the Stretch nav indicator, the Tilt and Zoom hover motions)
+  switch to a kept one, in saved themes too. Rain no longer strobes, and
+  links at the top of the tab jump to each section.
 
 ### Fixed
 
@@ -156,6 +180,24 @@ All notable changes to Horde are documented here. The format follows
   times and asked for seconds, and often answered "119" for 1:19, which put
   the chapter 40 seconds late (and minutes late further into a video). Start
   times are now read as the clock times they are.
+- **Made-for-kids videos failing with "This video is not available".**
+  YouTube plays them only to clients that run its player JavaScript, so
+  Horde now retries such a video that way for watching, previews and
+  downloads. It needs `YTDLP_JS_RUNTIME` (set in the Docker image). A
+  stream of one can take up to a minute to start while YouTube holds its
+  media back for the length of its ads.
+- **A clip downloaded as the whole video** when it was retried with cookies
+  after an age or members-only gate, which also lost the chosen audio
+  track. The retry now keeps both.
+- **Live stream sound drifting ahead of the picture**, by about a second
+  every 10 minutes until a seek or a reload, and sound and picture staying
+  apart after the broadcaster's encoder reconnected. Both now stay in sync.
+- **A stream dropping quality while another window had focus.** With a
+  game fullscreen on another monitor the browser drops frames, and Horde
+  took that as the device not keeping up and lowered the quality for a day.
+  Dropped frames no longer count while Horde's window is not focused.
+- **Picking a higher quality after Horde had lowered it** played the lowered
+  quality again. The pick now plays what you chose.
 
 ## [1.4.1] - 2026-11-20
 
@@ -1511,7 +1553,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.4.1...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.4.2...main
+[1.4.2]: https://github.com/jm-connell/horde/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/jm-connell/horde/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/jm-connell/horde/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/jm-connell/horde/compare/v1.2.2...v1.3.1
