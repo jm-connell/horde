@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import secrets
+import struct
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -395,6 +396,132 @@ def _probe_mp4_ranges(
     if last_err is not None:
         raise RuntimeError(f"MP4 range probe failed: {last_err}") from last_err
     raise RuntimeError("MP4 stream has no sidx index (cannot build DASH)")
+
+
+_EBML_SEGMENT = 0x18538067
+_EBML_INFO = 0x1549A966
+_EBML_CUES = 0x1C53BB6B
+_EBML_CLUSTER = 0x1F43B675
+_EBML_TIMECODE_SCALE = 0x2AD7B1
+_EBML_DURATION = 0x4489
+
+
+def _ebml_header(data: bytes, pos: int) -> tuple[int, int | None, int] | None:
+    """Read an element header at ``pos``.
+
+    Returns (id, size, header_len); size is None when the size is "unknown".
+    None when the window ends inside the header or the bytes are not EBML.
+    """
+    if pos >= len(data):
+        return None
+    first = data[pos]
+    id_len = 9 - first.bit_length() if first else 9
+    if id_len > 4 or pos + id_len >= len(data):
+        return None
+    elem_id = int.from_bytes(data[pos : pos + id_len], "big")
+    size_pos = pos + id_len
+    first = data[size_pos]
+    size_len = 9 - first.bit_length() if first else 9
+    if size_len > 8 or size_pos + size_len > len(data):
+        return None
+    raw = int.from_bytes(data[size_pos : size_pos + size_len], "big")
+    value = raw & ((1 << (7 * size_len)) - 1)
+    unknown = value == (1 << (7 * size_len)) - 1
+    return elem_id, (None if unknown else value), id_len + size_len
+
+
+def _webm_info_duration(body: bytes) -> float | None:
+    """Duration in seconds from an Info element body, None when absent."""
+    scale = 1_000_000
+    duration: float | None = None
+    pos = 0
+    while (head := _ebml_header(body, pos)) is not None:
+        elem_id, size, head_len = head
+        if size is None:
+            break
+        raw = body[pos + head_len : pos + head_len + size]
+        if elem_id == _EBML_TIMECODE_SCALE:
+            scale = int.from_bytes(raw, "big")
+        elif elem_id == _EBML_DURATION and size in (4, 8):
+            duration = struct.unpack(">f" if size == 4 else ">d", raw)[0]
+        pos += head_len + size
+    if duration is None:
+        return None
+    return duration * scale / 1e9
+
+
+def _find_webm_ranges(data: bytes) -> tuple[str, str, float | None] | None:
+    """Locate the init and index (Cues) byte ranges in a WebM header window.
+
+    Returns (init_range, index_range, duration_sec), or None when ``data`` ends
+    before the Cues header (ask for a larger window). Raises RuntimeError when
+    a Cluster comes first, i.e. the file has no Cues up front.
+    """
+    pos = 0
+    in_segment = False
+    duration: float | None = None
+    while (head := _ebml_header(data, pos)) is not None:
+        elem_id, size, head_len = head
+        if elem_id == _EBML_CLUSTER:
+            raise RuntimeError("WebM stream has no Cues index (cannot build DASH)")
+        if elem_id == _EBML_CUES:
+            if size is None or pos <= 0:
+                raise RuntimeError("Invalid Cues element in WebM probe")
+            return f"0-{pos - 1}", f"{pos}-{pos + head_len + size - 1}", duration
+        if elem_id == _EBML_SEGMENT and not in_segment:
+            in_segment = True
+            pos += head_len
+            continue
+        if size is None:
+            raise RuntimeError("WebM element of unknown size before Cues")
+        end = pos + head_len + size
+        if elem_id == _EBML_INFO and end <= len(data):
+            duration = _webm_info_duration(data[pos + head_len : end])
+        pos = end
+    return None
+
+
+def _probe_webm_ranges(
+    direct_url: str, headers: dict[str, str]
+) -> tuple[str, str, dict[str, Any]]:
+    """Probe a WebM file for initRange and indexRange (the Cues element).
+
+    Same return shape as _probe_mp4_ranges; there is no sidx, so the info has
+    no timescale or segment boundaries.
+    """
+    req_headers = dict(headers)
+    last_err: Exception | None = None
+    for nbytes in _PREVIEW_PROBE_SIZES:
+        req_headers["Range"] = f"bytes=0-{nbytes - 1}"
+        try:
+            data = fetch_bytes(
+                direct_url, max_bytes=nbytes, timeout=60.0, headers=req_headers
+            ).body
+        except UnsafeUrlError:
+            raise
+        except Exception as exc:
+            logger.debug("preview probe range request failed", exc_info=True)
+            last_err = exc
+            continue
+
+        found = _find_webm_ranges(data)
+        if found is None:
+            if len(data) < nbytes:
+                break
+            continue
+
+        init_range, index_range, duration = found
+        info: dict[str, Any] = {
+            "timescale": 0,
+            "earliest_presentation_time": 0,
+            "duration_sec": duration,
+            "boundaries": [],
+        }
+        return init_range, index_range, info
+
+    if last_err is not None:
+        raise RuntimeError(f"WebM range probe failed: {last_err}") from last_err
+    raise RuntimeError("WebM stream has no Cues index (cannot build DASH)")
 
 
 def _bandwidth_bps(fmt: dict[str, Any], *, kind: str) -> int:
