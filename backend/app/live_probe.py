@@ -45,6 +45,7 @@ class _Counter(logging.Handler):
 
 
 async def _run(url: str, minutes: float, variant_pick: str | None) -> int:
+    from app.config import LIVE_DVR_WINDOW_SEC
     from app.services import stream_preview
     from app.services.live.sessions import (
         LiveNotAvailable,
@@ -81,7 +82,11 @@ async def _run(url: str, minutes: float, variant_pick: str | None) -> int:
     try:
         info = await resolve(f"https://www.youtube.com/watch?v={video_id}", False)
         session = LiveSession.from_info(
-            video_id, info, fetcher=fetch, resolver=resolve, dvr_window_sec=4 * 3600
+            video_id,
+            info,
+            fetcher=fetch,
+            resolver=resolve,
+            dvr_window_sec=LIVE_DVR_WINDOW_SEC,
         )
     except LiveNotAvailable as exc:
         print(f"Not playable as live: {exc}")

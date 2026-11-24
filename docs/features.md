@@ -120,7 +120,7 @@ You can play a remote YouTube URL in the same shell (`/watch?url=…`) before co
 
 ## Live streams
 
-A small **Live** list in the sidebar shows which subscribed channels are live, with title and game. A channel's page leads with its current broadcast, and its **Live** tab lists past streams to watch or download (with a storage warning for streams over two hours). Live streams play through a server-side HLS proxy that refreshes YouTube's URLs on its own, and you can scrub back up to 4 hours by default. Toggle it in **Settings → Library → Show live streams**. Details: [Live streams](design/live-streams.md).
+A small **Live** list in the sidebar shows which subscribed channels are live, with title and game. A channel's page leads with its current broadcast, and its **Live** tab lists past streams to watch or download (with a storage warning for streams over two hours). Live streams play through a server-side HLS proxy that refreshes YouTube's URLs on its own, and you can scrub back to the start of the broadcast (up to 24 hours by default). Broadcasts that offer 1440p or 4K play at those qualities too (VP9; the Docker image includes the Deno runtime this needs). Toggle it in **Settings → Library → Show live streams**. Details: [Live streams](design/live-streams.md).
 
 ## Playlists
 

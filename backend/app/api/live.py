@@ -228,16 +228,20 @@ async def _session(request: Request, video_id: str) -> LiveSession:
         ) from exc
 
 
-def _playlist(request: Request, body: str) -> Response:
+async def _playlist(request: Request, body: str) -> Response:
     """A playlist, gzipped when the client accepts it.
 
     A DVR playlist lists thousands of segments and is re-read every few
-    seconds; its repetitive lines shrink about tenfold.
+    seconds; its repetitive lines shrink about tenfold. A long one is
+    compressed off the event loop.
     """
     headers = {"Cache-Control": "no-store", "Vary": "Accept-Encoding"}
     data = body.encode()
     if len(data) > 2048 and "gzip" in request.headers.get("accept-encoding", ""):
-        data = gzip.compress(data, compresslevel=5)
+        if len(data) > 64 * 1024:
+            data = await run_in_threadpool(gzip.compress, data, 5)
+        else:
+            data = gzip.compress(data, compresslevel=5)
         headers["Content-Encoding"] = "gzip"
     return Response(content=data, media_type=_PLAYLIST_TYPE, headers=headers)
 
@@ -245,7 +249,7 @@ def _playlist(request: Request, body: str) -> Response:
 @router.get("/{video_id}/master.m3u8", response_class=RAW, responses=HLS_PLAYLIST)
 async def live_master(request: Request, video_id: str = VideoId):
     session = await _session(request, video_id)
-    return _playlist(request, session.master())
+    return await _playlist(request, session.master())
 
 
 @router.get("/{video_id}/v/{key}.m3u8", response_class=RAW, responses=HLS_PLAYLIST)
@@ -254,7 +258,7 @@ async def live_media_playlist(
 ):
     session = await _session(request, video_id)
     try:
-        return _playlist(request, await session.media(key))
+        return await _playlist(request, await session.media(key))
     except KeyError as exc:
         raise CodedHTTPException(404, "Unknown stream variant", "not_found") from exc
     except (LiveUpstreamError, httpx.HTTPError) as exc:

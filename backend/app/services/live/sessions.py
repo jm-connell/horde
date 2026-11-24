@@ -56,8 +56,9 @@ _FIRST_PROBE_SEC = 10.0
 #: A full DVR window slides in steps of this many segments, not one per
 #: playlist, so variants rendered a segment apart still share their start.
 _WINDOW_SLACK_SEGMENTS = 30
-#: Low-latency broadcasts (1-2 s segments) would make a 4 hour playlist huge.
-_MAX_WINDOW_SEGMENTS = 7200
+#: A day of 5 s segments (about 40 KiB of gzipped playlist). Low-latency
+#: broadcasts (1-2 s segments) get correspondingly less time.
+_MAX_WINDOW_SEGMENTS = 17_280
 #: An open that just failed is answered from memory for this long, so a player
 #: retrying a dead stream does not run yt-dlp on every retry.
 _OPEN_FAILURE_TTL_SEC = 15.0
@@ -595,6 +596,10 @@ class LiveSession:
                 self.ended_at_ms = int(time.time() * 1000)
         if variant.head_sq is not None:
             floor = variant.head_sq - self._window_segments(variant.target_duration) - 8
+            if self.template_ok and playlist.segments:
+                # Older segments come through the template: keep only this
+                # playlist's URLs (about 1 KB each; the window holds a day).
+                floor = playlist.segments[0].sq
             for sq in [sq for sq in variant.known if sq < floor]:
                 del variant.known[sq]
         if not variant.advanced_at:

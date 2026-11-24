@@ -23,6 +23,10 @@ from urllib.parse import urljoin
 
 _SQ_PATH_RE = re.compile(r"/sq/(\d+)(?=/|$)")
 _SQ_QUERY_RE = re.compile(r"([?&])sq=(\d+)(?=&|$)")
+#: ``govp/lmt=N`` (video) and ``goap/lmt=N`` (audio): a value YouTube changes
+#: every so often during a broadcast. An earlier segment asked for with the
+#: current one is a 404; without it, any segment the broadcast keeps is served.
+_GOVP_PATH_RE = re.compile(r"/go[av]p/[^/]*(?=/|$)")
 SQ_PLACEHOLDER = "{sq}"
 
 
@@ -63,9 +67,9 @@ def segment_template(uri: str) -> str | None:
     """``uri`` with its sequence number replaced by ``{sq}`` (None if it has none).
 
     Literal braces elsewhere in the URL are escaped so ``str.format`` only fills
-    the sequence number.
+    the sequence number. The rotating ``govp``/``goap`` value is left out.
     """
-    escaped = uri.replace("{", "{{").replace("}", "}}")
+    escaped = _GOVP_PATH_RE.sub("", uri.replace("{", "{{").replace("}", "}}"))
     if _SQ_PATH_RE.search(escaped):
         return _SQ_PATH_RE.sub("/sq/" + SQ_PLACEHOLDER, escaped, count=1)
     if _SQ_QUERY_RE.search(escaped):

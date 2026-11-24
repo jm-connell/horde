@@ -23,7 +23,7 @@ Horde is configured primarily through environment variables. Most values have se
 | `HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC` | `540` (3x the above) | The same wait for background work (catalog indexing, metadata fills), which always queues behind interactive requests. |
 | `HORDE_LIVE_POLL_SEC` | `300` | How often each subscribed channel is checked for a live broadcast (seconds). `0` turns the checks off. See [Live streams](../design/live-streams.md). |
 | `HORDE_LIVE_POLL_SPACING_SEC` | `2` | Pause between two live checks, so a long subscription list never bursts requests at YouTube. |
-| `HORDE_LIVE_DVR_HOURS` | `4` | How far back the player can scrub in a live stream, when YouTube still serves those segments. |
+| `HORDE_LIVE_DVR_HOURS` | `24` | How far back the player can scrub in a live stream: the whole broadcast, up to this many hours (YouTube serves the segments that long and longer). |
 | `HORDE_BACKUP_ENABLED` | `1` | `0` turns the [nightly database backup](backup-restore.md#nightly) off. |
 | `HORDE_BACKUP_HOUR` | `4` | Local hour (0-23) after which the nightly backup is taken. |
 | `HORDE_BACKUP_KEEP` | `7` | How many nightly backups to keep (minimum 1). |

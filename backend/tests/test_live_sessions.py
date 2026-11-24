@@ -882,6 +882,57 @@ def test_vp9_variant_a_refresh_left_out_stops_asking_for_refreshes():
     run(go())
 
 
+class RotatingYouTube(FakeYouTube):
+    """Segment URLs carry ``govp/lmt=N``, which YouTube changes during a
+    broadcast: segments before ``rotated_at`` were made under ``lmt=1``. Asked
+    for with the wrong value a segment is a 404; without one it is served."""
+
+    rotated_at = 900
+
+    def seg_url(self, sq: int, gen: int | None = None) -> str:
+        url = super().seg_url(sq, gen)
+        lmt = 1 if sq < self.rotated_at else 2
+        return url.replace("/file/", f"/govp/lmt%3D{lmt}/file/")
+
+    async def fetch(
+        self, url: str, headers: dict[str, str], stream: bool
+    ) -> httpx.Response:
+        match = re.search(r"/sq/(\d+)/govp/lmt%3D(\d+)/", url)
+        if match:
+            sq, lmt = int(match.group(1)), int(match.group(2))
+            if lmt != (1 if sq < self.rotated_at else 2):
+                self.fetches.append(url)
+                return httpx.Response(404, request=httpx.Request("GET", url))
+        return await super().fetch(url, headers, stream)
+
+
+def test_dvr_reaches_past_the_value_youtube_rotates():
+    async def go():
+        # One hour window = 720 segments back from 1000; YouTube keeps them all.
+        yt, clock = RotatingYouTube(head=1000, window=4), Clock()
+        s = _session(yt, clock, dvr_sec=3600)
+        await s.media("95")
+        assert s.dvr_floor == 1000 - 720
+        resp = await s.segment("95", 300)  # made under the old value
+        assert resp.content == b"seg-300"
+
+    run(go())
+
+
+def test_a_day_of_dvr_lists_every_segment():
+    async def go():
+        # A long event: 20 hours of 5 s segments, all still served.
+        yt, clock = FakeYouTube(head=14_400, window=4), Clock()
+        s = _session(yt, clock, dvr_sec=24 * 3600)
+        await s.media("95")
+        await _drain(s)
+        clock.now += 10
+        sqs = _sqs(await s.media("95"))
+        assert sqs[0] == 0 and sqs[-1] == 14_400
+
+    run(go())
+
+
 def test_vp9_playlist_is_rendered_again_only_when_the_timeline_was():
     async def go():
         yt, clock = TallYouTube(head=1000, window=4), Clock()
@@ -894,3 +945,21 @@ def test_vp9_playlist_is_rendered_again_only_when_the_timeline_was():
 
     run(go())
 
+
+def test_a_long_window_keeps_only_the_current_playlists_urls():
+    async def go():
+        yt, clock = FakeYouTube(head=10_000, window=4), Clock()
+        s = _session(yt, clock, dvr_sec=24 * 3600)
+        await s.media("95")
+        await _drain(s)
+        for _ in range(3):  # the broadcast moves on; each playlist adds URLs
+            yt.head += 4
+            clock.now += 10
+            await s.media("95")
+        sqs = _sqs(await s.media("95"))
+        assert sqs[0] == 0 and sqs[-1] == 10_012
+        assert sorted(s.variants["95"].known) == [10_009, 10_010, 10_011, 10_012]
+        resp = await s.segment("95", 5)  # through the template
+        assert resp.content == b"seg-5"
+
+    run(go())

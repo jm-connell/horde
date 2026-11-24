@@ -160,9 +160,10 @@ LIVE_POLL_SEC: int = max(0, int(os.environ.get("HORDE_LIVE_POLL_SEC", "300")))
 LIVE_POLL_SPACING_SEC: float = max(
     0.0, float(os.environ.get("HORDE_LIVE_POLL_SPACING_SEC", "2"))
 )
-# How far back the player can scrub in a live stream (when YouTube keeps it).
+# How far back the player can scrub in a live stream (when YouTube keeps it):
+# a day covers a whole broadcast of any event.
 LIVE_DVR_WINDOW_SEC: float = 3600 * max(
-    0.0, float(os.environ.get("HORDE_LIVE_DVR_HOURS", "4"))
+    0.0, float(os.environ.get("HORDE_LIVE_DVR_HOURS", "24"))
 )
 
 # YouTube bot checks — bgutil POT sidecar (default in Docker) or cookie fallback.
