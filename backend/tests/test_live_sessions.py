@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import pytest
@@ -741,6 +742,9 @@ def _tall_formats(url_for) -> list[dict[str, Any]]:
     ]
 
 
+TALL_HOST = "rr2.googlevideo.com"
+
+
 class TallYouTube(SplitYouTube):
     """A split ladder plus the VP9 adaptive formats. Such a format has no
     playlist: segment ``n`` is its signed URL plus ``&sq=n``, and a segment
@@ -752,7 +756,7 @@ class TallYouTube(SplitYouTube):
     def tall_url(self, itag: int, gen: int | None = None) -> str:
         g = self.generation if gen is None else gen
         return (
-            f"https://rr2.googlevideo.com/videoplayback/g{g}/itag/{itag}"
+            f"https://{TALL_HOST}/videoplayback/g{g}/itag/{itag}"
             "?expire=1900000000&sparams=expire%2Citag&sig=AB%3D%3D"
         )
 
@@ -765,7 +769,7 @@ class TallYouTube(SplitYouTube):
     async def fetch(
         self, url: str, headers: dict[str, str], stream: bool
     ) -> httpx.Response:
-        if "rr2.googlevideo.com" not in url:
+        if urlparse(url).hostname != TALL_HOST:
             return await super().fetch(url, headers, stream)
         self.fetches.append(url)
         req = httpx.Request("GET", url)
@@ -820,7 +824,7 @@ def test_vp9_playlist_follows_the_hls_timeline():
             ".ts\n", ".webm\n"
         )
         # The VP9 format has no playlist of its own to read.
-        assert not any("rr2.googlevideo.com" in u for u in yt.fetches)
+        assert not any(urlparse(u).hostname == TALL_HOST for u in yt.fetches)
 
     run(go())
 
