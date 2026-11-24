@@ -510,6 +510,38 @@ export function useShakaDashLoad({
   ]);
 }
 
+/**
+ * Play the best track at or below `choice`, with ABR off. Returns the stream's
+ * tracks and the quality picked (null when there are none). The cap an
+ * automatic step-down set goes first: Shaka leaves tracks over it out of
+ * getVariantTracks(), so a pick above it would land on the cap.
+ */
+export function applyQualityPick(p: ShakaPlayer, choice: number) {
+  p.configure({
+    abr: { enabled: false },
+    restrictions: { maxHeight: 8192, maxWidth: 8192 },
+  });
+  const tracks = p.getVariantTracks() ?? [];
+  const qualities = distinctQualities(tracks);
+  const target =
+    qualities.find((q) => q <= choice) ?? qualities[qualities.length - 1];
+  if (target == null) return { tracks, target: null };
+  const candidates = tracks.filter((t) => trackQuality(t) === target);
+  candidates.sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0));
+  if (candidates[0]) {
+    // YouTube 1440/4K is typically AV1-only; honor an explicit pick even
+    // when Auto prefers H.264 for power efficiency.
+    const codec = (candidates[0].videoCodec ?? "").toLowerCase();
+    if (codec.startsWith("av01")) {
+      p.configure({
+        preferredVideo: preferVideoCodecs(["av01", "avc1"]),
+      });
+    }
+    selectQualityTrack(p, candidates[0]);
+  }
+  return { tracks, target };
+}
+
 export function useApplyShakaQuality(
   shakaPlayerRef: MutableRefObject<ShakaPlayer | null>,
   capabilityMaxHeightRef: MutableRefObject<number>,
@@ -528,9 +560,9 @@ export function useApplyShakaQuality(
       if (!p) return;
       setQualityChoice(choice);
       try {
-        const tracks = p.getVariantTracks() ?? [];
-        variantTracksRef.current = tracks;
         if (choice === "auto") {
+          const tracks = p.getVariantTracks() ?? [];
+          variantTracksRef.current = tracks;
           const cap = capabilityMaxHeightRef.current;
           p.configure({
             abr: { enabled: true },
@@ -538,28 +570,11 @@ export function useApplyShakaQuality(
           });
           return;
         }
-        p.configure({
-          abr: { enabled: false },
-          restrictions: { maxHeight: 8192, maxWidth: 8192 },
-        });
-        const qualities = distinctQualities(tracks);
-        const target =
-          qualities.find((q) => q <= choice) ?? qualities[qualities.length - 1];
-        if (target == null) return;
-        const candidates = tracks.filter((t) => trackQuality(t) === target);
-        candidates.sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0));
-        if (candidates[0]) {
-          // YouTube 1440/4K is typically AV1-only; honor an explicit pick even
-          // when Auto prefers H.264 for power efficiency.
-          const codec = (candidates[0].videoCodec ?? "").toLowerCase();
-          if (codec.startsWith("av01")) {
-            p.configure({
-              preferredVideo: preferVideoCodecs(["av01", "avc1"]),
-            });
-          }
-          selectQualityTrack(p, candidates[0]);
+        const picked = applyQualityPick(p, choice);
+        variantTracksRef.current = picked.tracks;
+        if (picked.target != null && picked.target !== choice) {
+          setQualityChoice(picked.target);
         }
-        if (target !== choice) setQualityChoice(target);
       } catch (err) {
         console.warn("[stream-quality] apply failed", err);
       }

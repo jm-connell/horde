@@ -3,7 +3,11 @@ import type {
   ShakaPlayer,
   ShakaVariantTrack,
 } from "shaka-player/dist/shaka-player.dash.js";
-import { LIVE_MANIFEST_CONFIG, selectQualityTrack } from "./useShakaDash";
+import {
+  LIVE_MANIFEST_CONFIG,
+  applyQualityPick,
+  selectQualityTrack,
+} from "./useShakaDash";
 
 describe("live stream config", () => {
   it("appends live segments back to back (HLS sequence mode)", () => {
@@ -39,5 +43,35 @@ describe("selectQualityTrack", () => {
     const { player, calls } = fakePlayer(true);
     selectQualityTrack(player, track);
     expect(calls).toEqual([[track, false]]);
+  });
+});
+
+describe("applyQualityPick", () => {
+  it("lifts an automatic step-down's cap before choosing the track", () => {
+    // Shaka leaves tracks over the restrictions out of getVariantTracks(),
+    // so reading them under the cap made every pick above it land on it.
+    let maxHeight = 480;
+    const all = [2160, 1080, 480].map((height, id) => ({
+      id,
+      height,
+      width: (height * 16) / 9,
+      bandwidth: height * 1000,
+      videoCodec: "avc1.64002A",
+    })) as ShakaVariantTrack[];
+    const picked: number[] = [];
+    const player = {
+      isLive: () => true,
+      configure: (config: { restrictions?: { maxHeight?: number } }) => {
+        if (config.restrictions?.maxHeight) {
+          maxHeight = config.restrictions.maxHeight;
+        }
+      },
+      getVariantTracks: () => all.filter((t) => (t.height ?? 0) <= maxHeight),
+      selectVariantTrack: (t: ShakaVariantTrack) => picked.push(t.height ?? 0),
+    } as unknown as ShakaPlayer;
+    const { target, tracks } = applyQualityPick(player, 2160);
+    expect(target).toBe(2160);
+    expect(picked).toEqual([2160]);
+    expect(tracks).toHaveLength(3);
   });
 });
