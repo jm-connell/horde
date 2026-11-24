@@ -30,6 +30,14 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # ESLint 10 cannot install yet: eslint-plugin-jsx-a11y (6.10.2) declares a
+    # peer range that stops at ESLint 9, so npm ci fails with ERESOLVE. Drop
+    # this once jsx-a11y ships ESLint 10 support, then bump both together.
+    ignore:
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
     groups:
       npm-minor-patch:
         update-types: [minor, patch]

@@ -91,3 +91,8 @@ package pins to a vulnerable range. Today it holds one: `minimatch` 11 for
 lint-time only, nothing ships in the image). Remove it once a
 `typescript-eslint` release depends on `minimatch` 11.0.1 or newer, then run
 `npm install` and `npm audit`.
+
+Dependabot is told to ignore major updates of `eslint` and `@eslint/js`:
+`eslint-plugin-jsx-a11y` 6.10.2 accepts ESLint 9 at most, so an ESLint 10 bump
+fails `npm ci`. Remove that `ignore` from `.github/dependabot.yml` once
+jsx-a11y supports ESLint 10, then bump `eslint` and `@eslint/js` together.
