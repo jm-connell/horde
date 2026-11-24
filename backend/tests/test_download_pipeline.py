@@ -138,6 +138,21 @@ def test_cookie_gate_retries_once_with_cookies(init_db, fake, monkeypatch, tmp_p
     assert ytdlp_common.url_cookie_required(URL)
 
 
+def test_a_video_only_the_js_client_opens_downloads_with_it(init_db, fake, monkeypatch):
+    # Made-for-kids videos: the JS-less clients answer "not available", which
+    # yt-dlp (told to ignore errors) only logs.
+    monkeypatch.setattr(ytdlp_common, "YTDLP_JS_RUNTIME", "deno:/opt/deno/deno")
+    fake.unavailable_without_js = True
+    job_id = _add_job(init_db)
+    run_job_inline(job_id)
+
+    assert _job(init_db, job_id).status == JobStatus.completed
+    (download,) = fake.downloads
+    assert download["opts"]["js_runtimes"] == {"deno": {"path": "/opt/deno/deno"}}
+    youtube = download["opts"]["extractor_args"]["youtube"]
+    assert youtube["player_client"] == ["tv_samsung"]
+
+
 def test_failed_format_falls_back_to_the_next_selector(init_db, fake):
     from app.services.ytdlp_formats import format_chain
 

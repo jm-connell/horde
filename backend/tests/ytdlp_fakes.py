@@ -75,6 +75,9 @@ class FakeYtdlp:
         # True writes one audio-only ``.m4a`` and no video, the way yt-dlp
         # downloads an audio format ("Audio" presets, podcasts).
         self.audio_only = False
+        # True answers like YouTube does for a made-for-kids video unless the
+        # JS client asks: yt-dlp (``ignoreerrors``) logs the error, returns None.
+        self.unavailable_without_js = False
 
     def add(self, url: str, info: dict[str, Any]) -> dict[str, Any]:
         self.infos[url] = info
@@ -92,6 +95,9 @@ class FakeYtdlp:
             def __init__(self, opts: dict[str, Any] | None = None, *_a, **_k) -> None:
                 self.opts = dict(opts or {})
                 self.params = self.opts
+                if opts is not None:
+                    # Like yt-dlp, which writes its defaults into the dict it is given.
+                    opts.setdefault("js_runtimes", {"deno": {}})
                 self._real = RealYoutubeDL(
                     {
                         "quiet": True,
@@ -114,6 +120,17 @@ class FakeYtdlp:
 
             def extract_info(self, url: str, download: bool = True, **_k: Any):
                 info = dict(fake.infos[url])
+                youtube = (self.opts.get("extractor_args") or {}).get("youtube") or {}
+                if fake.unavailable_without_js and youtube.get("player_client") != [
+                    "tv_samsung"
+                ]:
+                    message = (
+                        f"ERROR: [youtube] {info['id']}: This video is not available"
+                    )
+                    if not self.opts.get("ignoreerrors"):
+                        raise RuntimeError(message)
+                    self.opts["logger"].error(message)
+                    return None
                 if not download:
                     return info
                 path = Path(self._real.prepare_filename(info))

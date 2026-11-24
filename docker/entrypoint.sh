@@ -127,10 +127,12 @@ update_ytdlp() {
   log "YTDLP_AUTO_UPDATE=1: checking for a newer yt-dlp (baked: ${baked:-unknown}, ${limit}s limit)"
   # The limit is part of the start-up time `update.sh` waits for, so it stays
   # well under HORDE_HEALTH_TIMEOUT_SEC. Wheels only: never run a build script.
+  # yt-dlp-ejs (the challenge-solver scripts) moves with it: a newer yt-dlp
+  # refuses older scripts, which would cost live streams their 1440p/2160p.
   if as_app env HOME=/tmp timeout "$limit" \
        pip install --quiet --disable-pip-version-check --upgrade --no-deps \
        --only-binary=:all: --retries 1 --timeout 15 \
-       --target "$staging" yt-dlp; then
+       --target "$staging" yt-dlp yt-dlp-ejs; then
     fresh="$(ytdlp_version "$staging")"
     if [[ -n "$baked" && -n "$fresh" ]] && version_lt "$fresh" "$baked"; then
       log "ignoring yt-dlp $fresh from PyPI: older than the baked $baked"

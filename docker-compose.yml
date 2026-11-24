@@ -77,6 +77,7 @@ services:
       - YTDLP_POT_BASE_URL=${YTDLP_POT_BASE_URL:-http://bgutil-pot:4416}
       - YTDLP_COOKIE_FILE=${YTDLP_COOKIE_FILE:-}
       - YTDLP_COOKIES_FROM_BROWSER=${YTDLP_COOKIES_FROM_BROWSER:-}
+      - YTDLP_JS_RUNTIME=${YTDLP_JS_RUNTIME:-deno:/opt/deno/deno}
       # Legacy: the AI provider URL now lives in Settings → AI. Still read when
       # that is empty, and when upgrading an install that set it.
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
@@ -115,7 +116,7 @@ services:
       # Live streams of followed channels (docs/design/live-streams.md).
       - HORDE_LIVE_POLL_SEC=${HORDE_LIVE_POLL_SEC:-300}
       - HORDE_LIVE_POLL_SPACING_SEC=${HORDE_LIVE_POLL_SPACING_SEC:-2}
-      - HORDE_LIVE_DVR_HOURS=${HORDE_LIVE_DVR_HOURS:-4}
+      - HORDE_LIVE_DVR_HOURS=${HORDE_LIVE_DVR_HOURS:-24}
       # Logging and nightly database backups (docs/ops/logging.md, backup-restore.md).
       - HORDE_LOG_LEVEL=${HORDE_LOG_LEVEL:-INFO}
       - HORDE_LOG_FORMAT=${HORDE_LOG_FORMAT:-text}

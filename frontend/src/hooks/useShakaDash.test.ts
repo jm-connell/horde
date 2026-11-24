@@ -3,7 +3,12 @@ import type {
   ShakaPlayer,
   ShakaVariantTrack,
 } from "shaka-player/dist/shaka-player.dash.js";
-import { LIVE_MANIFEST_CONFIG, selectQualityTrack } from "./useShakaDash";
+import {
+  LIVE_MANIFEST_CONFIG,
+  applyQualityPick,
+  selectQualityTrack,
+  videoCodecConfig,
+} from "./useShakaDash";
 
 describe("live stream config", () => {
   it("appends live segments back to back (HLS sequence mode)", () => {
@@ -12,6 +17,19 @@ describe("live stream config", () => {
     // The few-ms gaps that leaves make Chrome's audio clock drift ahead of
     // the picture, about 1 s every 10 minutes, until a seek.
     expect(LIVE_MANIFEST_CONFIG.hls.sequenceMode).toBe(true);
+  });
+
+  it("keeps every codec of a live ladder (1440p and 2160p are VP9 only)", () => {
+    // Preferring avc1 would make Shaka drop the VP9 variants.
+    expect(videoCodecConfig(true, false)).toEqual({});
+    expect(videoCodecConfig(true, true)).toEqual({});
+  });
+
+  it("prefers AV1 then H.264 for a video, or H.264 alone", () => {
+    const codecs = (av1: boolean) =>
+      videoCodecConfig(false, av1).preferredVideo?.map((p) => p.codec);
+    expect(codecs(true)).toEqual(["av01", "avc1"]);
+    expect(codecs(false)).toEqual(["avc1"]);
   });
 });
 
@@ -39,5 +57,35 @@ describe("selectQualityTrack", () => {
     const { player, calls } = fakePlayer(true);
     selectQualityTrack(player, track);
     expect(calls).toEqual([[track, false]]);
+  });
+});
+
+describe("applyQualityPick", () => {
+  it("lifts an automatic step-down's cap before choosing the track", () => {
+    // Shaka leaves tracks over the restrictions out of getVariantTracks(),
+    // so reading them under the cap made every pick above it land on it.
+    let maxHeight = 480;
+    const all = [2160, 1080, 480].map((height, id) => ({
+      id,
+      height,
+      width: (height * 16) / 9,
+      bandwidth: height * 1000,
+      videoCodec: "avc1.64002A",
+    })) as ShakaVariantTrack[];
+    const picked: number[] = [];
+    const player = {
+      isLive: () => true,
+      configure: (config: { restrictions?: { maxHeight?: number } }) => {
+        if (config.restrictions?.maxHeight) {
+          maxHeight = config.restrictions.maxHeight;
+        }
+      },
+      getVariantTracks: () => all.filter((t) => (t.height ?? 0) <= maxHeight),
+      selectVariantTrack: (t: ShakaVariantTrack) => picked.push(t.height ?? 0),
+    } as unknown as ShakaPlayer;
+    const { target, tracks } = applyQualityPick(player, 2160);
+    expect(target).toBe(2160);
+    expect(picked).toEqual([2160]);
+    expect(tracks).toHaveLength(3);
   });
 });

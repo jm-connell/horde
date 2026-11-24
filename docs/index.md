@@ -103,7 +103,7 @@ Subscribe to channels and their new uploads arrive on their own. Keep everything
 
 <div class="horde-feature" markdown>
 ### Stream first
-Watch a YouTube video or a live broadcast without downloading it, then keep it if it was worth it. Live streams rewind up to four hours. [Watching](guides/watching.md)
+Watch a YouTube video or a live broadcast without downloading it, then keep it if it was worth it. Live streams rewind to the start of the broadcast (up to 24 hours). [Watching](guides/watching.md)
 </div>
 
 <div class="horde-feature" markdown>

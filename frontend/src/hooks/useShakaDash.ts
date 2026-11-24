@@ -120,6 +120,19 @@ function preferVideoCodecs(codecs: string[]) {
 }
 
 /**
+ * Shaka's codec preference: AV1 first where it decodes well, else H.264. Live
+ * keeps Shaka's default (no preference): its ladder is H.264 up to 1080p and
+ * VP9 above, since YouTube serves 1440p and 2160p live only as VP9, and a
+ * preference drops every variant in another codec.
+ */
+export function videoCodecConfig(live: boolean, preferAv1: boolean) {
+  if (live) return {};
+  return {
+    preferredVideo: preferVideoCodecs(preferAv1 ? ["av01", "avc1"] : ["avc1"]),
+  };
+}
+
+/**
  * Play `track` from now on. A video drops what it has buffered so the new
  * quality shows at once. A live stream keeps its buffer and switches where it
  * ends (a few segments ahead), as Shaka's own ABR does: in sequence mode Shaka
@@ -329,9 +342,7 @@ export function useShakaDashLoad({
             defaultBandwidthEstimate: bwEstimate,
             switchInterval: 8,
           },
-          preferredVideo: preferVideoCodecs(
-            preferAv1 ? ["av01", "avc1"] : ["avc1"]
-          ),
+          ...videoCodecConfig(live, preferAv1),
           restrictions: {
             maxHeight: abrEnabled ? maxHeight : 8192,
             maxWidth: 8192,
@@ -510,6 +521,38 @@ export function useShakaDashLoad({
   ]);
 }
 
+/**
+ * Play the best track at or below `choice`, with ABR off. Returns the stream's
+ * tracks and the quality picked (null when there are none). The cap an
+ * automatic step-down set goes first: Shaka leaves tracks over it out of
+ * getVariantTracks(), so a pick above it would land on the cap.
+ */
+export function applyQualityPick(p: ShakaPlayer, choice: number) {
+  p.configure({
+    abr: { enabled: false },
+    restrictions: { maxHeight: 8192, maxWidth: 8192 },
+  });
+  const tracks = p.getVariantTracks() ?? [];
+  const qualities = distinctQualities(tracks);
+  const target =
+    qualities.find((q) => q <= choice) ?? qualities[qualities.length - 1];
+  if (target == null) return { tracks, target: null };
+  const candidates = tracks.filter((t) => trackQuality(t) === target);
+  candidates.sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0));
+  if (candidates[0]) {
+    // YouTube 1440/4K is typically AV1-only; honor an explicit pick even
+    // when Auto prefers H.264 for power efficiency.
+    const codec = (candidates[0].videoCodec ?? "").toLowerCase();
+    if (codec.startsWith("av01")) {
+      p.configure({
+        preferredVideo: preferVideoCodecs(["av01", "avc1"]),
+      });
+    }
+    selectQualityTrack(p, candidates[0]);
+  }
+  return { tracks, target };
+}
+
 export function useApplyShakaQuality(
   shakaPlayerRef: MutableRefObject<ShakaPlayer | null>,
   capabilityMaxHeightRef: MutableRefObject<number>,
@@ -528,9 +571,9 @@ export function useApplyShakaQuality(
       if (!p) return;
       setQualityChoice(choice);
       try {
-        const tracks = p.getVariantTracks() ?? [];
-        variantTracksRef.current = tracks;
         if (choice === "auto") {
+          const tracks = p.getVariantTracks() ?? [];
+          variantTracksRef.current = tracks;
           const cap = capabilityMaxHeightRef.current;
           p.configure({
             abr: { enabled: true },
@@ -538,28 +581,11 @@ export function useApplyShakaQuality(
           });
           return;
         }
-        p.configure({
-          abr: { enabled: false },
-          restrictions: { maxHeight: 8192, maxWidth: 8192 },
-        });
-        const qualities = distinctQualities(tracks);
-        const target =
-          qualities.find((q) => q <= choice) ?? qualities[qualities.length - 1];
-        if (target == null) return;
-        const candidates = tracks.filter((t) => trackQuality(t) === target);
-        candidates.sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0));
-        if (candidates[0]) {
-          // YouTube 1440/4K is typically AV1-only; honor an explicit pick even
-          // when Auto prefers H.264 for power efficiency.
-          const codec = (candidates[0].videoCodec ?? "").toLowerCase();
-          if (codec.startsWith("av01")) {
-            p.configure({
-              preferredVideo: preferVideoCodecs(["av01", "avc1"]),
-            });
-          }
-          selectQualityTrack(p, candidates[0]);
+        const picked = applyQualityPick(p, choice);
+        variantTracksRef.current = picked.tracks;
+        if (picked.target != null && picked.target !== choice) {
+          setQualityChoice(picked.target);
         }
-        if (target !== choice) setQualityChoice(target);
       } catch (err) {
         console.warn("[stream-quality] apply failed", err);
       }

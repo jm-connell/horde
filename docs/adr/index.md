@@ -43,6 +43,8 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0035](0035-ask-indexes-subscriptions-up-to-a-limit.md) | Ask indexes every subscription, up to a limit; only Ask is called indexed (the catalog is listed, the library embedded) | Accepted |
 | [0036](0036-chat-replay-read-around-the-position.md) | Chat replay is read from YouTube around the playback position and never saved | Accepted |
 | [0037](0037-live-chat-follows-the-viewer.md) | Live chat is polled once per broadcast into a buffer and follows the viewer's position | Accepted |
+| [0038](0038-live-1440p-and-2160p-need-deno.md) | Live 1440p and 2160p come from a separate extraction that runs Deno | Accepted |
+| [0039](0039-deno-only-as-a-fallback.md) | Deno runs only as a fallback for videos the JS-less clients cannot open, not for all of yt-dlp | Accepted |
 
 ## Writing a new record
 

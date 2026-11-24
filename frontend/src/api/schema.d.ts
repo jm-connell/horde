@@ -2387,6 +2387,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/live/{video_id}/seg/{key}/{sq}.webm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Webm Segment
+         * @description A segment of a 1440p or 2160p variant (VP9 in WebM, which HLS cannot name).
+         *
+         *     The player asks for the type with HEAD once; that answers without fetching
+         *     the segment.
+         */
+        get: operations["live_webm_segment_api_live__video_id__seg__key___sq__webm_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/live/{video_id}/v/{key}.m3u8": {
         parameters: {
             query?: never;
@@ -15943,6 +15966,48 @@ export interface operations {
                 };
                 content: {
                     "video/mp2t": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_webm_segment_api_live__video_id__seg__key___sq__webm_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+                key: string;
+                sq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebM (VP9) media segment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/webm": string;
                 };
             };
             /** @description Validation error */

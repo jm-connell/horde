@@ -59,6 +59,27 @@ def test_template_rebuilds_any_earlier_segment_and_keeps_literal_braces():
     assert "{x}" in hls.fill_template(template, 12)
 
 
+def test_template_leaves_out_the_value_youtube_rotates_during_a_broadcast():
+    # A segment URL carries ``govp/lmt=N``, which changes every so often during
+    # a broadcast; an earlier segment asked for with the current one is a 404,
+    # and without it is served.
+    uri = (
+        "https://rr4.googlevideo.com/videoplayback/itag/312/live/1/sq/3689"
+        "/govp/lmt%3D78/dur/5.000/file/seg.ts"
+    )
+    template = hls.segment_template(uri)
+    assert template is not None
+    assert hls.fill_template(template, 12) == (
+        "https://rr4.googlevideo.com/videoplayback/itag/312/live/1/sq/12"
+        "/dur/5.000/file/seg.ts"
+    )
+    # The audio formats carry it as ``goap``.
+    audio = hls.segment_template(
+        uri.replace("/itag/312/", "/itag/234/").replace("govp", "goap")
+    )
+    assert audio is not None and "goap" not in audio
+
+
 def test_template_supports_query_sq_and_rejects_urls_without_one():
     template = hls.segment_template("https://h.example/vp?itag=95&sq=55&x=1")
     assert template is not None
