@@ -573,32 +573,49 @@ function WizardPanel({
                   { id: "connect" as const, label: "Connect a provider" },
                   { id: "bundled" as const, label: "Run Ollama for me" },
                 ] as const
-              ).map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => {
-                    setAiChoice(opt.id);
-                    setAiStatus(null);
-                  }}
-                  className={
-                    aiChoice === opt.id
-                      ? "ui-panel rounded-lg border border-accent/50 bg-accent/15 px-3 py-1.5 text-sm text-accent"
-                      : PANEL_BTN
-                  }
-                >
-                  {opt.label}
-                </button>
-              ))}
+              )
+                // The bundled Ollama is a Compose service; a desktop has none.
+                .filter(
+                  (opt) => opt.id !== "bundled" || health?.runtime !== "desktop"
+                )
+                .map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => {
+                      setAiChoice(opt.id);
+                      setAiStatus(null);
+                    }}
+                    className={
+                      aiChoice === opt.id
+                        ? "ui-panel rounded-lg border border-accent/50 bg-accent/15 px-3 py-1.5 text-sm text-accent"
+                        : PANEL_BTN
+                    }
+                  >
+                    {opt.label}
+                  </button>
+                ))}
             </div>
             <Collapse open={aiChoice === "connect"}>
               <div className="space-y-2 pt-2">
                 <p className="text-xs text-muted">
                   Paste an API key from a cloud provider (no GPU needed; titles,
                   captions and chat messages are sent to it) or the address of
-                  an AI server you run. Horde runs in Docker, so use{" "}
-                  <span className="font-mono">host.docker.internal</span> for a
-                  server on this machine, or the LAN address of another PC.
+                  an AI server you run.{" "}
+                  {health?.runtime === "desktop" ? (
+                    <>
+                      A local Ollama is at{" "}
+                      <span className="font-mono">http://localhost:11434</span>;
+                      for another PC use its LAN address.
+                    </>
+                  ) : (
+                    <>
+                      Horde runs in Docker, so use{" "}
+                      <span className="font-mono">host.docker.internal</span>{" "}
+                      for a server on this machine, or the LAN address of
+                      another PC.
+                    </>
+                  )}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <input

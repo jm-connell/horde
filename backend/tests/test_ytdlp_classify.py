@@ -1,5 +1,7 @@
 """Tests for yt-dlp error classification and members-only helpers."""
 
+import re
+
 from app.services.ytdlp_common import (
     ERROR_KIND_BOT,
     ERROR_KIND_COOKIES,
@@ -113,6 +115,28 @@ def test_classify_bot_pot_cookies(monkeypatch):
     kind, msg = classify_ytdlp_error("Login required / age-restricted")
     assert kind == ERROR_KIND_COOKIES
     assert "anonymously" in msg
+
+
+def test_desktop_bot_check_messages_do_not_mention_docker(monkeypatch):
+    monkeypatch.setattr("app.services.ytdlp_common.HORDE_RUNTIME", "desktop")
+    monkeypatch.setattr(
+        "app.services.ytdlp_common.pot_provider_configured", lambda: False
+    )
+    for raw, kind in (
+        ("Sign in to confirm you’re not a bot", ERROR_KIND_BOT),
+        ("PO Token required for this player", ERROR_KIND_POT),
+        ("HTTP Error 403: Forbidden", ERROR_KIND_POT),
+    ):
+        got, msg = classify_ytdlp_error(raw)
+        assert got == kind
+        assert not re.search(
+            r"compose|docker|bgutil|YTDLP_|sidecar|container", msg, re.I
+        )
+    _, msg = classify_ytdlp_error("Sign in to confirm you’re not a bot")
+    assert "sign-in check" in msg
+    monkeypatch.setattr("app.services.ytdlp_common.HORDE_RUNTIME", "server")
+    _, msg = classify_ytdlp_error("Sign in to confirm you’re not a bot")
+    assert "Compose bgutil-pot" in msg
 
 
 def test_classify_rate_unavailable_postprocess():

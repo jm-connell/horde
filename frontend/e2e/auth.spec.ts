@@ -328,6 +328,10 @@ test("forgot password asks for a log code and refuses a wrong one", async ({
   await expect(
     visitor.getByRole("status").filter({ hasText: "server log" })
   ).toContainText("PASSWORD RESET CODE");
+  // Where the log is with the desktop app, for someone who has no terminal.
+  await expect(
+    visitor.getByRole("status").filter({ hasText: "server log" })
+  ).toContainText("choose Open logs");
   await visitor.getByLabel("Reset code").fill("AAAAA-AAAAA");
   await visitor
     .getByLabel("New password", { exact: true })

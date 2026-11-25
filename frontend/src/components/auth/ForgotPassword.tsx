@@ -135,7 +135,10 @@ export default function ForgotPassword({
             docker logs horde
           </code>{" "}
           on the server (with <code className="font-mono text-xs">sudo</code> in
-          front on most hosts) or the stack’s log in Dockge.
+          front on most hosts) or the stack’s log in Dockge. With the desktop
+          app, click the Horde icon next to the clock on the computer that runs
+          Horde and choose{" "}
+          <span className="font-medium text-gray-100">Open logs</span>.
         </p>
         <p className="mt-2 text-xs text-muted">
           A code works once and expires after 15 minutes. A new code can be

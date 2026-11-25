@@ -24,6 +24,17 @@ export const UPDATE_CONFIRM_RUN = {
   confirmLabel: "Run update",
 };
 
+/** The desktop app has no host job to go back to the old version: it restarts to install. */
+export const UPDATE_CONFIRM_AVAILABLE_DESKTOP = {
+  ...UPDATE_CONFIRM_AVAILABLE,
+  body: "Horde will restart to install the update. It will be unavailable for a minute or two and downloads in progress will start again afterwards. If the new version doesn’t start, Horde shows how to get the previous one. Your library and settings are not affected.",
+};
+
+export const UPDATE_CONFIRM_RUN_DESKTOP = {
+  ...UPDATE_CONFIRM_RUN,
+  body: "Horde will check for a newer release. If it is already up to date, nothing changes. Otherwise it restarts to install the release, which restarts downloads in progress. If the new version doesn’t start, Horde shows how to get the previous one. Your library and settings are not affected.",
+};
+
 /** Maps the server state (plus "server not answering") to what the UI shows. */
 export function describeUpdate(
   c: UpdateControl | null,
