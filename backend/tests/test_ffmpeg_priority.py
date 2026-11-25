@@ -1,5 +1,6 @@
 """Background ffmpeg (sprites, scanner thumbnails) runs below playback priority."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -22,7 +23,11 @@ def _record_run_ffmpeg(monkeypatch, target: str) -> list[dict]:
     return calls
 
 
-@pytest.mark.skipif(shutil.which("nice") is None, reason="needs nice")
+@pytest.mark.skipif(
+    os.name != "posix" or shutil.which("nice") is None,
+    reason="runs a real nice, which Horde uses only on POSIX (Windows lowers the "
+    "priority with creationflags: test_low_priority_kwargs_lower_the_priority_...)",
+)
 def test_low_priority_wraps_after_the_progress_args():
     # The progress args go right after the ffmpeg binary, so nice must be
     # prefixed after them or they would be handed to nice instead.
@@ -44,6 +49,17 @@ def test_below_playback_off_posix_runs_the_command_as_is(monkeypatch):
     # Patch the module's os, not os.name itself: Path() reads os.name.
     monkeypatch.setattr(ffmpeg_bin, "os", SimpleNamespace(name="nt"))
     assert ffmpeg_bin.below_playback(["ffmpeg", "-i", "x"]) == ["ffmpeg", "-i", "x"]
+
+
+def test_low_priority_kwargs_lower_the_priority_on_windows_only(monkeypatch):
+    if ffmpeg_bin.os.name != "nt":
+        assert ffmpeg_bin.low_priority_kwargs() == {}
+    # Patch the module's os, not os.name itself: Path() reads os.name.
+    monkeypatch.setattr(ffmpeg_bin, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0x4000, raising=False
+    )
+    assert ffmpeg_bin.low_priority_kwargs() == {"creationflags": 0x4000}
 
 
 def test_sprite_and_background_thumbnail_ffmpeg_are_low_priority(monkeypatch, tmp_path):

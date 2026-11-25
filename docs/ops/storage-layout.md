@@ -116,7 +116,7 @@ The scanner and cleanup logic ignore intermediate fragments so partial downloads
 
 ## Data (`DATA_DIR`)
 
-App state. Default in Docker: `/app/data` (host: `DATA_PATH`).
+App state. Default in Docker: `/app/data` (host: `DATA_PATH`). The [desktop app](../getting-started/install-desktop.md#where-things-are-kept) keeps it in your user folder (for example `%LOCALAPPDATA%\Horde\data` on Windows), with the logs and the videos in their own places.
 
 ```text
 data/

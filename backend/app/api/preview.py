@@ -27,7 +27,14 @@ from ..openapi_responses import (
 )
 from ..parental_guard import NOT_ALLOWED, stream_guard
 from ..schemas import NextPartRead, StreamPreviewMeta, StreamRelatedPage
-from ..services import library, next_part, parental, stream_preview, stream_related
+from ..services import (
+    desktop_status,
+    library,
+    next_part,
+    parental,
+    stream_preview,
+    stream_related,
+)
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import history as stream_history
 from ..services.discovery.other_interests import Viewer
@@ -809,7 +816,12 @@ def preview_manifest(request: Request, url: str = Query(...)):
     )
 
 
-@router.get("/media", response_class=RAW, responses=VIDEO_STREAM)
+@router.get(
+    "/media",
+    response_class=RAW,
+    responses=VIDEO_STREAM,
+    dependencies=[Depends(desktop_status.track_media)],
+)
 async def preview_media(
     request: Request,
     token: str = Query(...),

@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from ..config import (
+    HORDE_RUNTIME,
     YTDLP_COOKIE_FILE,
     YTDLP_COOKIES_FROM_BROWSER,
     YTDLP_JS_RUNTIME,
@@ -469,6 +470,17 @@ def classify_ytdlp_error(
 
     raw = _REPORT_BOILERPLATE.sub("", raw).strip()
 
+    if HORDE_RUNTIME == "desktop" and (
+        _BOT_MESSAGE.search(raw) or _POT_MESSAGE.search(raw)
+    ):
+        # No Docker, Compose or environment variables on a desktop install.
+        kind = ERROR_KIND_BOT if _BOT_MESSAGE.search(raw) else ERROR_KIND_POT
+        return _finish(
+            kind,
+            "YouTube asked for a sign-in check. Try again later. "
+            "Horde does not send cookies for bot checks.",
+        )
+
     if _BOT_MESSAGE.search(raw):
         if pot_provider_configured():
             msg = (
@@ -515,6 +527,12 @@ def classify_ytdlp_error(
         return _finish(ERROR_KIND_COOKIES, msg)
 
     if re.search(r"http error 403|403:\s*forbidden", raw, re.I):
+        if HORDE_RUNTIME == "desktop":
+            return _finish(
+                ERROR_KIND_POT,
+                "YouTube rejected the media URL (HTTP 403). Usually a stale "
+                "player client — update yt-dlp and try again later.",
+            )
         return _finish(
             ERROR_KIND_POT,
             "YouTube rejected the media URL (HTTP 403). Usually a stale "

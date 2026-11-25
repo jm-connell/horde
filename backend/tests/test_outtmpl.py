@@ -36,7 +36,9 @@ def test_template_escapes_percent_in_literal_parts():
     tmpl = library_outtmpl(Path("/data/100%"), "50% Off")
     ydl = yt_dlp.YoutubeDL({"quiet": True})
     out = ydl.prepare_filename({"id": "x", "title": "t", "ext": "mp4"}, outtmpl=tmpl)
-    assert out.startswith("/data/100%/50% Off/Unknown year/t [x].mp4")
+    # Native separators: yt-dlp builds the path with os.path on every platform.
+    expected = Path("/data/100%") / "50% Off" / "Unknown year" / "t [x].mp4"
+    assert out.startswith(str(expected))
 
 
 def test_fit_outtmpl_leaves_room_for_suffixes():

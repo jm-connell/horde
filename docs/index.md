@@ -168,6 +168,7 @@ docker compose up -d
 Open `http://<server-ip>:8686`, create the administrator account, and the setup wizard does the rest. Compose downloads the published image for x86 or ARM; nothing is built on your machine.
 
 <div class="horde-platforms" markdown>
+[Desktop app (Windows, macOS, Linux)](getting-started/install-desktop.md)
 [Step by step with Docker](getting-started/install-docker.md)
 [TrueNAS / Dockge](getting-started/truenas-dockge.md)
 [Windows](getting-started/other-platforms.md#windows)

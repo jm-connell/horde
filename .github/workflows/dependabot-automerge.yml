@@ -7,8 +7,8 @@ name: Dependabot auto-merge
 #
 # main has no required status checks, so GitHub's own auto-merge would merge
 # at once; this waits for the checks itself. It runs after each of CI,
-# Security and Image finishes, and the last one to finish sees all three green
-# and merges. Only check runs from GitHub Actions count: checks from other
+# Security, Image and Desktop finishes, and the last one to finish sees all
+# four green and merges. Only check runs from GitHub Actions count: checks from other
 # apps (CodeQL default setup) finish on their own schedule and would never
 # wake this workflow up again.
 #
@@ -18,12 +18,12 @@ name: Dependabot auto-merge
 #
 # A merge made with the default GITHUB_TOKEN starts no workflows, so after
 # merging it dispatches the push-to-main workflows on main itself (Release
-# needs a green CI and Image run on the tagged commit, and Trivy only blocks
-# on main).
+# needs a green CI, Image and Desktop run on the tagged commit, and Trivy only
+# blocks on main).
 
 on:
   workflow_run:
-    workflows: [CI, Security, Image]
+    workflows: [CI, Security, Image, Desktop]
     types: [completed]
 
 permissions:
@@ -69,7 +69,7 @@ jobs:
           checks="$(gh api --paginate "repos/${GH_REPO}/commits/${SHA}/check-runs?per_page=100" \
             --jq '.check_runs[] | select(.app.slug == "github-actions") | "\(.status) \(.conclusion) \(.name)"')"
           echo "${checks}"
-          for wf in CI Security Image; do
+          for wf in CI Security Image Desktop; do
             ran="$(gh run list --commit "${SHA}" --workflow "${wf}" --json conclusion \
               --jq '[.[] | select(.conclusion == "success")] | length')"
             if [ "${ran}" = "0" ]; then
@@ -82,6 +82,6 @@ jobs:
             exit 0
           fi
           gh pr merge "${pr}" --squash --match-head-commit "${SHA}"
-          for wf in ci.yml security.yml image.yml; do
+          for wf in ci.yml security.yml image.yml desktop.yml; do
             gh workflow run "$wf" --ref main
           done

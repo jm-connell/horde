@@ -1,5 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
-import type { HealthStats } from "../types";
+import { useHealth } from "../queries/health";
 import { bugReportUrl, REPO_URL } from "./bugReport";
 
 const LINK =
@@ -7,16 +6,8 @@ const LINK =
 
 /** The quiet strip under every page: docs and where to report bugs. */
 export default function AppFooter() {
-  // Read once per visit, for the bug report link only.
-  const version = useQuery({
-    queryKey: ["health", "version"],
-    queryFn: async ({ signal }) => {
-      const res = await fetch("/api/health", { signal });
-      return ((await res.json()) as Partial<HealthStats>).horde_version ?? null;
-    },
-    staleTime: Infinity,
-    retry: false,
-  }).data;
+  // Read once per visit, for the bug report link.
+  const version = useHealth().data?.horde_version ?? null;
   return (
     // No z-index: above the background (earlier, z-0) but below <main>'s
     // layer, which holds fixed bars such as the library's bulk actions.

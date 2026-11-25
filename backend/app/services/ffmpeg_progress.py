@@ -11,7 +11,7 @@ import threading
 import time
 from collections.abc import Callable
 
-from .ffmpeg_bin import below_playback
+from .ffmpeg_bin import LowPriorityKwargs, below_playback, low_priority_kwargs
 from .workers import CallbackWorker
 
 logger = logging.getLogger(__name__)
@@ -195,6 +195,7 @@ def run_ffmpeg(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         start_new_session=True,
+        **(low_priority_kwargs() if low_priority else LowPriorityKwargs()),
     )
     if not children.add(proc):
         terminate_process(proc, 0.0)

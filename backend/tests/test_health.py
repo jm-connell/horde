@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -163,6 +164,11 @@ def test_filesystem_lookup_uses_the_longest_matching_mount(path, fstype):
     assert storage_check.filesystem_of(Path(path), mounts)[1] == fstype
 
 
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="the check reads Linux /proc/self/mountinfo, whose mount points are "
+    "POSIX paths; on Windows resolve() puts a drive letter on DATA_DIR",
+)
 def test_warns_for_network_filesystems_only(tmp_path):
     info = tmp_path / "mountinfo"
     info.write_text(MOUNTINFO)

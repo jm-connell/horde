@@ -49,7 +49,7 @@ from .api import (
     stream_ai as stream_ai_api,
 )
 from .auth import E2E_PUBLIC_ROUTES, current_user, ensure_admin, require_admin
-from .config import LIVE_POLL_SEC, short_git_sha
+from .config import HORDE_RUNTIME, LIVE_POLL_SEC, short_git_sha
 from .context import (
     AppContext,
     activate,
@@ -75,7 +75,7 @@ from .response_schemas import (
 from .schemas import ReadyResponse
 from .security import host_policy_warning, install_security
 from .services import app_settings as app_settings_svc
-from .services import ffmpeg_progress
+from .services import desktop_status, ffmpeg_progress
 from .services.ai.worker import recover_ai_jobs
 from .services.auth.accounts import AuthUser
 from .services.backup import create_backup_worker
@@ -305,6 +305,10 @@ async def lifespan(app: FastAPI):
         if host_warning:
             logger.warning(host_warning)
         restore_signals = _install_shutdown_signals(ctx.shutdown_event)
+        if HORDE_RUNTIME == "desktop":
+            # Before the boot branch: it runs under HORDE_E2E too, and stopping
+            # last makes its final write describe the stopped server.
+            ctx.workers.start(desktop_status.create_worker(ctx))
         if ctx.e2e:
             _boot_e2e(app, ctx)
             # Never used offline, but a test serving a local stream needs it.
@@ -483,6 +487,7 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
         "review_pending_count": review_count,
         "active_downloads": active_downloads,
         "wiki_available": WIKI_DIR.is_dir(),
+        "runtime": HORDE_RUNTIME,
         "downloads": {
             "active": active_downloads,
             "paused": downloads_paused,

@@ -51,6 +51,7 @@ nav:
   - Home: index.md
   - Features: features.md
   - Getting started:
+      - Install the desktop app: getting-started/install-desktop.md
       - Install with Docker: getting-started/install-docker.md
       - TrueNAS / Dockge: getting-started/truenas-dockge.md
       - Other platforms (Windows, macOS, Pi, Unraid, Synology, Portainer, Proxmox): getting-started/other-platforms.md
@@ -154,6 +155,7 @@ nav:
       - 0039 Deno only as a fallback: adr/0039-deno-only-as-a-fallback.md
       - 0040 Streams choose a codec by hardware decoding: adr/0040-streams-choose-a-codec-by-hardware-decoding.md
       - 0041 Related lists keep other interests: adr/0041-related-lists-keep-other-interests.md
+      - 0042 Desktop apps: adr/0042-desktop-apps.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

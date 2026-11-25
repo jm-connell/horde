@@ -45,6 +45,29 @@ updates:
       prefix: "deps(frontend)"
     labels: [dependencies]
 
+  # The desktop shell. Electron majors (every ~8 weeks) get their own PR, so a
+  # supported one is kept with a review. electron-builder stays on major 26:
+  # 27 refuses unsigned Windows updates by default (see the desktop design).
+  # ESLint stays with the frontend's major.
+  - package-ecosystem: npm
+    directory: /desktop
+    schedule:
+      interval: weekly
+      day: monday
+    ignore:
+      - dependency-name: electron-builder
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+    groups:
+      desktop-minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(desktop)"
+    labels: [dependencies]
+
   - package-ecosystem: docker
     directory: /
     schedule:

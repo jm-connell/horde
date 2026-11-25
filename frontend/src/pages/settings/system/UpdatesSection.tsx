@@ -1,5 +1,7 @@
 import { useEffect } from "react";
 import LoadingIndicator from "../../../components/LoadingIndicator";
+import { REPO_URL } from "../../../components/bugReport";
+import { useRuntime } from "../../../queries/health";
 import { swUpdates } from "../../../offline/register";
 import { formatRelative, safeHref } from "../../../utils";
 import { PANEL_BTN } from "../constants";
@@ -85,10 +87,31 @@ bash update.sh`}</Code>
   );
 }
 
+/** Shown instead of the cron setup help: a desktop install updates by hand. */
+export function DesktopUpdateHelp() {
+  const href = safeHref(`${REPO_URL}/releases/latest`);
+  return (
+    <p className="text-sm text-muted">
+      This computer installs updates by hand.{" "}
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent underline underline-offset-2"
+        >
+          Download the new version
+        </a>
+      ) : null}
+    </p>
+  );
+}
+
 export default function UpdatesSection({ system }: { system: SystemState }) {
   const { match } = useSettingsPage();
   const { health, updateCheck, updateChecking, refreshUpdates, updateRun } =
     system;
+  const desktop = useRuntime() === "desktop";
   const { control, view, connected, unreachable, updatedHere } = updateRun;
   const available = Boolean(updateCheck?.update_available);
   const showReload = updatedHere && control?.state === "updated";
@@ -182,7 +205,13 @@ export default function UpdatesSection({ system }: { system: SystemState }) {
             )}
           </div>
         )}
-        {!connected && control ? <UpdateSetupHelp /> : null}
+        {!connected && control ? (
+          desktop ? (
+            <DesktopUpdateHelp />
+          ) : (
+            <UpdateSetupHelp />
+          )
+        ) : null}
 
         {view.message && (
           <div role="status" aria-live="polite" className="space-y-2">

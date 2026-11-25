@@ -7293,6 +7293,15 @@
             "title": "Review Pending Count",
             "type": "integer"
           },
+          "runtime": {
+            "default": "server",
+            "enum": [
+              "server",
+              "desktop"
+            ],
+            "title": "Runtime",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"

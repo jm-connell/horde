@@ -36,7 +36,7 @@ from ..schemas import (
     LiveChatRead,
     LiveListResponse,
 )
-from ..services import follows, stream_preview
+from ..services import desktop_status, follows, stream_preview
 from ..services.auth.accounts import AuthUser
 from ..services.chat_replay.youtube import ChatReplayError
 from ..services.comments.fetch import LATER, RETRY
@@ -308,7 +308,12 @@ async def _segment(
     )
 
 
-@router.get("/{video_id}/seg/{key}/{sq}.ts", response_class=RAW, responses=TS_SEGMENT)
+@router.get(
+    "/{video_id}/seg/{key}/{sq}.ts",
+    response_class=RAW,
+    responses=TS_SEGMENT,
+    dependencies=[Depends(desktop_status.track_media)],
+)
 async def live_segment(
     request: Request,
     video_id: str = VideoId,
@@ -318,7 +323,12 @@ async def live_segment(
     return await _segment(request, video_id, key, sq, "video/mp2t")
 
 
-@router.get("/{video_id}/seg/{key}/{sq}.aac", response_class=RAW, responses=AAC_SEGMENT)
+@router.get(
+    "/{video_id}/seg/{key}/{sq}.aac",
+    response_class=RAW,
+    responses=AAC_SEGMENT,
+    dependencies=[Depends(desktop_status.track_media)],
+)
 async def live_audio_segment(
     request: Request,
     video_id: str = VideoId,
@@ -332,7 +342,10 @@ async def live_audio_segment(
 # One handler serves both verbs; HEAD stays out of the schema (one operation id).
 @router.head("/{video_id}/seg/{key}/{sq}.webm", include_in_schema=False)
 @router.get(
-    "/{video_id}/seg/{key}/{sq}.webm", response_class=RAW, responses=WEBM_SEGMENT
+    "/{video_id}/seg/{key}/{sq}.webm",
+    response_class=RAW,
+    responses=WEBM_SEGMENT,
+    dependencies=[Depends(desktop_status.track_media)],
 )
 async def live_webm_segment(
     request: Request,

@@ -1,0 +1,65 @@
+# Packaging for the desktop app. Run through `npm run dist` after
+# scripts/fetch_vendor.py and scripts/build_runtime.py have filled build/resources.
+#
+# Artifact names carry no version on purpose: the docs link to
+# releases/latest/download/<name>, and scripts/check_release_assets.py expects
+# exactly these.
+appId: io.github.jm-connell.horde
+productName: Horde
+copyright: Horde contributors
+directories:
+  output: release
+  buildResources: assets
+files:
+  - dist/**
+  - package.json
+# Python, the server, ffmpeg and deno, laid out like the image's /app.
+extraResources:
+  - from: build/resources
+    to: .
+# The Release workflow uploads; the builder only writes the update files.
+publish:
+  provider: github
+  owner: jm-connell
+  repo: horde
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: Horde-windows-x64-setup.${ext}
+nsis:
+  # Per-user, no questions and no administrator prompt.
+  oneClick: true
+  perMachine: false
+  deleteAppDataOnUninstall: false
+  include: installer.nsh
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  artifactName: Horde-mac-arm64.${ext}
+  category: public.app-category.video
+  # Ad-hoc: Apple silicon runs no unsigned code. Not a Developer ID signature;
+  # replace with the real identity when signing is switched on.
+  identity: "-"
+  hardenedRuntime: false
+  gatekeeperAssess: false
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64]
+  artifactName: Horde-linux-x64.${ext}
+  executableName: horde
+  # The window belongs to the menu entry the app writes (horde.desktop), so
+  # a pinned icon and the running window are one.
+  syncDesktopName: true
+  category: AudioVideo
+  synopsis: Self-hosted video library and downloader
+# The static AppImage runtime: no FUSE 2 on the user's machine needed.
+toolsets:
+  appimage: "1.0.3"

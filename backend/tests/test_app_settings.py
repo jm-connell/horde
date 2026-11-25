@@ -1,7 +1,9 @@
 """Tests for settings clamps, merge, load/save, and API key masking."""
 
 import json
+import os
 import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -235,9 +237,10 @@ def test_write_is_atomic_private_and_keeps_one_backup(tmp_dirs):
     settings_svc.save({"progress_expiry_days": 20})
     settings_svc.save({"progress_expiry_days": 21})
     settings_svc.save({"progress_expiry_days": 22})
-    assert path.stat().st_mode & 0o777 == 0o600
     bak = path.with_name("app_settings.json.bak")
-    assert bak.stat().st_mode & 0o777 == 0o600
+    if os.name == "posix":  # Windows has no mode bits; the data folder's ACL applies
+        assert path.stat().st_mode & 0o777 == 0o600
+        assert bak.stat().st_mode & 0o777 == 0o600
     assert json.loads(bak.read_text())["progress_expiry_days"] == 21
     assert [p.name for p in tmp_dirs["data"].iterdir() if p.name.endswith(".tmp")] == []
 
@@ -382,3 +385,11 @@ def test_settings_degraded_is_exposed(client, tmp_dirs):
     assert client.get("/api/settings").json()["settings_degraded"] is False
     (tmp_dirs["data"] / "app_settings.json").write_text("{broken")
     assert client.get("/api/settings").json()["settings_degraded"] is True
+
+
+def test_saving_skips_the_directory_fsync_on_windows(tmp_path, monkeypatch):
+    # Windows refuses to open a directory (PermissionError), so a save there
+    # must not try. A stand-in os without open() fails if the branch is wrong.
+    # (Patch the module's os, not os.name itself: Path() reads os.name.)
+    monkeypatch.setattr(settings_svc, "os", SimpleNamespace(name="nt"))
+    settings_svc._fsync_dir(tmp_path)

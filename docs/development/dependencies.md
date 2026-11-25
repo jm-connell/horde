@@ -5,8 +5,10 @@ produces the same software as a rebuild today.
 
 | What | Where | Pinned by |
 |------|-------|-----------|
-| Python runtime deps | `backend/requirements.txt` (direct) and `backend/requirements.lock` (full tree, hashes) | `uv pip compile --generate-hashes` |
+| Python runtime deps | `backend/requirements.txt` (direct) and `backend/requirements.lock` (full tree, hashes) | `uv pip compile --universal --generate-hashes` |
 | Frontend deps | `frontend/package.json` and `frontend/package-lock.json` | `npm ci` |
+| Desktop shell deps | `desktop/package.json` and `desktop/package-lock.json` | `npm ci` |
+| Desktop bundled programs (Python, ffmpeg, deno, the YouTube helper) | `desktop/vendor.lock.json` | version, URL and SHA-256 for each of three targets |
 | Docs toolchain | `docs/requirements.txt` | exact `mkdocs-material` version |
 | pip in the image | `docker/pip.lock` | exact version plus hash |
 | Base images | `Dockerfile` `FROM` lines | exact version tag plus `@sha256` digest |
@@ -20,7 +22,7 @@ tampered or unexpectedly changed package fails the build instead of shipping.
 Edit `backend/requirements.txt` (the direct dependencies), then:
 
 ```bash
-uv pip compile --generate-hashes --python-version 3.14 \
+uv pip compile --universal --generate-hashes --python-version 3.14 \
     backend/requirements.txt -o backend/requirements.lock
 ```
 
@@ -79,6 +81,32 @@ pins (`Requires-Dist: yt-dlp-ejs==…` on its PyPI page). The yt-dlp bump workfl
 changes only yt-dlp, and Dependabot proposes `yt-dlp-ejs` weekly, so after a
 yt-dlp release that moves the scripts, live streams stop at 1080p and
 made-for-kids videos fail until the `yt-dlp-ejs` pin catches up. Bump both together when you can.
+
+## Desktop app { #desktop-app }
+
+The [desktop app](../getting-started/install-desktop.md) installs the same `backend/requirements.lock` as the image, so the Python lock needs no separate step. Two more things are pinned.
+
+### `desktop/vendor.lock.json`
+
+It names the three programs the installer carries: Python ([python-build-standalone](https://github.com/astral-sh/python-build-standalone), 3.14), jellyfin-ffmpeg (the same major, 7, as the image's `jellyfin-ffmpeg7`) and deno. Each has a `version`, and for each of `win32-x64`, `darwin-arm64` and `linux-x64` a download `url` and its `sha256`. `desktop/scripts/fetch_vendor.py` refuses a file whose hash differs.
+
+To bump one, change the `version` and, for **all three targets**, the `url` and `sha256` (run `sha256sum` on the files you download). Keep to a Python 3.14 patch release: a new minor changes the lock, CI and the image together, as for the image.
+
+- **deno must equal the Dockerfile's** (`FROM denoland/deno:bin-<version>`), so the app and the image run the same one. Bump both in the same commit.
+- **ffmpeg** stays on the major the image uses.
+- **The YouTube helper** (`pot`) is the source of `bgutil-ytdlp-pot-provider`'s server at one tag, the same archive for all three targets. Its version must equal the plugin's pin in `backend/requirements.txt` (and should match the image tag in `docker-compose.yml`): the plugin and the server are released together. `build_runtime.py` installs its npm dependencies from the helper's own lock file and starts it once.
+- `scripts/check_vendor_lock.py` runs inside the backend suite (`backend/tests/test_vendor_lock.py`), so it is part of `scripts/check.sh` and CI. It fails when an entry or target is missing, a hash is not 64 hex characters, a URL is not on `github.com`, or the deno versions differ. It needs no network. Nothing bumps this file for you: Dependabot does not read it.
+
+The Desktop workflow then builds and starts the app with the new files, which is the real test of a bump.
+
+### `desktop/package.json`
+
+Dependabot opens a weekly grouped minor and patch pull request for `/desktop`, and separate pull requests for majors. Electron has a new major about every eight weeks and the latest three are supported, so a major is a review, not a project: the packaged-app test plays AV1, VP9 and H.264.
+
+Two majors are held back on purpose:
+
+- **electron-builder stays on major 26.** Version 26 updates an unsigned Windows app by checking the SHA-512 in the release's update file. Version 27 refuses unsigned Windows updates by default and adds its own signature to the update file. Moving to it is a decision made together with signing ([ADR 0042](../adr/0042-desktop-apps.md)), so Dependabot ignores its major. Likewise ESLint stays on the frontend's major.
+- The AppImage toolset in `desktop/electron-builder.yml` (`toolsets.appimage`) selects the static runtime, which is why the AppImage needs no FUSE. Keep it when bumping electron-builder.
 
 ## Frontend
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 from pathlib import Path
+from typing import TypedDict
 
 _JELLYFIN_FFMPEG = Path("/usr/lib/jellyfin-ffmpeg/ffmpeg")
 _JELLYFIN_FFPROBE = Path("/usr/lib/jellyfin-ffmpeg/ffprobe")
@@ -54,6 +56,20 @@ def below_playback(cmd: list[str]) -> list[str]:
     if os.name != "posix" or shutil.which("nice") is None:
         return cmd
     return ["nice", "-n", "15", *cmd]
+
+
+class LowPriorityKwargs(TypedDict, total=False):
+    creationflags: int
+
+
+def low_priority_kwargs() -> LowPriorityKwargs:
+    """``Popen`` arguments that lower the priority where ``nice`` does not exist.
+
+    Windows has no ``nice``: start the process below normal priority instead.
+    """
+    if os.name != "nt":
+        return {}
+    return {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}  # type: ignore[attr-defined]  # Windows-only constant; typeshed hides it off win32
 
 
 def ffmpeg_available() -> bool:

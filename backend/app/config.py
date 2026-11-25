@@ -66,6 +66,14 @@ AUDIO_EXTENSIONS: set[str] = {".m4a", ".mp3", ".opus", ".ogg", ".aac", ".flac", 
 HOST: str = os.environ.get("HOST", "0.0.0.0")  # noqa: S104 - container server; bind-all is the documented default
 PORT: int = int(os.environ.get("PORT", "8080"))
 
+# "desktop" when the desktop app started the server (it sets HORDE_RUNTIME), else
+# "server". Reported in /api/health and turns on the desktop status file.
+HORDE_RUNTIME: str = (
+    "desktop"
+    if os.environ.get("HORDE_RUNTIME", "").strip().lower() == "desktop"
+    else "server"
+)
+
 # Max simultaneous download workers (FIFO queue).
 MAX_DOWNLOAD_CONCURRENCY: int = int(os.environ.get("MAX_DOWNLOAD_CONCURRENCY", "2"))
 
