@@ -6,7 +6,7 @@ import random as py_random
 from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal, overload
+from typing import TYPE_CHECKING, Any, Literal, overload
 
 from sqlalchemy import and_, func, nullsfirst, nullslast, or_, text
 from sqlalchemy import select as sa_select
@@ -18,6 +18,9 @@ from . import next_part, parental
 from .pagination import PageRequest, random_key
 from .parental import AllowList
 from .search_text import fts_match_expression, keyword_match_clause
+
+if TYPE_CHECKING:
+    from .discovery.other_interests import Viewer
 
 logger = logging.getLogger(__name__)
 
@@ -634,6 +637,7 @@ def related_videos(
     *,
     offset: int = 0,
     user_id: int | None = None,
+    viewer: Viewer | None = None,
 ) -> list[Video]:
     """Return related library videos.
 
@@ -641,7 +645,10 @@ def related_videos(
     Then ranked by embedding similarity of the whole videos when AI is ready,
     nudged up for the same channel and for shared tags (rare tags count more),
     and down for videos ``user_id`` has already watched. Same-channel, shared-tag
-    and random videos fill the rest. Every page slices the same ranking.
+    and random videos fill the rest. With ``viewer``, every fourth place goes to
+    one of that user's Recommended picks about something else
+    (``discovery/other_interests.py``).
+    Every page slices the same ranking.
     """
     source = session.get(Video, video_id)
     if source is None:
@@ -717,4 +724,58 @@ def related_videos(
         )
         add_candidates(pool)
 
+    if viewer is not None:
+        try:
+            picked = _with_other_interests(session, viewer, source, picked, pool_limit)
+        except Exception:
+            logger.warning(
+                "other interests unavailable for the related videos of video %s",
+                source.id,
+                exc_info=True,
+            )
     return picked[offset : offset + limit]
+
+
+def _with_other_interests(
+    session: Session,
+    viewer: Viewer,
+    source: Video,
+    related: list[Video],
+    limit: int,
+) -> list[Video]:
+    """``related`` with a downloaded pick from another interest in every fourth place."""
+    from .ai import vector_index
+    from .ai.provider import get_embed_provider
+    from .discovery import other_interests
+
+    source_id = require_id(source)
+    vector = (
+        vector_index.profile_vectors(session, [source_id]).get(source_id)
+        if get_embed_provider() is not None
+        else None
+    )
+    picks = other_interests.other_interest_picks(
+        session, viewer, vector=vector, channel=source.channel, library_only=True
+    )
+    by_id = {
+        require_id(v): v
+        for v in session.exec(
+            select(Video).where(
+                col(Video.id).in_([c.video_id for c in picks]),
+                Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+            )
+        ).all()
+    }
+    others = [by_id[c.video_id] for c in picks if c.video_id in by_id]
+    mixed: list[Video] = []
+    seen = {source_id}
+
+    def add(video: Video) -> bool:
+        if len(mixed) >= limit or require_id(video) in seen:
+            return False
+        seen.add(require_id(video))
+        mixed.append(video)
+        return True
+
+    other_interests.weave(related, others, add)
+    return mixed

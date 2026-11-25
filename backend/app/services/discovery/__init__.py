@@ -17,6 +17,8 @@
 * ``feed``: sorts candidates into buckets, ranks and caches the feed;
   ``picks``: what a feed is made of; ``suggest``: channels to follow.
 * ``tuning``, ``algorithms``, ``topics``: a user's own settings for all of it.
+* ``other_interests``: the feed's picks about something else, woven into a
+  video's related list.
 
 Design and tuning: ``docs/adr/0019-recommended-plus.md`` and
 ``docs/adr/0024-tunable-recommended-plus.md``.
