@@ -62,14 +62,6 @@ def _force_exit_later() -> None:
     os._exit(1)
 
 
-def _stop(server: uvicorn.Server) -> None:
-    """Ask for a graceful stop, with an exit of last resort behind it."""
-    server.should_exit = True
-    threading.Thread(
-        target=_force_exit_later, name="desktop-lifeline-backstop", daemon=True
-    ).start()
-
-
 def _parent() -> psutil.Process | None:
     """The desktop shell's process, when it told us its id."""
     raw = os.environ.get(PARENT_PID_ENV, "").strip()
@@ -121,7 +113,7 @@ def _watch_lifeline(server: uvicorn.Server, fd: int) -> None:
             "reading standard input failed (%r); stopping", exc, exc_info=True
         )
     finally:
-        _stop(server)
+        server.should_exit = True
 
 
 if sys.platform == "win32":
@@ -187,7 +179,7 @@ if sys.platform == "win32":
                 break
             first = False
             time.sleep(_POLL_SEC)
-        _stop(server)
+        server.should_exit = True
 
 
 def _stdin_fd() -> int | None:
@@ -209,24 +201,22 @@ def main() -> int:
         timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SEC,
     )
     server = uvicorn.Server(config)
-    if sys.platform == "win32":
-        threading.Thread(
-            target=_watch_lifeline_windows,
-            args=(server,),
-            name="desktop-lifeline",
-            daemon=True,
-        ).start()
-    else:
-        fd = _stdin_fd()
-        if fd is None:
-            logger.warning("no standard input: serving without a lifeline")
+
+    def lifeline() -> None:
+        if sys.platform == "win32":
+            _watch_lifeline_windows(server)
         else:
-            threading.Thread(
-                target=_watch_lifeline,
-                args=(server, fd),
-                name="desktop-lifeline",
-                daemon=True,
-            ).start()
+            fd = _stdin_fd()
+            if fd is None:
+                logger.warning("no standard input: serving without a lifeline")
+                return
+            _watch_lifeline(server, fd)
+        if server.should_exit:
+            # The shell is gone. If the graceful stop hangs, nobody else can
+            # end this process.
+            _force_exit_later()
+
+    threading.Thread(target=lifeline, name="desktop-lifeline", daemon=True).start()
     server.run()
     return 0 if server.started else 1
 
