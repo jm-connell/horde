@@ -3,11 +3,15 @@ import type {
   ShakaPlayer,
   ShakaVariantTrack,
 } from "shaka-player/dist/shaka-player.dash.js";
+import type { DecodeSupport } from "../utils/decodeCapability";
 import {
   LIVE_MANIFEST_CONFIG,
   applyQualityPick,
+  qualitiesOnlyInAv1,
   selectQualityTrack,
+  streamLoadLimits,
   videoCodecConfig,
+  type StreamQualityState,
 } from "./useShakaDash";
 
 describe("live stream config", () => {
@@ -87,5 +91,108 @@ describe("applyQualityPick", () => {
     expect(target).toBe(2160);
     expect(picked).toEqual([2160]);
     expect(tracks).toHaveLength(3);
+  });
+});
+
+describe("streamLoadLimits", () => {
+  const SOFTWARE_AV1: DecodeSupport = {
+    av1Supported: true,
+    av1Efficient: false,
+    maxSupportedHeight: 2160,
+    maxAv1Efficient: 0,
+    maxVp9Efficient: 0,
+  };
+  const HARDWARE: DecodeSupport = {
+    av1Supported: true,
+    av1Efficient: true,
+    maxSupportedHeight: 2160,
+    maxAv1Efficient: 2160,
+    maxVp9Efficient: 2160,
+  };
+  const fresh = (): StreamQualityState => ({
+    downgrade: null,
+    av1Picked: false,
+    av1Only: [],
+  });
+
+  it("plays H.264 up to 1080p where AV1 decodes only in software", () => {
+    // Software AV1 drops frames at the start of every high-quality video.
+    expect(streamLoadLimits(SOFTWARE_AV1, false, fresh())).toEqual({
+      preferAv1: false,
+      maxHeight: 1080,
+    });
+  });
+
+  it("plays AV1 up to what the hardware decodes", () => {
+    expect(streamLoadLimits(HARDWARE, false, fresh())).toEqual({
+      preferAv1: true,
+      maxHeight: 2160,
+    });
+  });
+
+  it("loads AV1 on any device for a quality only AV1 offers", () => {
+    const state = { ...fresh(), av1Picked: true };
+    expect(streamLoadLimits(SOFTWARE_AV1, false, state).preferAv1).toBe(true);
+  });
+
+  it("reloads after an AV1 step-down without AV1, under the cut", () => {
+    const state: StreamQualityState = {
+      downgrade: { maxHeight: 1080, blacklistAv1: true },
+      av1Picked: true,
+      av1Only: [],
+    };
+    expect(streamLoadLimits(HARDWARE, false, state)).toEqual({
+      preferAv1: false,
+      maxHeight: 1080,
+    });
+  });
+
+  it("takes a live stream above 1080p on Auto only where VP9 decodes in hardware", () => {
+    expect(streamLoadLimits(SOFTWARE_AV1, true, fresh()).maxHeight).toBe(1080);
+    expect(streamLoadLimits(HARDWARE, true, fresh())).toEqual({
+      preferAv1: false,
+      maxHeight: 2160,
+    });
+  });
+});
+
+describe("qualitiesOnlyInAv1", () => {
+  const rep = (codecs: string, width: number, height: number) =>
+    `<Representation id="${width}" bandwidth="1" codecs="${codecs}" width="${width}" height="${height}"><BaseURL>x</BaseURL></Representation>`;
+  const mpd = (...sets: string[][]) =>
+    `<?xml version="1.0"?><MPD><Period>${sets
+      .map(
+        (reps, i) =>
+          `<AdaptationSet id="${i}" contentType="video" mimeType="video/mp4">${reps.join("")}</AdaptationSet>`
+      )
+      .join(
+        ""
+      )}<AdaptationSet id="9" contentType="audio"><Representation id="140" bandwidth="1" codecs="mp4a.40.2"/></AdaptationSet></Period></MPD>`;
+
+  it("lists the AV1 qualities above the H.264 ladder", () => {
+    const text = mpd(
+      [
+        rep("av01.0.12M.08", 3840, 2160),
+        rep("av01.0.12M.08", 2560, 1440),
+        rep("av01.0.08M.08", 1920, 1080),
+      ],
+      [rep("avc1.640028", 1920, 1080), rep("avc1.4d401f", 1280, 720)]
+    );
+    expect(qualitiesOnlyInAv1(text, 1080)).toEqual([2160, 1440]);
+  });
+
+  it("reads a portrait video's quality from its short side", () => {
+    const text = mpd([rep("av01.0.12M.08", 2160, 3840)], []);
+    expect(qualitiesOnlyInAv1(text, 1080)).toEqual([2160]);
+  });
+
+  it("takes the codec from the adaptation set when representations omit it", () => {
+    const text = `<MPD><Period><AdaptationSet contentType="video" codecs="av01.0.12M.08"><Representation id="a" bandwidth="1" width="3840" height="2160"/></AdaptationSet></Period></MPD>`;
+    expect(qualitiesOnlyInAv1(text, 1080)).toEqual([2160]);
+  });
+
+  it("lists nothing when AV1 goes no higher", () => {
+    const text = mpd([rep("av01.0.08M.08", 1920, 1080)], []);
+    expect(qualitiesOnlyInAv1(text, 1080)).toEqual([]);
   });
 });

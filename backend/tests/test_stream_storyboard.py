@@ -42,7 +42,7 @@ def info(monkeypatch) -> dict[str, Any]:
     }
     monkeypatch.setattr(
         "app.services.stream_preview._extract_preview_info",
-        lambda url, *, force=False: state,
+        lambda url, **_kw: state,
     )
     return state
 

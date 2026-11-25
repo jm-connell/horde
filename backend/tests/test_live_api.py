@@ -692,7 +692,8 @@ def test_preview_meta_reports_is_live(client, monkeypatch, live):
         "subtitles": [],
     }
     monkeypatch.setattr(
-        "app.services.stream_preview.extract_stream_preview_meta", lambda url: meta
+        "app.services.stream_preview.extract_stream_preview_meta",
+        lambda url, **_kw: meta,
     )
     resp = client.get(
         "/api/preview/meta", params={"url": f"https://www.youtube.com/watch?v={VID}"}
@@ -705,7 +706,7 @@ def test_preview_meta_reports_is_live(client, monkeypatch, live):
 def test_preview_meta_is_live_defaults_to_false(client, monkeypatch):
     monkeypatch.setattr(
         "app.services.stream_preview.extract_stream_preview_meta",
-        lambda url: {"id": VID, "title": "x"},
+        lambda url, **_kw: {"id": VID, "title": "x"},
     )
     resp = client.get(
         "/api/preview/meta", params={"url": f"https://www.youtube.com/watch?v={VID}"}

@@ -1,5 +1,5 @@
 /** Probe decode capability for preview DASH gating. */
-import { getItem, getJson, removeItem, setItem, setJson } from "../storage";
+import { getItem, getJson, setItem, setJson } from "../storage";
 
 export type DecodeSupport = {
   /** True when any AV1 ladder step reports MediaCapabilities.supported. */
@@ -7,12 +7,14 @@ export type DecodeSupport = {
   /** True when AV1 at some step also reports powerEfficient. */
   av1Efficient: boolean;
   /**
-   * Highest height this device can decode (supported). Used as the Auto ABR
-   * ceiling — playback health still downgrades if frames drop.
+   * Highest height this device can decode (supported). Auto never goes above
+   * it; playback health still steps down if frames drop.
    */
   maxSupportedHeight: number;
-  /** Highest height reported powerEfficient (informational / soft preference). */
-  maxEfficientHeight: number;
+  /** Highest AV1 height decoded in hardware (powerEfficient); 0 for none. */
+  maxAv1Efficient: number;
+  /** Highest VP9 height above 1080p decoded in hardware; 0 for none. */
+  maxVp9Efficient: number;
 };
 
 const HEIGHTS = [2160, 1440, 1080, 720] as const;
@@ -35,6 +37,12 @@ const AV1_CODEC_FOR: Record<number, string> = {
   1440: "av01.0.12M.08",
   1080: "av01.0.08M.08",
   720: "av01.0.05M.08",
+};
+
+/** VP9 as YouTube serves live streams above 1080p (WebM, profile 0). */
+const VP9_CODEC_FOR: Record<number, string> = {
+  2160: "vp09.00.51.08",
+  1440: "vp09.00.50.08",
 };
 
 /**
@@ -74,8 +82,8 @@ export function trackQuality(t: {
   return bestQ;
 }
 
-// v2: supported≠powerEfficient split + height-appropriate AV1 codec strings.
-const CACHE_KEY = "horde.decode-capability.v2";
+// v3: AV1 and VP9 hardware decode heights (Auto's ceilings above 1080p).
+const CACHE_KEY = "horde.decode-capability.v3";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type Cached = DecodeSupport & { at: number };
@@ -94,7 +102,8 @@ function readCache(): DecodeSupport | null {
     av1Supported: Boolean(parsed.av1Supported),
     av1Efficient: Boolean(parsed.av1Efficient),
     maxSupportedHeight: Number(parsed.maxSupportedHeight) || 1080,
-    maxEfficientHeight: Number(parsed.maxEfficientHeight) || 720,
+    maxAv1Efficient: Number(parsed.maxAv1Efficient) || 0,
+    maxVp9Efficient: Number(parsed.maxVp9Efficient) || 0,
   };
 }
 
@@ -105,7 +114,8 @@ function writeCache(support: DecodeSupport): void {
 
 async function canDecode(
   codec: string,
-  height: number
+  height: number,
+  container = "video/mp4"
 ): Promise<{ supported: boolean; powerEfficient: boolean }> {
   const mc = navigator.mediaCapabilities;
   if (!mc?.decodingInfo) {
@@ -117,7 +127,7 @@ async function canDecode(
     const result = await mc.decodingInfo({
       type: "media-source",
       video: {
-        contentType: `video/mp4; codecs="${codec}"`,
+        contentType: `${container}; codecs="${codec}"`,
         width,
         height,
         bitrate,
@@ -138,12 +148,13 @@ export const DEFAULT_DECODE_SUPPORT: DecodeSupport = {
   av1Supported: false,
   av1Efficient: false,
   maxSupportedHeight: 1080,
-  maxEfficientHeight: 1080,
+  maxAv1Efficient: 0,
+  maxVp9Efficient: 0,
 };
 
 /**
- * Probe decode support for AV1 and H.264 ladders.
- * Results are cached in localStorage for a week (v2 key).
+ * Probe decode support for the AV1 and H.264 ladders, and VP9 above 1080p.
+ * Results are cached in localStorage for a week.
  */
 export async function probeDecodeSupport(): Promise<DecodeSupport> {
   const cached = readCache();
@@ -163,7 +174,8 @@ export async function probeDecodeSupport(): Promise<DecodeSupport> {
   let maxAv1Supported = 0;
   let maxAv1Efficient = 0;
   let maxAvcSupported = 0;
-  let maxAvcEfficient = 0;
+  let maxVp9Supported = 0;
+  let maxVp9Efficient = 0;
 
   for (const h of HEIGHTS) {
     const av1 = await canDecode(AV1_CODEC_FOR[h] ?? "av01.0.08M.08", h);
@@ -178,61 +190,35 @@ export async function probeDecodeSupport(): Promise<DecodeSupport> {
     const avc = await canDecode(avcCodec, h);
     if (avc.supported) {
       maxAvcSupported = Math.max(maxAvcSupported, h);
-      if (avc.powerEfficient) {
-        maxAvcEfficient = Math.max(maxAvcEfficient, h);
+    }
+    const vp9Codec = VP9_CODEC_FOR[h];
+    if (vp9Codec) {
+      const vp9 = await canDecode(vp9Codec, h, "video/webm");
+      if (vp9.supported) {
+        maxVp9Supported = Math.max(maxVp9Supported, h);
+        if (vp9.powerEfficient) {
+          maxVp9Efficient = Math.max(maxVp9Efficient, h);
+        }
       }
     }
   }
 
   // Floor: always allow at least 720p when MSE exists.
-  const maxSupportedHeight = Math.max(maxAv1Supported, maxAvcSupported, 720);
-  const maxEfficientHeight = Math.max(maxAv1Efficient, maxAvcEfficient, 720);
+  const maxSupportedHeight = Math.max(
+    maxAv1Supported,
+    maxAvcSupported,
+    maxVp9Supported,
+    720
+  );
   const support: DecodeSupport = {
     av1Supported,
     av1Efficient,
     maxSupportedHeight,
-    maxEfficientHeight,
+    maxAv1Efficient,
+    maxVp9Efficient,
   };
   writeCache(support);
   return support;
-}
-
-const DOWNGRADE_KEY = "horde.decode-downgrade.v1";
-const DOWNGRADE_TTL_MS = 24 * 60 * 60 * 1000;
-
-export type DowngradeRecord = {
-  maxHeight: number;
-  blacklistAv1: boolean;
-  at: number;
-};
-
-export function readDowngrade(): DowngradeRecord | null {
-  const parsed = getJson<DowngradeRecord | null>(
-    DOWNGRADE_KEY,
-    (v): v is DowngradeRecord =>
-      typeof v === "object" &&
-      v !== null &&
-      typeof (v as DowngradeRecord).maxHeight === "number",
-    null
-  );
-  if (!parsed) return null;
-  if (
-    typeof parsed.at === "number" &&
-    Date.now() - parsed.at > DOWNGRADE_TTL_MS
-  ) {
-    removeItem(DOWNGRADE_KEY);
-    return null;
-  }
-  return parsed;
-}
-
-export function writeDowngrade(record: Omit<DowngradeRecord, "at">): void {
-  setJson(DOWNGRADE_KEY, { ...record, at: Date.now() });
-}
-
-/** Clear a persisted auto-downgrade (e.g. user explicitly picks 4K / AV1). */
-export function clearDowngrade(): void {
-  removeItem(DOWNGRADE_KEY);
 }
 
 const BW_KEY = "horde.abr-bandwidth.v1";

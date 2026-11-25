@@ -277,3 +277,36 @@ def test_adaptive_ranges_are_read_once_the_url_works(monkeypatch, sleeps):
     }
     stream_preview._build_representation(fmt, {}, kind="video")
     assert order == ["wait", "probe"]
+
+
+def test_meta_background_lookups_wait_behind_interactive_ones(client, monkeypatch):
+    """A hover warm-up nobody is waiting on must not hold up a video being opened."""
+    from app.services import ytdlp_common
+
+    url = "https://www.youtube.com/watch?v=warmupprio1"
+    seen: list[int] = []
+
+    def gated(target, opts, *, priority, **_kw):
+        seen.append(priority)
+        return {
+            "id": "warmupprio1",
+            "title": "A warmed video",
+            "duration": 60.0,
+            "webpage_url": target,
+            "formats": [
+                {
+                    "format_id": "18",
+                    "url": "https://rr1.googlevideo.com/v",
+                    "height": 360,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(stream_preview, "extract_info_gated", gated)
+    assert client.get("/api/preview/meta", params={"url": url}).status_code == 200
+    res = client.get("/api/preview/meta", params={"url": url, "background": "true"})
+    assert res.status_code == 200, res.text
+    assert seen == [
+        ytdlp_common.EXTRACT_PRIORITY_INTERACTIVE,
+        ytdlp_common.EXTRACT_PRIORITY_DOWNLOAD,
+    ]

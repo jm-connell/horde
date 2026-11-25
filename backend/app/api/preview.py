@@ -43,6 +43,8 @@ from ..services.url_safety import (
 from ..services.ytdlp_common import (
     ERROR_KIND_NETWORK,
     ERROR_KIND_UNKNOWN,
+    EXTRACT_PRIORITY_DOWNLOAD,
+    EXTRACT_PRIORITY_INTERACTIVE,
     MembersOnlyError,
     classify_ytdlp_error,
     http_detail_for_error,
@@ -497,13 +499,23 @@ def preview_extraction_error(exc: Exception, cleaned: str) -> StarletteHTTPExcep
 )
 def preview_meta(
     url: str = Query(...),
+    background: bool = False,
     session: Session = Depends(get_session),
     gate: ExtractionGate = Depends(extraction_gate),
     user: AuthUser = Depends(current_user),
 ):
+    """A stream's details for the watch page.
+
+    ``background=true`` marks a lookup nobody is waiting on yet (a hover
+    warm-up): it queues behind the videos people are opening.
+    """
     cleaned = _require_video_url(url)
+    # Not EXTRACT_PRIORITY_BACKGROUND: that waits behind catalog indexing.
+    priority = EXTRACT_PRIORITY_DOWNLOAD if background else EXTRACT_PRIORITY_INTERACTIVE
     try:
-        meta = gate.run(stream_preview.extract_stream_preview_meta, cleaned)
+        meta = gate.run(
+            stream_preview.extract_stream_preview_meta, cleaned, priority=priority
+        )
     except HTTPException:
         raise  # 429 / 504 from the gate
     except Exception as exc:

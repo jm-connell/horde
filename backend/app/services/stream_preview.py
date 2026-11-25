@@ -658,7 +658,9 @@ def _build_representation(
     return rep
 
 
-def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
+def _extract_preview_info(
+    url: str, *, force: bool = False, priority: int = EXTRACT_PRIORITY_INTERACTIVE
+) -> dict[str, Any]:
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -674,7 +676,7 @@ def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
                 opts,
                 cache_key=url,
                 force=force,
-                priority=EXTRACT_PRIORITY_INTERACTIVE,
+                priority=priority,
             )
         )
     except Exception as exc:
@@ -874,9 +876,11 @@ def _storyboard(info: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def extract_stream_preview_meta(url: str) -> dict[str, Any]:
+def extract_stream_preview_meta(
+    url: str, *, priority: int = EXTRACT_PRIORITY_INTERACTIVE
+) -> dict[str, Any]:
     """Metadata for the in-app preview page (includes description for chapters)."""
-    info = _extract_preview_info(url)
+    info = _extract_preview_info(url, priority=priority)
     preview_height = _max_adaptive_height(info)
     if preview_height is None:
         fmt = _pick_progressive_format(info)

@@ -13,15 +13,22 @@ import { usePlaybackHealth } from "../../hooks/usePlaybackHealth";
 import {
   selectQualityTrack,
   useApplyShakaQuality,
+  type StreamQualityState,
 } from "../../hooks/useShakaDash";
 import type { StreamQuality } from "../../hooks/useSettings";
-import { clearDowngrade, trackQuality } from "../../utils/decodeCapability";
+import { trackQuality } from "../../utils/decodeCapability";
 import {
   abrRestrictions,
   streamQualityToChoice,
   type QualityChoice,
 } from "../videoPlayerQuality";
 import type { StreamType } from "../videoPlayerTypes";
+
+const freshStreamState = (): StreamQualityState => ({
+  downgrade: null,
+  av1Picked: false,
+  av1Only: [],
+});
 
 interface Options {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -58,6 +65,8 @@ export function useStreamQuality({
   showQualityNotice,
 }: Options) {
   const capabilityMaxHeightRef = useRef<number>(2160);
+  /** This stream's quality state; a reload of the stream keeps it. */
+  const streamStateRef = useRef<StreamQualityState>(freshStreamState());
   const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() =>
     streamQualityToChoice(defaultStreamQuality)
   );
@@ -76,6 +85,7 @@ export function useStreamQuality({
   >([]);
   /** A new source starts from the setting again with an empty ladder. */
   const resetQuality = useCallback(() => {
+    streamStateRef.current = freshStreamState();
     setAvailableHeights([]);
     setActiveQuality(null);
     setQualityChoice(streamQualityToChoice(defaultStreamQuality));
@@ -141,11 +151,37 @@ export function useStreamQuality({
     setQualityChoice
   );
 
+  /** Load this stream again where it is playing (a codec changes on a load). */
+  const reloadHere = useCallback(() => {
+    const t = videoRef.current?.currentTime ?? 0;
+    if (t > 1) pendingSeekRef.current = t;
+    setDashReloadToken((n) => n + 1);
+  }, [videoRef, pendingSeekRef, setDashReloadToken]);
+
   const pickQuality = useCallback(
     (choice: QualityChoice) => {
-      // Explicit ladder picks override a persisted auto-downgrade / AV1 blacklist.
+      const stream = streamStateRef.current;
+      if (typeof choice === "number" && stream.av1Only.includes(choice)) {
+        // Only the AV1 ladder has it: load this video again with that ladder.
+        streamStateRef.current = {
+          downgrade: null,
+          av1Picked: true,
+          av1Only: [],
+        };
+        setQualityChoice(choice);
+        reloadHere();
+        return;
+      }
+      if (choice === "auto" && stream.av1Picked) {
+        // Auto plays the codec this device decodes in hardware again.
+        streamStateRef.current = { ...stream, av1Picked: false };
+        setQualityChoice("auto");
+        reloadHere();
+        return;
+      }
+      // Explicit ladder picks override the step-down / AV1 blacklist.
       if (choice !== "auto") {
-        clearDowngrade();
+        stream.downgrade = null;
         capabilityMaxHeightRef.current = Math.max(
           capabilityMaxHeightRef.current,
           typeof choice === "number" ? choice : 2160
@@ -153,7 +189,7 @@ export function useStreamQuality({
       }
       applyQualityChoice(choice);
     },
-    [applyQualityChoice]
+    [applyQualityChoice, reloadHere]
   );
 
   usePlaybackHealth({
@@ -162,6 +198,12 @@ export function useStreamQuality({
     onDowngrade: ({ maxHeight, blacklistAv1, notice }) => {
       const p = shakaPlayerRef.current;
       if (!p) return;
+      const stream = streamStateRef.current;
+      const prev = stream.downgrade;
+      stream.downgrade = {
+        maxHeight: Math.min(prev?.maxHeight ?? maxHeight, maxHeight),
+        blacklistAv1: Boolean(prev?.blacklistAv1) || blacklistAv1,
+      };
       capabilityMaxHeightRef.current = Math.min(
         capabilityMaxHeightRef.current,
         maxHeight
@@ -171,10 +213,8 @@ export function useStreamQuality({
       try {
         if (blacklistAv1) {
           // Codec family change needs a reload so Shaka re-filters AdaptationSets.
-          // readDowngrade() is consulted on the next load.
-          const t = videoRef.current?.currentTime ?? 0;
-          if (t > 1) pendingSeekRef.current = t;
-          setDashReloadToken((n) => n + 1);
+          // The reload reads streamStateRef.
+          reloadHere();
         } else {
           const tracks = p.getVariantTracks() ?? [];
           variantTracksRef.current = tracks;
@@ -208,6 +248,7 @@ export function useStreamQuality({
     setAvailableHeights,
     activeQuality,
     capabilityMaxHeightRef,
+    streamStateRef,
     variantTracksRef,
     pickQuality,
     resetQuality,

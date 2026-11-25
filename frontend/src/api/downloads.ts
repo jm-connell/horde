@@ -29,10 +29,16 @@ export const downloadsApi = {
     );
   },
 
-  getPreviewMeta(url: string, opts?: ReadOptions): Promise<StreamPreviewMeta> {
+  /** ``background``: a lookup nobody is waiting on yet (a hover warm-up),
+   *  which the server runs after the videos people are opening. */
+  getPreviewMeta(
+    url: string,
+    opts?: ReadOptions & { background?: boolean }
+  ): Promise<StreamPreviewMeta> {
+    const bg = opts?.background ? "&background=true" : "";
     return request<StreamPreviewMeta>(
-      `/api/preview/meta?url=${encodeURIComponent(url)}`,
-      opts
+      `/api/preview/meta?url=${encodeURIComponent(url)}${bg}`,
+      { signal: opts?.signal }
     );
   },
 

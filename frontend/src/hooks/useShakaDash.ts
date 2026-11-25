@@ -21,10 +21,10 @@ import type {
 import {
   probeDecodeSupport,
   readBandwidthEstimate,
-  readDowngrade,
   trackQuality,
   type DecodeSupport,
 } from "../utils/decodeCapability";
+import type { StreamDowngrade } from "./usePlaybackHealth";
 import {
   abrRestrictions,
   distinctQualities,
@@ -97,6 +97,8 @@ export const STREAM_FAILED_MESSAGE =
   "The stream stopped loading. Try again or download the video.";
 /** Shaka's error category for failed requests (bad status, timeout, offline). */
 const SHAKA_NETWORK_CATEGORY = 1;
+/** `shaka.net.NetworkingEngine.RequestType.MANIFEST`. */
+const SHAKA_MANIFEST_REQUEST = 0;
 
 const LIVE_MAX_RETRIES = 6;
 /** Recoverable errors (failed playlist refreshes) in a row before giving up. */
@@ -130,6 +132,72 @@ export function videoCodecConfig(live: boolean, preferAv1: boolean) {
   return {
     preferredVideo: preferVideoCodecs(preferAv1 ? ["av01", "avc1"] : ["avc1"]),
   };
+}
+
+/** What one stream has learned or been asked for. Its reloads keep it. */
+export type StreamQualityState = {
+  /** The automatic step-down in force. */
+  downgrade: StreamDowngrade | null;
+  /** The viewer picked a quality only AV1 offers: load the AV1 ladder. */
+  av1Picked: boolean;
+  /** Qualities only the AV1 ladder has, while the H.264 one is loaded. */
+  av1Only: number[];
+};
+
+/**
+ * How a load of a stream plays on Auto. Shaka keeps one codec's ladder per
+ * load: H.264 tops out at 1080p, and only AV1 (VP9 for live) goes higher.
+ * AV1 decoded in software drops frames at the start of every high-quality
+ * video, so a video loads AV1 only where it decodes in hardware, or for a
+ * quality the viewer picked that only AV1 offers. Above 1080p Auto goes only
+ * as high as that codec decodes in hardware.
+ */
+export function streamLoadLimits(
+  caps: DecodeSupport,
+  live: boolean,
+  state: StreamQualityState
+): { preferAv1: boolean; maxHeight: number } {
+  const { downgrade } = state;
+  const preferAv1 =
+    !live && !downgrade?.blacklistAv1 && (caps.av1Efficient || state.av1Picked);
+  const hardwareTop = live
+    ? caps.maxVp9Efficient
+    : preferAv1
+      ? caps.maxAv1Efficient
+      : 0;
+  const maxHeight = Math.min(
+    caps.maxSupportedHeight,
+    Math.max(1080, hardwareTop),
+    downgrade?.maxHeight ?? Infinity
+  );
+  return { preferAv1, maxHeight };
+}
+
+const attr = (tag: string, name: string): string | null =>
+  new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1] ?? null;
+
+/**
+ * Qualities above `top` that a DASH manifest offers only in AV1, read from
+ * the manifest text: Shaka drops the other codec's variants when it loads.
+ */
+export function qualitiesOnlyInAv1(mpd: string, top: number): number[] {
+  const found = new Set<number>();
+  const sets = mpd.matchAll(
+    /<AdaptationSet\b([^>]*)>([\s\S]*?)<\/AdaptationSet>/g
+  );
+  for (const [, setAttrs, body] of sets) {
+    const setCodecs = attr(setAttrs, "codecs");
+    for (const [tag] of body.matchAll(/<Representation\b[^>]*>/g)) {
+      const codecs = attr(tag, "codecs") ?? setCodecs ?? "";
+      if (!codecs.startsWith("av01")) continue;
+      const q = trackQuality({
+        width: Number(attr(tag, "width")) || null,
+        height: Number(attr(tag, "height")) || null,
+      });
+      if (q > top) found.add(q);
+    }
+  }
+  return [...found].sort((a, b) => b - a);
 }
 
 /**
@@ -173,6 +241,8 @@ export interface UseShakaDashArgs {
   shakaPlayerRef: MutableRefObject<ShakaPlayer | null>;
   qualityChoiceRef: MutableRefObject<QualityChoice>;
   capabilityMaxHeightRef: MutableRefObject<number>;
+  /** This stream's quality state (read at every load of it). */
+  streamStateRef: MutableRefObject<StreamQualityState>;
   variantTracksRef: MutableRefObject<
     {
       width?: number | null;
@@ -205,6 +275,7 @@ export function useShakaDashLoad({
   shakaPlayerRef,
   qualityChoiceRef,
   capabilityMaxHeightRef,
+  streamStateRef,
   variantTracksRef,
   casting,
   enterCompatMode,
@@ -314,15 +385,9 @@ export function useShakaDashLoad({
           ]);
         if (cancelled || !videoRef.current) return;
 
-        const downgrade = readDowngrade();
-        // Allow the full supported ladder (incl. 4K AV1). Health monitor
-        // downgrades if the decoder starts dropping frames.
-        const maxHeight = Math.min(
-          caps.maxSupportedHeight,
-          downgrade?.maxHeight ?? Infinity
-        );
+        const stream = streamStateRef.current;
+        const { preferAv1, maxHeight } = streamLoadLimits(caps, live, stream);
         capabilityMaxHeightRef.current = maxHeight;
-        const preferAv1 = caps.av1Supported && !downgrade?.blacklistAv1;
         const bwEstimate = persistedBw ?? 5_000_000;
         const initialChoice = qualityChoiceRef.current;
 
@@ -430,6 +495,15 @@ export function useShakaDashLoad({
             return;
           }
         }
+        // The manifest's text, for the qualities only its AV1 ladder has.
+        let manifestText: string | null = null;
+        if (!live && !preferAv1) {
+          p.getNetworkingEngine()?.registerResponseFilter((type, response) => {
+            if (type === SHAKA_MANIFEST_REQUEST) {
+              manifestText = new TextDecoder().decode(response.data);
+            }
+          });
+        }
         const startAt = startTimeRef.current;
         await p.load(src, !live && startAt > 1 ? startAt : undefined);
         if (cancelled) return;
@@ -438,7 +512,10 @@ export function useShakaDashLoad({
         const variants = p.getVariantTracks() ?? [];
         variantTracksRef.current = variants;
         const qualities = distinctQualities(variants);
-        setAvailableHeights(qualities);
+        stream.av1Only = manifestText
+          ? qualitiesOnlyInAv1(manifestText, qualities[0] ?? 0)
+          : [];
+        setAvailableHeights([...stream.av1Only, ...qualities]);
         if (abrEnabled) {
           p.configure({
             restrictions: abrRestrictions(maxHeight, variants),

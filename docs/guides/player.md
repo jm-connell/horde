@@ -68,7 +68,7 @@ Stream preview uses adaptive **DASH** (Shaka) when available. Quality choices:
 
 | Choice | Meaning |
 |--------|---------|
-| **Auto** | ABR within capability |
+| **Auto** | ABR within what this device decodes smoothly (below) |
 | **2160** | Cap at 4K |
 | **1440** | Cap at 1440p |
 | **1080** | Cap at 1080p |
@@ -79,7 +79,9 @@ Library files typically play as progressive local media; if DASH fails on a stre
 
 On a live broadcast a new quality takes over a few seconds after you pick it, where the already buffered part ends.
 
-When the browser keeps dropping frames for several seconds, Horde lowers the quality ceiling one step ("Reduced quality for smooth playback") and keeps that ceiling for later streams for a day; picking a quality other than **Auto** in the menu clears it. This only happens while Horde's window has focus: frames dropped while you are in another window, such as a fullscreen game on the other monitor, say nothing about what your device can play. Shaka's own bandwidth-based quality changes on **Auto** still apply.
+YouTube offers H.264 only up to 1080p; 1440p and 4K come as AV1 (VP9 on a live broadcast), which is heavy to decode without a hardware decoder. So on **Auto**, a video that isn't downloaded plays AV1 only where your browser reports hardware AV1 decoding, and H.264 up to 1080p elsewhere; a live broadcast goes above 1080p only where VP9 decodes in hardware. Higher qualities stay in the menu: picking 1440p or 4K loads that video again in AV1 for as long as you watch it, and picking **Auto** goes back.
+
+When the browser keeps dropping frames for several seconds, Horde lowers the quality ceiling one step ("Reduced quality for smooth playback") for the rest of that video; the next video starts on its full ladder again, and picking a quality other than **Auto** in the menu lifts it. This only happens while Horde's window has focus: frames dropped while you are in another window, such as a fullscreen game on the other monitor, say nothing about what your device can play. Shaka's own bandwidth-based quality changes on **Auto** still apply.
 
 A stream that freezes restarts itself. When it should be playing but the clock has stood still (5 seconds with video buffered, 20 seconds while it waits for video and none arrives), the player reloads the stream at the same position, staying in fullscreen; after two reloads that do not get it moving it switches to the progressive URL. This covers Safari on iPad and iPhone leaving a stream stuck after the sound moves between devices (AirPods switching to a phone and back).
 

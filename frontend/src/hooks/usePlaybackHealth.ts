@@ -3,7 +3,6 @@ import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 import {
   trackQuality,
   writeBandwidthEstimate,
-  writeDowngrade,
 } from "../utils/decodeCapability";
 
 export const POLL_MS = 2000;
@@ -19,6 +18,16 @@ export type HealthDowngrade = {
   notice: string;
 };
 
+/**
+ * The step-down in force on the current stream. It ends with that stream: frames
+ * dropped once (a game still rendering on the other monitor) must not cap the
+ * next one.
+ */
+export type StreamDowngrade = Pick<
+  HealthDowngrade,
+  "maxHeight" | "blacklistAv1"
+>;
+
 export type FrameSample = {
   now: number;
   /** Shaka's running counts (`getStats()`). */
@@ -33,7 +42,7 @@ export type FrameSample = {
  * `check` answers true once per bad stretch of `SUSTAINED_MS`. Samples taken
  * while another window has focus do not count: a fullscreen game on the
  * other monitor holding the GPU says nothing about what this device can
- * play, and the cut it would cause is remembered for later streams.
+ * play.
  */
 export class FrameDropWatch {
   private prev: { dropped: number; decoded: number } | null = null;
@@ -134,10 +143,6 @@ export function usePlaybackHealth({
           isAv1,
         });
 
-        writeDowngrade({
-          maxHeight: nextQuality,
-          blacklistAv1: isAv1,
-        });
         onDowngradeRef.current({
           maxHeight: nextQuality,
           blacklistAv1: isAv1,

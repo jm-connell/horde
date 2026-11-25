@@ -7,6 +7,24 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **Streams no longer get stuck at 480p.** When the browser keeps dropping
+  frames (a game still rendering on the other monitor, say), Horde lowers
+  that video's quality as before, but the next video starts at full quality
+  again. Before, the cut lasted a day for every stream in that browser, a
+  refresh did not clear it, and the quality menu could not go above it.
+- **High-quality streams start smoothly on more devices.** On Auto, a video
+  that isn't downloaded plays AV1 only where the browser decodes it in
+  hardware, and H.264 up to 1080p elsewhere, instead of stuttering through
+  software AV1 first; live broadcasts go above 1080p only with hardware VP9
+  decoding. 1440p and 4K stay in the quality menu: picking one loads that
+  video in AV1.
+- **Opening a stream is no longer held up by cards you point past.** A video
+  starts loading ahead of the click only once the mouse rests on its card
+  for a moment, so cards the mouse crosses on the way are left alone, and
+  those early lookups now wait behind the video you click.
+
 ## [1.4.2] - 2026-11-24
 
 ### Added
