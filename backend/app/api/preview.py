@@ -816,7 +816,12 @@ def preview_manifest(request: Request, url: str = Query(...)):
     )
 
 
-@router.get("/media", response_class=RAW, responses=VIDEO_STREAM)
+@router.get(
+    "/media",
+    response_class=RAW,
+    responses=VIDEO_STREAM,
+    dependencies=[Depends(desktop_status.track_media)],
+)
 async def preview_media(
     request: Request,
     token: str = Query(...),
@@ -844,7 +849,6 @@ async def preview_media(
             status_code=400, detail=f"Could not open preview media: {exc}"
         ) from exc
 
-    desktop_status.note_media_served()
     return await _proxy_upstream(request, resolved, allow_refresh=(token, itag))
 
 
@@ -901,5 +905,4 @@ async def preview_stream(request: Request, url: str = Query(...)):
     delay = stream_preview.seconds_until_available(resolved)
     if delay > 0:
         await asyncio.sleep(delay)
-    desktop_status.note_media_served()
     return await _proxy_upstream(request, resolved, stream_url=cleaned)

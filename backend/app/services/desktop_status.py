@@ -10,8 +10,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from collections import Counter
-from dataclasses import dataclass
+from collections.abc import Iterator
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -33,13 +35,38 @@ WRITE_INTERVAL_SEC = 5.0
 class DesktopRuntime:
     """What the status file needs that nothing else keeps."""
 
-    #: When video bytes (library, preview or live) were last served to anyone.
+    #: When video bytes (library, preview or live) were last being served.
     last_media_at: datetime | None = None
+    #: Media responses being sent right now. A film can be one response that
+    #: lasts hours, so "last served" alone would call a viewer idle.
+    media_active: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def begin_media(self) -> None:
+        with self._lock:
+            self.media_active += 1
+            self.last_media_at = datetime.now(UTC)
+
+    def end_media(self) -> None:
+        with self._lock:
+            self.media_active = max(0, self.media_active - 1)
+            self.last_media_at = datetime.now(UTC)
 
 
-def note_media_served() -> None:
-    """Stamp the time on the active context. Called by the media routes."""
-    current().desktop.last_media_at = datetime.now(UTC)
+def track_media() -> Iterator[None]:
+    """Route dependency for the endpoints that send video bytes.
+
+    Counts the response as in flight until it has been sent in full (FastAPI
+    runs the part after ``yield`` once the response is finished, also when the
+    client goes away), so the desktop app never calls Horde idle while someone
+    is watching or saving a video.
+    """
+    runtime = current().desktop
+    runtime.begin_media()
+    try:
+        yield
+    finally:
+        runtime.end_media()
 
 
 def _iso(value: datetime) -> str:
@@ -53,15 +80,17 @@ def build_status(ctx: AppContext) -> dict[str, Any]:
     with ctx.session() as session:
         users = accounts.count_users(session)
     last_media = ctx.desktop.last_media_at
+    media_active = ctx.desktop.media_active
     return {
         "written_at": _iso(datetime.now(UTC)),
         "pid": os.getpid(),
         "version": os.environ.get("HORDE_VERSION", "").strip() or None,
         "setup_required": users == 0
         or not app_settings_svc.load().get("setup_completed"),
-        "busy": bool(running) or queued > 0,
+        "busy": bool(running) or queued > 0 or media_active > 0,
         "running": running,
         "queued": queued,
+        "media_active": media_active,
         "last_media_at": _iso(last_media) if last_media else None,
     }
 

@@ -91,7 +91,7 @@ scripts/check_release_assets.py   expected asset list
    "last_media_at": "2026-11-24T09:58:12+00:00"}
   ```
   `running` counts `activity.snapshot()["running"]` by task kind; `queued` is the sum of its queue counts; `busy` is `bool(running) or queued > 0`; `last_media_at` is null until a video, preview or live segment has been served.
-- `desktop_status.note_media_served() -> None`: stamps the time on `get_ctx().desktop`; called from the routes that stream video bytes (library video, DASH preview, live HLS). Cheap, always called, no runtime check.
+- `desktop_status.track_media`: a route dependency on the endpoints that send video bytes (library video, DASH preview, live HLS). It counts a response as in flight until it has been sent, so one long response (a whole film) keeps `busy` true; `media_active` in the status file is that count.
 - `ffmpeg_bin.low_priority_kwargs() -> dict[str, int]`: `{"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS}` on Windows, `{}` elsewhere, passed to `Popen`/`run` wherever `below_playback` wraps the command.
 - Health for signed-in users gains `runtime: "server" | "desktop"`.
 

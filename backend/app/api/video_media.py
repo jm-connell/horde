@@ -292,7 +292,12 @@ def _resolve_rendition(video: Video, rendition: str | None) -> Path | None:
     return path
 
 
-@router.get("/videos/{video_id}/stream", response_class=RAW, responses=VIDEO_STREAM)
+@router.get(
+    "/videos/{video_id}/stream",
+    response_class=RAW,
+    responses=VIDEO_STREAM,
+    dependencies=[Depends(desktop_status.track_media)],
+)
 def stream_video(
     video_id: int,
     request: Request,
@@ -305,7 +310,6 @@ def stream_video(
     compat = _resolve_rendition(video, rendition)
     path = compat or _resolve_media(video)
     file_size = path.stat().st_size
-    desktop_status.note_media_served()
 
     suffix = path.suffix.lower()
     content_type = CONTENT_TYPES.get(suffix, "application/octet-stream")
@@ -389,7 +393,10 @@ def media_token(
     "/videos/{video_id}/file",
     response_class=RAW,
     responses=FILE_DOWNLOAD,
-    dependencies=[Depends(require_permission("offline_download"))],
+    dependencies=[
+        Depends(require_permission("offline_download")),
+        Depends(desktop_status.track_media),
+    ],
 )
 def download_video_file(
     video_id: int,
@@ -404,5 +411,4 @@ def download_video_file(
     content_type = CONTENT_TYPES.get(path.suffix.lower(), "application/octet-stream")
     tag = " (H.264)" if compat is not None else ""
     filename = f"{_safe_filename(video.title)}{tag}{path.suffix.lower()}"
-    desktop_status.note_media_served()
     return FileResponse(path, media_type=content_type, filename=filename)
