@@ -83,6 +83,17 @@ else
   gate "vite build" in_dir "$ROOT/frontend" npm run --silent build
 fi
 
+# --- desktop shell -----------------------------------------------------------
+if [[ ! -d "$ROOT/desktop/node_modules" ]]; then
+  echo "desktop/node_modules missing; run 'npm ci' in desktop/ first" >&2
+  failed+=("desktop npm ci (not run)")
+else
+  gate "desktop eslint" in_dir "$ROOT/desktop" npm run --silent lint
+  gate "desktop prettier --check" in_dir "$ROOT/desktop" npm run --silent format:check
+  gate "desktop tsc" in_dir "$ROOT/desktop" npm run --silent typecheck
+  gate "desktop vitest" in_dir "$ROOT/desktop" npm test --silent
+fi
+
 # --- docs --------------------------------------------------------------------
 if "$PYTHON" -c "import mkdocs" 2>/dev/null; then
   gate "mkdocs build --strict" in_dir "$ROOT" "$PYTHON" -m mkdocs build --strict --site-dir "$(mktemp -d)"
