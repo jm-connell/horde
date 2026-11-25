@@ -1,0 +1,57 @@
+{
+  "python": {
+    "version": "3.14.10",
+    "release": "20261124",
+    "source": "https://github.com/astral-sh/python-build-standalone",
+    "targets": {
+      "win32-x64": {
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261124/cpython-3.14.10%2B20261124-x86_64-pc-windows-msvc-install_only_stripped.tar.gz",
+        "sha256": "72d45d2d16c509293999550c684003b0411ab9ec6e473675d1df2af5be050790"
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261124/cpython-3.14.10%2B20261124-aarch64-apple-darwin-install_only_stripped.tar.gz",
+        "sha256": "81fca81fcc8a715288fd12286b66bbdaaf4a0db6818bc91826ddbcffae2ac2cf"
+      },
+      "linux-x64": {
+        "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261124/cpython-3.14.10%2B20261124-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz",
+        "sha256": "73ee0629c19e9f87077f318cd50d7e703137c274479ce8e8fd5723e75c86c9bc"
+      }
+    }
+  },
+  "ffmpeg": {
+    "version": "7.1.4-3",
+    "source": "https://github.com/jellyfin/jellyfin-ffmpeg/tree/v7.1.4-3",
+    "targets": {
+      "win32-x64": {
+        "url": "https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v7.1.4-3/jellyfin-ffmpeg_7.1.4-3_portable_win64-clang-gpl.zip",
+        "sha256": "113adeb702683c38be40a65d859f8ef7ffb07bae9df16dfb6c3df5ac3d95ef3c"
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v7.1.4-3/jellyfin-ffmpeg_7.1.4-3_portable_macarm64-gpl.tar.xz",
+        "sha256": "99d689816a41075574928a0b3059101fd454fc58f465c99105a73b5c415ac86d"
+      },
+      "linux-x64": {
+        "url": "https://github.com/jellyfin/jellyfin-ffmpeg/releases/download/v7.1.4-3/jellyfin-ffmpeg_7.1.4-3_portable_linux64-gpl.tar.xz",
+        "sha256": "cab9ff40a47e4232d231e4eb7e4e85fabfeec56c6905266bc94291fc0881f83f"
+      }
+    }
+  },
+  "deno": {
+    "version": "2.9.8",
+    "source": "https://github.com/denoland/deno/tree/v2.9.8",
+    "targets": {
+      "win32-x64": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-pc-windows-msvc.zip",
+        "sha256": "cba84b26e0df5ae7f74fc66b86a95b866872a86292ebd84fa1e959927edd93bf"
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-aarch64-apple-darwin.zip",
+        "sha256": "9f0bf660393da2eaff044cdc7444cb08c73f235849b61d224d825a194ce7c98e"
+      },
+      "linux-x64": {
+        "url": "https://github.com/denoland/deno/releases/download/v2.9.8/deno-x86_64-unknown-linux-gnu.zip",
+        "sha256": "e890975bc2549807bbcc0b584ffafda72cc7c93349dd99c80483dd784f6c4609"
+      }
+    }
+  }
+}
