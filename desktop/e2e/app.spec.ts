@@ -24,6 +24,14 @@ const ELECTRON: string =
   PACKAGED ??
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- in Node the electron package exports the binary's path
   (require("electron") as string);
+/** The YouTube helper is bundled (packaged builds) or pointed at. */
+const HELPER =
+  Boolean(process.env.HORDE_DESKTOP_POT_DIR) ||
+  (PACKAGED !== null &&
+    [
+      path.join(path.dirname(PACKAGED), "resources", "pot", "server"),
+      path.join(path.dirname(PACKAGED), "..", "Resources", "pot", "server"),
+    ].some((dir) => fs.existsSync(path.join(dir, "horde_lifeline.ts"))));
 
 test.describe.configure({ mode: "serial" });
 
@@ -153,21 +161,54 @@ async function createAdminShown(page: Page): Promise<void> {
   ).toBeVisible({ timeout: 60_000 });
 }
 
+interface Launch {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+  output: string;
+}
+
+const describeLaunch = (r: Launch) =>
+  `exit code ${r.code}, signal ${r.signal}, output:\n${r.output.slice(-4_000)}`;
+
 /** A second launch of the same app, as the person double-clicking again. */
-async function secondLaunch(extra: string[]): Promise<number | null> {
-  const proc = spawn(ELECTRON, appArgs(extra), {
+async function secondLaunch(extra: string[]): Promise<Launch> {
+  // The same switches as Playwright's own launch, which adds --no-sandbox on
+  // Linux: without it Chromium aborts at once where unprivileged user
+  // namespaces are restricted (Ubuntu 24.04, as on GitHub's runners).
+  const sandbox =
+    process.platform === "linux" && !extra.includes("--no-sandbox")
+      ? ["--no-sandbox"]
+      : [];
+  const proc = spawn(ELECTRON, [...sandbox, ...appArgs(extra)], {
     env: appEnv(),
-    stdio: "ignore",
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
   });
-  const code = await Promise.race([
-    exited(proc),
-    new Promise<"timeout">((r) => setTimeout(() => r("timeout"), 30_000)),
+  let output = "";
+  proc.stdout.on("data", (d: Buffer) => (output += d.toString()));
+  proc.stderr.on("data", (d: Buffer) => (output += d.toString()));
+  const done = await Promise.race([
+    new Promise<true>((resolve) => proc.once("close", () => resolve(true))),
+    new Promise<false>((r) => setTimeout(() => r(false), 30_000)),
   ]);
-  if (code === "timeout") {
+  if (!done) {
     proc.kill("SIGKILL");
-    throw new Error("the second launch did not exit");
+    throw new Error(`the second launch did not exit; output:\n${output}`);
   }
-  return code;
+  return { code: proc.exitCode, signal: proc.signalCode, output };
+}
+
+async function helperPort(): Promise<number> {
+  let found: number | null = null;
+  await expect
+    .poll(async () => {
+      found = await current().evaluate(() => globalThis.__hordeTest!.potPort());
+      return found;
+    })
+    .not.toBeNull();
+  const pid = await current().evaluate(() => globalThis.__hordeTest!.potPid());
+  if (pid !== null) serverPids.add(pid); // killed in afterAll if left over
+  return found!;
 }
 
 test.beforeAll(async () => {
@@ -212,13 +253,42 @@ test.afterAll(async () => {
     }
   }
   if (app) await app.close().catch(() => undefined);
-  fs.rmSync(home, { recursive: true, force: true });
+  // Windows may hold a file a moment after the processes ended.
+  fs.rmSync(home, {
+    recursive: true,
+    force: true,
+    maxRetries: 10,
+    retryDelay: 500,
+  });
 });
 
 test("the window shows the create-admin page", async () => {
   const page = await current().firstWindow({ timeout: 120_000 });
   await createAdminShown(page);
   expect(page.url()).toContain(`http://127.0.0.1:${port}/`);
+});
+
+test("the YouTube helper answers", async () => {
+  test.skip(!HELPER, "no YouTube helper bundled");
+  const pot = await helperPort();
+  let body: { version?: unknown } = {};
+  await expect
+    .poll(
+      async () => {
+        try {
+          const res = await fetch(`http://127.0.0.1:${pot}/ping`, {
+            signal: AbortSignal.timeout(3_000),
+          });
+          body = (await res.json()) as { version?: unknown };
+          return res.ok;
+        } catch {
+          return false;
+        }
+      },
+      { timeout: 60_000 }
+    )
+    .toBe(true);
+  expect(typeof body.version).toBe("string");
 });
 
 test("the player's codecs are supported", async () => {
@@ -287,12 +357,14 @@ test("a second launch exits and the first one shows its window", async () => {
   };
   await close();
   // At sign-in (--hidden): no second server and no window.
-  expect(await secondLaunch(["--hidden"])).toBe(0);
+  const hidden = await secondLaunch(["--hidden"]);
+  expect(hidden.code, describeLaunch(hidden)).toBe(0);
   await new Promise((r) => setTimeout(r, 2_000));
   expect(await windowCount()).toBe(0);
   // Opened again by hand: the running one shows its window.
   const shown = current().waitForEvent("window");
-  expect(await secondLaunch([])).toBe(0);
+  const again = await secondLaunch([]);
+  expect(again.code, describeLaunch(again)).toBe(0);
   await createAdminShown(await shown);
   expect(await serverPid()).toBe(first);
   expect(await pingOk()).toBe(true);
@@ -325,6 +397,7 @@ test("the tray menu has every item", async () => {
 
 test("Quit Horde stops the server and frees the port", async () => {
   const pid = await serverPid();
+  const pot = HELPER ? await helperPort() : null;
   const proc = current().process();
   const gone = exited(proc);
   await clickTray("Quit Horde");
@@ -332,6 +405,7 @@ test("Quit Horde stops the server and frees the port", async () => {
   app = null;
   expect(alive(pid)).toBe(false);
   expect(await accepts(port)).toBe(false);
+  if (pot !== null) expect(await accepts(pot)).toBe(false);
 });
 
 test("killing the app also ends the server", async () => {
@@ -341,6 +415,7 @@ test("killing the app also ends the server", async () => {
   await launch();
   const pid = await serverPid();
   await expect.poll(pingOk, { timeout: 120_000 }).toBe(true);
+  const pot = HELPER ? await helperPort() : null;
   const proc = current().process();
   const gone = exited(proc);
   proc.kill("SIGKILL");
@@ -348,4 +423,7 @@ test("killing the app also ends the server", async () => {
   app = null;
   await expect.poll(() => alive(pid), { timeout: 20_000 }).toBe(false);
   expect(await accepts(port)).toBe(false);
+  if (pot !== null) {
+    await expect.poll(() => accepts(pot), { timeout: 20_000 }).toBe(false);
+  }
 });

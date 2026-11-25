@@ -22,6 +22,8 @@ export interface StartOptions {
   host: string;
   port: number;
   mediaDir: string;
+  /** The YouTube helper's address, when the shell started one. */
+  potUrl: string | null;
 }
 
 export type ExitHandler = (info: {
@@ -100,6 +102,7 @@ export class HordeServer {
       PYTHONUNBUFFERED: "1",
       PYTHONUTF8: "1",
     };
+    if (opts.potUrl) env.YTDLP_POT_BASE_URL = opts.potUrl;
     const ffmpeg = bundledTool(this.paths, "ffmpeg");
     if (ffmpeg) env.FFMPEG_BIN = ffmpeg;
     const deno = bundledTool(this.paths, "deno");

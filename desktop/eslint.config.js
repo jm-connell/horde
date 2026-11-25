@@ -13,6 +13,8 @@ module.exports = tseslint.config(
       "node_modules/**",
       "playwright-report/**",
       "test-results/**",
+      // Deno code for the YouTube helper, run by the bundled deno.
+      "pot/**",
     ],
   },
   js.configs.recommended,

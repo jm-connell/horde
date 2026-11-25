@@ -1,6 +1,7 @@
 // Wiring only: the pieces live in their own modules, the decisions in logic.ts.
 import { mkdirSync } from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import {
   type BrowserWindow,
   Menu,
@@ -31,6 +32,7 @@ import {
   statusLine,
 } from "./logic";
 import { resolvePaths } from "./paths";
+import { PotHelper } from "./pot";
 import { HordeServer, isPortFree } from "./server";
 import {
   type TrayActions,
@@ -47,6 +49,9 @@ interface HordeTestHook {
   clickTray(label: string): void;
   serverPid(): number | null;
   port(): number;
+  /** The YouTube helper, when one runs. */
+  potPid(): number | null;
+  potPort(): number | null;
   /** Links the shell would have opened in the default browser. */
   openedExternally(): string[];
 }
@@ -128,6 +133,11 @@ function run(): void {
     if (!intentional && !quitting) void recover();
   });
   const origin = () => `http://127.0.0.1:${server.port}`;
+  const pot = new PotHelper(
+    paths,
+    log,
+    path.join(app.getPath("userData"), "deno")
+  );
 
   const updater = new Updater({
     log: say,
@@ -148,7 +158,7 @@ function run(): void {
     prepareInstall: async () => {
       quitting = true;
       win?.close();
-      await server.stop();
+      await Promise.all([server.stop(), pot.stop()]);
       tray?.destroy();
       tray = null;
     },
@@ -156,6 +166,7 @@ function run(): void {
       quitting = false;
       if (!tray) makeTray();
       refreshTray();
+      await pot.start();
       if (!server.running) await startServer();
     },
     refresh: () => refreshTray(),
@@ -227,7 +238,7 @@ function run(): void {
       config.shareOnNetwork = false;
       save();
     }
-    server.start({ host, port, mediaDir: config.mediaDir });
+    server.start({ host, port, mediaDir: config.mediaDir, potUrl: pot.url });
     const mine = server.pid;
     refreshTray();
     const ok = await server.waitHealthy();
@@ -469,7 +480,7 @@ function run(): void {
     quitting = true;
     say("quitting");
     win?.close();
-    await server.stop();
+    await Promise.all([server.stop(), pot.stop()]);
     tray?.destroy();
     tray = null;
     app.quit();
@@ -568,6 +579,8 @@ function run(): void {
       },
       serverPid: () => server.pid,
       port: () => server.port,
+      potPid: () => pot.pid,
+      potPort: () => (pot.pid === null ? null : pot.port),
       openedExternally: () => [...external],
     };
   }
@@ -621,6 +634,8 @@ function run(): void {
       // Started at sign-in: let everything else start first.
       await new Promise((r) => setTimeout(r, HIDDEN_START_DELAY_MS));
     }
+    // The helper first, so the server starts knowing its address.
+    await pot.start();
     await startServer();
   });
 }

@@ -16,6 +16,9 @@ export interface Paths {
   backendDir: string;
   /** ffmpeg, ffprobe and deno; null when not bundled (development). */
   binDir: string | null;
+  /** The YouTube helper's `server` folder (bgutil-ytdlp-pot-provider with
+   * horde_lifeline.ts); null when it is not bundled. */
+  potServerDir: string | null;
   /** The built web UI when it is not in `backendDir/static`. */
   frontendDir: string | null;
   icon: string | null;
@@ -86,6 +89,7 @@ export function resolvePaths(): Paths {
   let backendDir: string;
   let binDir: string | null;
   let frontendDir: string | null = null;
+  let potServerDir: string | null = null;
   if (app.isPackaged) {
     const res = process.resourcesPath;
     python =
@@ -94,6 +98,7 @@ export function resolvePaths(): Paths {
         : path.join(res, "python", "bin", "python3");
     backendDir = path.join(res, "backend");
     binDir = path.join(res, "bin");
+    potServerDir = path.join(res, "pot", "server");
   } else {
     // desktop/ is the app path; the repository is its parent.
     const repo = path.resolve(app.getAppPath(), "..");
@@ -111,12 +116,27 @@ export function resolvePaths(): Paths {
   if (env.HORDE_DESKTOP_PYTHON) python = env.HORDE_DESKTOP_PYTHON;
   if (env.HORDE_DESKTOP_BACKEND_DIR) backendDir = env.HORDE_DESKTOP_BACKEND_DIR;
   if (env.HORDE_DESKTOP_BIN_DIR) binDir = env.HORDE_DESKTOP_BIN_DIR;
+  if (env.HORDE_DESKTOP_POT_DIR) potServerDir = env.HORDE_DESKTOP_POT_DIR;
+  if (
+    potServerDir &&
+    !existsSync(path.join(potServerDir, "horde_lifeline.ts"))
+  ) {
+    potServerDir = null;
+  }
   const icon = firstExisting([
     path.join(app.getAppPath(), "assets", "icon.png"),
     path.join(backendDir, "static", "icon-192.png"),
     path.join(app.getAppPath(), "..", "frontend", "public", "icon-192.png"),
   ]);
-  return { ...folders(), python, backendDir, binDir, frontendDir, icon };
+  return {
+    ...folders(),
+    python,
+    backendDir,
+    binDir,
+    potServerDir,
+    frontendDir,
+    icon,
+  };
 }
 
 /** A bundled tool, or null when it is not there. */
