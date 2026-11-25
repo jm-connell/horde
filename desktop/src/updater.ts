@@ -28,6 +28,22 @@ const TICK_MS = 60_000;
 /** A check older than this is redone before answering an "Update now". */
 const CHECK_FRESH_MS = 2 * 60_000;
 const MAX_FILE = 64 * 1024;
+/** Still running this long after quitAndInstall: the install did not happen. */
+const INSTALL_GIVE_UP_MS = 30_000;
+
+/** File writes and renames in the update folder, tried 3 times 100 ms apart:
+ * on Windows the server may hold a file open for a moment. Runs once a
+ * minute, so waiting synchronously is fine. */
+function retry<T>(op: () => T): T {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return op();
+    } catch (err) {
+      if (attempt >= 3) throw err;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  }
+}
 
 export interface UpdaterHost {
   log(message: string): void;
@@ -41,6 +57,8 @@ export interface UpdaterHost {
   serverReady(): boolean;
   /** Stop the server and let the app quit without asking. */
   prepareInstall(): Promise<void>;
+  /** The install did not happen: tray and server back, quitting off. */
+  abortInstall(): Promise<void>;
   refresh(): void;
   openExternal(url: string): void;
   notify(title: string, body: string): void;
@@ -57,6 +75,7 @@ export class Updater {
   private readyVersion: string | null = null;
   private availableVersion: string | null = null;
   private installing = false;
+  private installTimer: NodeJS.Timeout | null = null;
   private manualCheck = false;
   private readonly mac = process.platform === "darwin";
 
@@ -97,6 +116,9 @@ export class Updater {
     autoUpdater.on("update-downloaded", (info) => {
       this.readyVersion = info.version;
       this.setCheck("ready");
+      // An "Update now" request in flight keeps its entry, or its outcome
+      // would never be reported.
+      if (this.host.pending()?.requestId) return;
       // Installed on the next quit at the latest; remember it for the notice.
       this.host.setPending({
         requestId: null,
@@ -107,6 +129,10 @@ export class Updater {
       });
     });
     autoUpdater.on("error", (err) => {
+      if (this.installing) {
+        void this.abortInstall(`the updater failed: ${String(err)}`);
+        return;
+      }
       log(`update check failed: ${String(err)}`);
       this.setCheck("error");
       if (this.manualCheck) {
@@ -175,7 +201,39 @@ export class Updater {
       reopenWindow: this.host.windowOpen(),
     });
     await this.host.prepareInstall();
-    this.updater.quitAndInstall(true, true);
+    this.installTimer = setTimeout(
+      () => void this.abortInstall("Horde was still running 30 seconds later"),
+      INSTALL_GIVE_UP_MS
+    );
+    try {
+      this.updater.quitAndInstall(true, true);
+    } catch (err) {
+      await this.abortInstall(`quitAndInstall failed: ${String(err)}`);
+    }
+  }
+
+  /** Undo a failed install: Horde keeps running the version it has. */
+  private async abortInstall(reason: string): Promise<void> {
+    if (!this.installing) return;
+    const log = this.host.log;
+    log(`the update was not installed: ${reason}`);
+    if (this.installTimer) clearTimeout(this.installTimer);
+    this.installTimer = null;
+    // Not offered again every minute; a later check downloads it anew.
+    this.readyVersion = null;
+    this.check = "unknown";
+    const pending = this.host.pending();
+    if (pending?.requestId) {
+      // Kept: the watcher reports this request failed once the server is up.
+      log("the Update now request will be reported as failed");
+    } else {
+      this.host.setPending(null);
+    }
+    log("restarting the tray and the server");
+    await this.host.abortInstall();
+    this.installing = false;
+    this.host.refresh();
+    log("back on the current version");
   }
 
   // --- ADR 0011 host watcher ------------------------------------------------
@@ -202,8 +260,14 @@ export class Updater {
     const body = Object.entries(lines)
       .map(([k, v]) => `${k}=${v}\n`)
       .join("");
-    writeFileSync(tmp, body, "utf8");
-    renameSync(tmp, file);
+    retry(() => writeFileSync(tmp, body, "utf8"));
+    retry(() => renameSync(tmp, file));
+  }
+
+  private writeLog(line: string): void {
+    retry(() =>
+      writeFileSync(path.join(this.dir(), "update.log"), `${line}\n`, "utf8")
+    );
   }
 
   private tick(): void {
@@ -223,6 +287,7 @@ export class Updater {
     mkdirSync(this.dir(), { recursive: true });
     this.write("watcher.env", { LAST_SEEN: isoSeconds(now) });
     const request = this.read("request.env");
+    const current = this.read("current.env");
     const status = this.read("status.env");
     const fresh = now - this.checkedAt < CHECK_FRESH_MS;
     const check =
@@ -231,34 +296,49 @@ export class Updater {
         : this.check;
     const pending = this.host.pending();
     const action = watcherAction(
-      { request, status },
+      { request, current, status },
       {
         currentVersion: app.getVersion(),
         check,
         readyVersion: this.readyVersion,
         pending,
+        installing: this.installing,
       }
     );
+    // Move request.env to current.env. Idempotent: a request that an earlier
+    // attempt already moved is fine. Throws (files left as they are) when it
+    // still fails; the next tick retries or reports it interrupted.
     const take = (id: string) => {
-      if (request?.REQUEST_ID === id) {
-        renameSync(
-          path.join(this.dir(), "request.env"),
-          path.join(this.dir(), "current.env")
-        );
-      }
+      if (request?.REQUEST_ID !== id) return;
+      retry(() => {
+        try {
+          renameSync(
+            path.join(this.dir(), "request.env"),
+            path.join(this.dir(), "current.env")
+          );
+        } catch (err) {
+          const moved = this.read("current.env")?.REQUEST_ID === id;
+          if ((err as NodeJS.ErrnoException).code !== "ENOENT" || !moved) {
+            throw err;
+          }
+        }
+      });
     };
-    const finish = (id: string, state: string, code: number, line: string) => {
+    const finish = (
+      id: string,
+      state: string,
+      code: number | null,
+      line: string
+    ) => {
+      const same = status?.REQUEST_ID === id && status.STARTED_AT;
       this.write("status.env", {
         STATE: state,
         REQUEST_ID: id,
-        STARTED_AT:
-          status?.REQUEST_ID === id && status.STARTED_AT
-            ? status.STARTED_AT
-            : isoSeconds(now),
+        STARTED_AT: same ? status.STARTED_AT : isoSeconds(now),
         FINISHED_AT: isoSeconds(now),
-        EXIT_CODE: String(code),
+        ...(code === null ? {} : { EXIT_CODE: String(code) }),
       });
-      writeFileSync(path.join(this.dir(), "update.log"), `${line}\n`, "utf8");
+      this.writeLog(line);
     };
     switch (action.kind) {
       case "stamp":
@@ -268,7 +348,9 @@ export class Updater {
         return;
       case "discard-request":
         this.host.log("ignoring a malformed update request");
-        rmSync(path.join(this.dir(), "request.env"), { force: true });
+        retry(() =>
+          rmSync(path.join(this.dir(), "request.env"), { force: true })
+        );
         return;
       case "start":
         take(action.requestId);
@@ -277,12 +359,19 @@ export class Updater {
           REQUEST_ID: action.requestId,
           STARTED_AT: isoSeconds(now),
         });
-        writeFileSync(
-          path.join(this.dir(), "update.log"),
-          `Installing Horde ${action.toVersion}; Horde restarts by itself.\n`,
-          "utf8"
+        this.writeLog(
+          `Installing Horde ${action.toVersion}; Horde restarts by itself.`
         );
         void this.install(action.requestId);
+        return;
+      case "report-interrupted":
+        this.host.log(`update request ${action.requestId} was interrupted`);
+        finish(
+          action.requestId,
+          "interrupted",
+          null,
+          "The update stopped before it finished. Try again."
+        );
         return;
       case "report-up-to-date":
         take(action.requestId);

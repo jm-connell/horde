@@ -77,7 +77,12 @@ function linuxEntryOn(file: string): boolean {
 export function autostartEnabled(): boolean {
   if (!autostartSupported()) return false;
   if (process.platform === "linux") return linuxEntryOn(autostartFile());
-  return app.getLoginItemSettings({ args: [HIDDEN_ARG] }).openAtLogin;
+  const settings = app.getLoginItemSettings({ args: [HIDDEN_ARG] });
+  // Windows: false too when the person turned Horde off in Task Manager's
+  // Startup apps, which openAtLogin alone does not show.
+  return process.platform === "win32"
+    ? settings.executableWillLaunchAtLogin
+    : settings.openAtLogin;
 }
 
 export function setAutostart(on: boolean): void {

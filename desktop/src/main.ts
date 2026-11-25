@@ -25,6 +25,7 @@ import {
   type PendingUpdate,
   RestartLimiter,
   type ServerStatus,
+  bindHost,
   choosePort,
   isIdle,
   statusLine,
@@ -59,6 +60,10 @@ const STATUS_POLL_MS = 5_000;
 const HIDDEN_START_DELAY_MS = 30_000;
 
 app.setName("Horde");
+// Notifications need it on Windows, and it names the sign-in registry entry.
+// The same id as appId in electron-builder.yml.
+if (process.platform === "win32")
+  app.setAppUserModelId("io.github.jm-connell.horde");
 const paths = resolvePaths();
 // Before the single-instance lock, which lives in this folder.
 app.setPath("userData", paths.userData);
@@ -101,6 +106,11 @@ function run(): void {
   let serverReady = false;
   let wantWindow = !hidden;
   let quitting = false;
+  /** The restart limit or a failed update stopped the server for good. */
+  let gaveUp = false;
+  let winOrigin = "";
+  let replacingWindow = false;
+  let startingNoticeOpen = false;
   let justUpdated: PendingUpdate | null = null;
   const limiter = new RestartLimiter();
   const external: string[] = [];
@@ -140,6 +150,13 @@ function run(): void {
       win?.close();
       await server.stop();
       tray?.destroy();
+      tray = null;
+    },
+    abortInstall: async () => {
+      quitting = false;
+      if (!tray) makeTray();
+      refreshTray();
+      if (!server.running) await startServer();
     },
     refresh: () => refreshTray(),
     openExternal,
@@ -157,12 +174,29 @@ function run(): void {
     }
     if (!serverReady) {
       wantWindow = true; // opened as soon as the server answers
+      if (!TEST && !gaveUp && !startingNoticeOpen) {
+        // A migration after an update can take minutes: say so, not nothing.
+        startingNoticeOpen = true;
+        void dialog
+          .showMessageBox({
+            title: "Horde",
+            message: "Horde is still starting.",
+            detail:
+              "This can take a few minutes after an update. The window " +
+              "opens by itself when Horde is ready.",
+          })
+          .finally(() => {
+            startingNoticeOpen = false;
+          });
+      }
       return;
     }
-    win = createWindow(origin(), {
+    winOrigin = origin();
+    win = createWindow(winOrigin, {
       openExternal,
       onClosed: () => {
         win = null;
+        if (replacingWindow) return;
         if (!config.closeNoticeShown && !quitting && !TEST) {
           closeNotice();
           config.closeNoticeShown = true;
@@ -183,11 +217,17 @@ function run(): void {
       port = await choosePort(port + 1, (p) => isPortFree(p));
       say(`port ${config.port} is in use; using ${port} this time`);
     }
-    server.start({
-      host: config.shareOnNetwork ? "0.0.0.0" : "127.0.0.1",
-      port,
-      mediaDir: config.mediaDir,
-    });
+    // The status file of the last run says whether an admin exists.
+    const host = bindHost(config.shareOnNetwork, server.readStatus());
+    if (config.shareOnNetwork && host === "127.0.0.1") {
+      say(
+        "not sharing on the network: Horde has no admin account yet " +
+          "(or no status from the last run); sharing is switched off"
+      );
+      config.shareOnNetwork = false;
+      save();
+    }
+    server.start({ host, port, mediaDir: config.mediaDir });
     const mine = server.pid;
     refreshTray();
     const ok = await server.waitHealthy();
@@ -195,7 +235,7 @@ function run(): void {
       // Still this start's process: it hangs. Had it exited, the exit handler
       // has already restarted it (server.pid is then another process).
       if (server.running && server.pid === mine) {
-        say("the server did not answer in time");
+        say("the server did not answer within 30 minutes");
         await server.stop(10_000);
         void recover();
       }
@@ -203,6 +243,18 @@ function run(): void {
     }
     say(`the server answers at ${origin()}`);
     serverReady = true;
+    gaveUp = false;
+    if (win && winOrigin !== origin()) {
+      // The port changed: the window's navigation guard would block the new
+      // address, so it is replaced.
+      const visible = win.isVisible();
+      say(`the address changed to ${origin()}; reopening the window`);
+      replacingWindow = true;
+      win.destroy();
+      replacingWindow = false;
+      win = null;
+      if (visible) wantWindow = true;
+    }
     status = server.readStatus();
     if (justUpdated) {
       notify(
@@ -240,6 +292,8 @@ function run(): void {
   }
 
   async function stoppedWorking(): Promise<void> {
+    gaveUp = true;
+    refreshTray();
     for (;;) {
       const { response } = await dialog.showMessageBox({
         type: "error",
@@ -259,6 +313,8 @@ function run(): void {
   }
 
   async function couldNotStart(p: PendingUpdate): Promise<void> {
+    gaveUp = true;
+    refreshTray();
     const previous = `${RELEASES_URL}/tag/v${p.fromVersion}`;
     for (;;) {
       const { response } = await dialog.showMessageBox({
@@ -286,7 +342,13 @@ function run(): void {
 
   function trayState(): TrayState {
     return {
-      statusLine: server.running ? statusLine(status) : "Not running",
+      // Until /api/ping answers (minutes during a migration), and not from
+      // the status file a previous run left behind.
+      statusLine: serverReady
+        ? statusLine(status)
+        : gaveUp
+          ? "Not running"
+          : "Starting…",
       version: app.getVersion(),
       startAtSignIn: autostartEnabled(),
       canStartAtSignIn: autostartSupported(),
@@ -314,6 +376,11 @@ function run(): void {
     about: () => void about(),
     quit: () => void quit(),
   };
+
+  function makeTray(): void {
+    tray = createTray(paths.icon, say);
+    if (process.platform === "win32") tray?.on("click", showWindow);
+  }
 
   function refreshTray(): void {
     template = trayTemplate(trayState(), actions);
@@ -404,6 +471,7 @@ function run(): void {
     win?.close();
     await server.stop();
     tray?.destroy();
+    tray = null;
     app.quit();
   }
 
@@ -467,7 +535,11 @@ function run(): void {
   });
   // Closing the window keeps Horde running in the background.
   app.on("window-all-closed", () => undefined);
-  app.on("activate", () => showWindow());
+  // macOS also sends "activate" at launch: no "still starting" notice then.
+  app.on("activate", () => {
+    if (serverReady) showWindow();
+    else wantWindow = true;
+  });
   app.on("before-quit", (event) => {
     if (quitting) return;
     event.preventDefault();
@@ -532,8 +604,7 @@ function run(): void {
     save();
     registerLinuxApp(paths.icon, say);
 
-    tray = createTray(paths.icon, say);
-    if (process.platform === "win32") tray?.on("click", showWindow);
+    makeTray();
     refreshTray();
     setInterval(() => {
       const before = `${statusLine(status)}|${status?.setup_required}`;

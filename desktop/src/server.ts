@@ -13,8 +13,10 @@ import { bundledTool, type Paths } from "./paths";
 
 /** How long Quit waits for a graceful stop (the stop time Compose gives). */
 export const STOP_GRACE_MS = 40_000;
-/** How long a start may take before it counts as failed. */
-export const START_TIMEOUT_MS = 120_000;
+/** How long a live server may take to answer before it counts as hung. A
+ * database migration on a large library runs before /api/ping answers and can
+ * take many minutes; a server that exits is handled at once, not here. */
+export const START_TIMEOUT_MS = 30 * 60_000;
 
 export interface StartOptions {
   host: string;
@@ -138,8 +140,11 @@ export class HordeServer {
       stdio: ["pipe", "pipe", "pipe"],
       shell: false,
       windowsHide: true,
-      // Own process group on POSIX, so a stop can end ffmpeg children too.
-      // On Windows `detached` would open a console; taskkill /T does the tree.
+      // Own process group on POSIX, so a forced stop can end the server and
+      // anything left in its group. ffmpeg is not in it: the backend starts it
+      // in its own session (start_new_session=True) and ends it itself on a
+      // graceful stop. On Windows `detached` would open a console; taskkill /T
+      // ends the process tree instead.
       detached: process.platform !== "win32",
     });
     this.child = child;

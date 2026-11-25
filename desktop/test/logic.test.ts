@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   RestartLimiter,
+  bindHost,
   choosePort,
   desktopExec,
   isIdle,
@@ -109,6 +110,7 @@ describe("watcherAction", () => {
     check: "up-to-date",
     readyVersion: null,
     pending: null,
+    installing: false,
   };
   const pending = {
     requestId: id,
@@ -161,6 +163,67 @@ describe("watcherAction", () => {
       kind: "report-failed",
       requestId: id,
     });
+  });
+});
+
+describe("watcherAction, interrupted runs", () => {
+  const id = "0123456789abcdef0123456789abcdef";
+  const other = "fedcba9876543210fedcba9876543210";
+  const base: UpdaterState = {
+    currentVersion: "1.4.2",
+    check: "ready",
+    readyVersion: "1.5.0",
+    pending: null,
+    installing: false,
+  };
+
+  it("reports a running state nobody is handling as interrupted", () => {
+    expect(
+      watcherAction({ status: { STATE: "running", REQUEST_ID: id } }, base)
+    ).toEqual({ kind: "report-interrupted", requestId: id });
+  });
+
+  it("reports a taken request with no outcome as interrupted", () => {
+    expect(
+      watcherAction(
+        {
+          current: { REQUEST_ID: id },
+          status: { STATE: "updated", REQUEST_ID: other },
+        },
+        base
+      )
+    ).toEqual({ kind: "report-interrupted", requestId: id });
+  });
+
+  it("leaves a run alone while installing it", () => {
+    expect(
+      watcherAction(
+        { status: { STATE: "running", REQUEST_ID: id } },
+        { ...base, installing: true }
+      )
+    ).toEqual({ kind: "stamp" });
+  });
+
+  it("still starts a request already copied to current.env", () => {
+    expect(
+      watcherAction(
+        {
+          request: { REQUEST_ID: id },
+          current: { REQUEST_ID: id },
+          status: { STATE: "updated", REQUEST_ID: other },
+        },
+        base
+      )
+    ).toEqual({ kind: "start", requestId: id, toVersion: "1.5.0" });
+  });
+});
+
+describe("bindHost", () => {
+  it("shares only once an admin account exists", () => {
+    expect(bindHost(false, status())).toBe("127.0.0.1");
+    expect(bindHost(true, null)).toBe("127.0.0.1");
+    expect(bindHost(true, status({ setup_required: true }))).toBe("127.0.0.1");
+    expect(bindHost(true, status({ setup_required: false }))).toBe("0.0.0.0");
   });
 });
 

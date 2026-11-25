@@ -32,6 +32,8 @@ export interface UpdaterState {
   /** The downloaded version waiting to be installed. */
   readyVersion: string | null;
   pending: PendingUpdate | null;
+  /** The shell is stopping to install right now. */
+  installing: boolean;
 }
 
 /** What the shell does this minute in the part of the ADR 0011 host watcher.
@@ -43,7 +45,8 @@ export type WatcherAction =
   | { kind: "start"; requestId: string; toVersion: string }
   | { kind: "report-up-to-date"; requestId: string }
   | { kind: "report-failed"; requestId: string }
-  | { kind: "report-updated"; requestId: string };
+  | { kind: "report-updated"; requestId: string }
+  | { kind: "report-interrupted"; requestId: string };
 
 export const STATUS_STALE_MS = 30_000;
 export const MEDIA_QUIET_MS = 15 * 60_000;
@@ -163,21 +166,40 @@ const REQUEST_ID = /^[0-9a-f]{32}$/;
 export function watcherAction(
   files: {
     request?: Record<string, string>;
+    current?: Record<string, string>;
     status?: Record<string, string>;
   },
   updater: UpdaterState
 ): WatcherAction {
+  if (updater.installing) return { kind: "stamp" };
   const status = files.status ?? {};
   const pending = updater.pending;
+  const ownPending = (id: string | undefined) =>
+    Boolean(id) && pending?.requestId === id;
   // Back after installing an update this watcher started: say how it went.
+  if (status.STATE === "running" && ownPending(status.REQUEST_ID)) {
+    return pending!.toVersion === updater.currentVersion
+      ? { kind: "report-updated", requestId: pending!.requestId! }
+      : { kind: "report-failed", requestId: pending!.requestId! };
+  }
+  // As update_watch.sh: a run that stopped midway (the shell was killed, or
+  // a file could not be written) is reported as interrupted, never left
+  // "running". A request still waiting in request.env is not one of them.
+  if (status.STATE === "running") {
+    const id = status.REQUEST_ID ?? "";
+    return {
+      kind: "report-interrupted",
+      requestId: REQUEST_ID.test(id) ? id : "",
+    };
+  }
+  const taken = files.current?.REQUEST_ID ?? "";
   if (
-    status.STATE === "running" &&
-    pending?.requestId &&
-    status.REQUEST_ID === pending.requestId
+    REQUEST_ID.test(taken) &&
+    taken !== status.REQUEST_ID &&
+    taken !== files.request?.REQUEST_ID &&
+    !ownPending(taken)
   ) {
-    return pending.toVersion === updater.currentVersion
-      ? { kind: "report-updated", requestId: pending.requestId }
-      : { kind: "report-failed", requestId: pending.requestId };
+    return { kind: "report-interrupted", requestId: taken };
   }
   const request = files.request;
   if (request === undefined) return { kind: "stamp" };
@@ -197,6 +219,16 @@ export function watcherAction(
     case "checking":
       return { kind: "stamp" };
   }
+}
+
+/** Where the server listens. Sharing needs an admin account: the status file
+ * from the last run must say setup is done (desktop.json outlives a deleted
+ * data folder, and on a fresh one the first visitor becomes the admin). */
+export function bindHost(
+  share: boolean,
+  status: ServerStatus | null
+): "0.0.0.0" | "127.0.0.1" {
+  return share && status?.setup_required === false ? "0.0.0.0" : "127.0.0.1";
 }
 
 /** `2026-11-24T10:00:00Z`, the form update_watch.sh writes. */
