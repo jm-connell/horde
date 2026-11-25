@@ -101,8 +101,12 @@ def assemble_python(vendor: Path, out: Path, target: str) -> Path:
         shutil.rmtree(cache, ignore_errors=True)
     # Headers, man pages and Tcl/Tk: nothing the server runs.
     extras = [root / "include", root / "share", root / "tcl", root / "libs"]
-    for pattern in ("tcl*", "tk*", "itcl*", "thread*", "libtcl*"):
-        extras.extend((root / "lib").glob(pattern))
+    if not target.startswith("win32"):
+        # Tcl/Tk libraries beside the standard library. Not on Windows: there
+        # "lib" IS the standard library (Lib, case-insensitive), and a pattern
+        # like thread* would delete threading.py.
+        for pattern in ("tcl*", "tk*", "itcl*", "thread*", "libtcl*"):
+            extras.extend((root / "lib").glob(pattern))
     for extra in extras:
         if extra.is_dir():
             shutil.rmtree(extra, ignore_errors=True)
