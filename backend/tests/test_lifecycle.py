@@ -43,6 +43,7 @@ EXPECTED_WORKERS = {
     "comments",
     "stream-ai",
     "discovery",
+    "discovery-rank",
     "job-metadata",
     "trash-purge",
     "channel-retention",

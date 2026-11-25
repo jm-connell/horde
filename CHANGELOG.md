@@ -18,6 +18,18 @@ All notable changes to Horde are documented here. The format follows
   switches that video to the next codec down. Qualities your browser cannot
   decode at all are no longer listed.
 
+### Changed
+
+- **Recommended opens without the wait.** The feed was ranked when you opened
+  it, which took a second or more on a large library every time the server
+  had restarted, a new day had begun, a quarter of an hour had passed or you
+  had watched something. Horde now keeps the feed ranked in the background
+  for the people who opened Recommended in the last three days (the eight
+  most recent), so opening it only reads the result. In the first minute
+  after you watch something the feed is still ranked as you open it (the
+  background waits until playback has stopped), and **Refresh** ranks a new
+  order when you ask for it.
+
 ### Fixed
 
 - **Streams no longer get stuck at 480p.** When the browser keeps dropping

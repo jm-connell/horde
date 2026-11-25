@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import date, datetime
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
@@ -69,7 +69,7 @@ from ..services.discovery import (
 )
 from ..services.discovery import categories as discover_categories
 from ..services.discovery.candidates import Candidate
-from ..services.discovery.feed import ranked_feed
+from ..services.discovery.feed import ranked_feed, today_seed
 from ..services.discovery.picks import FeedItem
 from ..services.live import picks as live_picks
 from ..services.pagination import (
@@ -86,11 +86,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/discover", tags=["discover"])
 
 _SORT = "discover"
-
-
-def _today_seed() -> int:
-    """The default ordering seed: the same all day, so a plain reload is stable."""
-    return date.today().toordinal() % SEED_RANGE
 
 
 def _entry(c: Candidate) -> ChannelFeedEntry:
@@ -208,7 +203,7 @@ def discover_feed(
         raise CodedHTTPException(400, str(exc), "invalid_cursor") from exc
     use_seed = page.seed if page.seed is not None else seed
     if use_seed is None:
-        use_seed = _today_seed()
+        use_seed = today_seed()
     if not cursor and not prefetch:
         gather.note_viewed(session, ctx.discovery, user.id)
     feed = ranked_feed(session, ctx.discovery, user.id, use_seed, fresh=not cursor)
@@ -542,7 +537,7 @@ def discover_channels(
         session,
         ctx.discovery,
         user.id,
-        _today_seed() if seed is None else seed,
+        today_seed() if seed is None else seed,
         fresh=False,
     )
     picks = suggest.suggestions(

@@ -28,7 +28,8 @@ from __future__ import annotations
 import hashlib
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+from typing import Any
 
 import numpy as np
 from sqlmodel import Session, col, select
@@ -36,6 +37,7 @@ from sqlmodel import Session, col, select
 from ...models import DiscoveryHit, UserVideoState, Video, utcnow
 from .. import follows
 from ..ai.provider import get_embed_provider
+from ..pagination import SEED_RANGE
 from ..takeout import history as takeout_history
 from . import scoring
 from . import topics as topic_store
@@ -64,7 +66,7 @@ from .household import cowatched, taste_history
 from .mix import FEED_MAX, mix, mix_stats
 from .picks import ChannelStat, Feed, FeedItem, Reason, name_key, short
 from .relevance import Vectors, channel_maps, similarity, taste_relevance
-from .runtime import DiscoveryRuntime
+from .runtime import FEED_CACHE_TTL_SEC, DiscoveryRuntime
 from .tuning import DEFAULTS, Tuning
 from .tuning import for_user as load_tuning
 
@@ -608,6 +610,64 @@ def history_fingerprint(session: Session, user_id: int) -> tuple[object, ...]:
     return (lib, streamed, *hits, *feedback, *videos)
 
 
+def today_seed() -> int:
+    """The default ordering seed: the same all day, so a plain reload is stable."""
+    return date.today().toordinal() % SEED_RANGE
+
+
+@dataclass(frozen=True)
+class FeedState:
+    """What a kept ranking is filed under, and what it is current for."""
+
+    key: tuple[Any, ...]
+    fingerprint: tuple[object, ...]
+    seed: int
+    tuning: Tuning
+
+
+def feed_state(
+    session: Session, user_id: int, seed: int, tuning: Tuning | None = None
+) -> FeedState:
+    tuned = tuning if tuning is not None else load_tuning(session, user_id)
+    # A different tuning is a different feed: changing a slider never pages
+    # through a ranking made with the old values.
+    # Topics too: one that expires (or is added) ranks the feed again.
+    topic_ids = topic_store.active_ids(session, user_id)
+    return FeedState(
+        (user_id, seed, tuned.model_dump_json(), topic_ids),
+        history_fingerprint(session, user_id),
+        seed,
+        tuned,
+    )
+
+
+def kept_feed(
+    runtime: DiscoveryRuntime,
+    state: FeedState,
+    *,
+    fresh: bool = True,
+    max_age: float = FEED_CACHE_TTL_SEC,
+) -> Feed | None:
+    """The ranking kept for ``state``; with ``fresh`` only one that is current."""
+    cached = runtime.feed(state.key, max_age, paging=not fresh)
+    if (
+        isinstance(cached, tuple)
+        and isinstance(cached[1], Feed)
+        and (not fresh or cached[0] == state.fingerprint)
+    ):
+        return cached[1]
+    return None
+
+
+def rank(
+    session: Session, runtime: DiscoveryRuntime, user_id: int, state: FeedState
+) -> Feed:
+    """Rank the feed and keep it. The caller holds ``runtime.ranking(user_id)``."""
+    feed = build_feed(session, runtime, user_id, state.seed, state.tuning)
+    runtime.store_feed(state.key, (state.fingerprint, feed))
+    return feed
+
+
 def ranked_feed(
     session: Session,
     runtime: DiscoveryRuntime,
@@ -622,32 +682,15 @@ def ranked_feed(
     ``fresh`` (a first page): ranked again when anything it depends on changed.
     Otherwise (the next pages of a visit) the visit's ranking is kept even if
     the user watched something meanwhile, so an offset cursor never skips.
+    For today's seed a current ranking is usually there already (``warm``).
     """
-    tuned = tuning if tuning is not None else load_tuning(session, user_id)
-    # A different tuning is a different feed: changing a slider never pages
-    # through a ranking made with the old values.
-    # Topics too: one that expires (or is added) ranks the feed again.
-    topic_ids = topic_store.active_ids(session, user_id)
-    key = (user_id, seed, tuned.model_dump_json(), topic_ids)
-    fingerprint = history_fingerprint(session, user_id)
-
-    def kept() -> Feed | None:
-        cached = runtime.feed(key)
-        if (
-            isinstance(cached, tuple)
-            and isinstance(cached[1], Feed)
-            and (not fresh or cached[0] == fingerprint)
-        ):
-            return cached[1]
-        return None
-
-    feed = kept()
+    state = feed_state(session, user_id, seed, tuning)
+    feed = kept_feed(runtime, state, fresh=fresh)
     if feed is not None:
         return feed
     with runtime.ranking(user_id):
         # A request that arrived beside this one may have ranked it meanwhile.
-        feed = kept()
+        feed = kept_feed(runtime, state, fresh=fresh)
         if feed is None:
-            feed = build_feed(session, runtime, user_id, seed, tuned)
-            runtime.store_feed(key, (fingerprint, feed))
+            feed = rank(session, runtime, user_id, state)
     return feed
