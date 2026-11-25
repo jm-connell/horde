@@ -180,6 +180,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     from .services.ai import worker as ai_worker
     from .services.comments import worker as comments_worker
     from .services.discovery import gather as discovery_gather
+    from .services.discovery import warm as discovery_warm
     from .services.knowledge import worker as knowledge_worker
     from .services.live import directory as live_directory
     from .services.metadata_sync import create_sync_worker
@@ -216,6 +217,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     registry.start(comments_worker.create_worker())
     registry.start(stream_ai.create_worker())
     registry.start(discovery_gather.create_worker(ctx.discovery))
+    registry.start(discovery_warm.create_worker())
     registry.start(job_metadata.create_worker())
     registry.start(trash_svc.create_worker())
     registry.start(channel_retention.create_worker())

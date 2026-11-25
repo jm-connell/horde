@@ -11,7 +11,7 @@ from typing import Any
 from ..workers import BackgroundWorker
 from .candidates import CatalogPool, VectorStore
 
-#: Ranked feeds kept for paging (one per user and refresh).
+#: Ranked feeds kept (one per user and refresh): for paging, and ahead of a visit.
 FEED_CACHE_SIZE = 16
 FEED_CACHE_TTL_SEC = 15 * 60
 #: Hand-added topics' vectors kept (every user's together).
@@ -22,6 +22,8 @@ TOPIC_VECTOR_CACHE_SIZE = 512
 class _CachedFeed:
     at: float
     value: Any
+    #: When a visit last read a further page from it.
+    paged_at: float | None = None
 
 
 class DiscoveryRuntime:
@@ -29,7 +31,8 @@ class DiscoveryRuntime:
 
     Ranked feeds are cached by (user, seed) with the history fingerprint they
     were ranked for (``feed.ranked_feed``), so the pages of one visit come from
-    one ranking; a first page re-ranks when the fingerprint changed.
+    one ranking; a first page re-ranks when the fingerprint changed. Today's
+    feed of the people who use Recommended is ranked ahead of them (``warm``).
     """
 
     def __init__(self) -> None:
@@ -71,14 +74,34 @@ class DiscoveryRuntime:
         with self._lock:
             return self._ranking.setdefault(user_id, threading.Lock())
 
-    def feed(self, key: tuple[Any, ...]) -> Any | None:
+    def feed(
+        self,
+        key: tuple[Any, ...],
+        max_age: float = FEED_CACHE_TTL_SEC,
+        *,
+        paging: bool = False,
+    ) -> Any | None:
         now = time.monotonic()
         with self._lock:
             hit = self._feeds.get(key)
-            if hit is None or now - hit.at > FEED_CACHE_TTL_SEC:
+            if hit is None or now - hit.at > max_age:
                 return None
             self._feeds.move_to_end(key)
+            if paging:
+                hit.paged_at = now
             return hit.value
+
+    def paged_within(self, key: tuple[Any, ...], seconds: float) -> bool:
+        """A visit read a further page of this feed lately: its offsets count
+        on the ranking staying as it is."""
+        now = time.monotonic()
+        with self._lock:
+            hit = self._feeds.get(key)
+            return (
+                hit is not None
+                and hit.paged_at is not None
+                and now - hit.paged_at < seconds
+            )
 
     def store_feed(self, key: tuple[Any, ...], value: Any) -> None:
         with self._lock:

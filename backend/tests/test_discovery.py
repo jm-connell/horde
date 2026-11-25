@@ -8,6 +8,7 @@ plain from the angles.
 from __future__ import annotations
 
 import math
+import time
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -1495,3 +1496,248 @@ def test_the_cached_catalog_follows_the_catalog(client, session, admin_user):
     session.add(ChannelCatalogSkip(catalog_id=catalog.id, yt_id="cachedvid02"))
     session.commit()
     assert keys(4) == set()
+
+
+# --- ranked ahead in the background ----------------------------------------------
+
+
+def _count_rankings(monkeypatch) -> list[int]:
+    """The user ids ``build_feed`` ranks for from here on."""
+    from app.services.discovery import feed
+
+    ranked: list[int] = []
+    real = feed.build_feed
+
+    def counted(session, runtime, user_id, *args, **kwargs):
+        ranked.append(user_id)
+        return real(session, runtime, user_id, *args, **kwargs)
+
+    monkeypatch.setattr(feed, "build_feed", counted)
+    return ranked
+
+
+def _warmer():
+    """A warmer on the app's runtime with a clock the test moves."""
+    from app import context
+    from app.services.discovery import warm
+
+    clock = [1000.0]
+    return warm.Warmer(context.current().discovery, lambda: clock[0]), clock
+
+
+def test_an_active_users_feed_is_ranked_before_they_ask(
+    client, session, admin_user, monkeypatch
+):
+    """Opening Recommended reads a ranking made in the background: the request
+    ranks nothing, also after a restart emptied what was kept."""
+    from app import context
+
+    _discovered(session, admin_user, "found000001", "Found", "Chan")
+    _feed(client)  # They use Recommended.
+    context.current().discovery.forget_feeds(admin_user.id)  # As after a restart.
+    ranked = _count_rankings(monkeypatch)
+
+    warmer, _clock = _warmer()
+    warmer.run_once()
+    assert ranked == [admin_user.id]
+    assert [i["key"] for i in _feed(client)["items"]] == ["found000001"]
+    client.get("/api/discover/channels")
+    assert ranked == [admin_user.id]  # Read, not ranked again.
+    warmer.run_once()
+    assert ranked == [admin_user.id]  # And it is still current.
+
+
+def test_a_feed_is_ranked_again_once_the_watching_stops(
+    client, session, admin_user, monkeypatch
+):
+    """A watch puts the kept ranking out of date. A stream reports its place
+    every 30 seconds while it plays: the new ranking waits for that to stop."""
+    from app.services.discovery import warm
+
+    for n in range(3):
+        _discovered(session, admin_user, f"found{n:06d}", f"Found {n}", f"Chan {n}")
+    _feed(client)
+    ranked = _count_rankings(monkeypatch)
+    warmer, clock = _warmer()
+    warmer.run_once()
+    assert ranked == []  # The request's own ranking is current.
+
+    for report in range(1, 6):
+        client.post(
+            "/api/discover/history",
+            json={"url": _yt("found000000"), "position_sec": 30 * report},
+        )
+        for _pass in range(3):
+            clock[0] += warm.PASS_SEC
+            warmer.run_once()
+    assert ranked == []  # Still playing.
+    clock[0] += warm.QUIET_SEC
+    warmer.run_once()
+    assert ranked == [admin_user.id]
+    keys = [i["key"] for i in _items(client)]
+    assert sorted(keys) == ["found000001", "found000002"]
+    assert ranked == [admin_user.id]
+
+
+def test_a_slow_run_of_changes_is_not_ranked_one_by_one(
+    client, session, admin_user, add_video, monkeypatch
+):
+    """A bulk download adds a video a minute; each one puts every feed out of
+    date, and the background does not rank for each."""
+    from app.services.discovery import warm
+
+    _feed(client)
+    ranked = _count_rankings(monkeypatch)
+    warmer, clock = _warmer()
+    warmer.run_once()
+    for n in range(4):
+        add_video(title=f"Downloaded {n}", yt_id=f"dl{n:09d}")
+        for _pass in range(6):
+            clock[0] += warm.PASS_SEC
+            warmer.run_once()
+    assert len(ranked) < 4
+    clock[0] += warm.MIN_GAP_SEC
+    warmer.run_once()
+    assert ranked[-1] == admin_user.id
+    warmer.run_once()
+    count = len(ranked)
+    _feed(client)
+    assert len(ranked) == count  # The last one is current.
+
+
+def test_a_visit_being_paged_keeps_its_ranking(
+    client, session, admin_user, monkeypatch
+):
+    """The next page's offset counts on the visit's ranking: the background
+    leaves it alone while the person pages, and replaces it afterwards."""
+    from app.services.discovery import warm
+
+    for n in range(6):
+        _discovered(session, admin_user, f"found{n:06d}", f"Found {n}", f"Chan {n}")
+    order = [i["key"] for i in _items(client)]
+    first = _feed(client, limit=2)
+    second = _feed(client, cursor=first["next_cursor"], limit=2)
+    assert [i["key"] for i in second["items"]] == order[2:4]
+    # Watched in the mini player (it was on the first page) while scrolling.
+    client.post(
+        "/api/discover/history", json={"url": _yt(order[0]), "position_sec": 60}
+    )
+    ranked = _count_rankings(monkeypatch)
+    warmer, clock = _warmer()
+    warmer.run_once()
+    clock[0] += warm.QUIET_SEC
+    warmer.run_once()
+    assert ranked == []
+    third = _feed(client, cursor=second["next_cursor"], limit=2)
+    assert [i["key"] for i in third["items"]] == order[4:6]
+
+    # They stopped paging a while ago.
+    monkeypatch.setattr(warm, "PAGING_HOLD_SEC", 0.0)
+    warmer.run_once()
+    assert ranked == [admin_user.id]
+    assert order[0] not in [i["key"] for i in _items(client)]
+
+
+def test_the_background_takes_a_ranking_a_request_made_meanwhile(
+    session, init_db, admin_user, tmp_dirs, monkeypatch
+):
+    """A pass that waited for a request's ranking uses it."""
+    import threading
+
+    from app.models import DiscoveryState
+    from app.services.discovery import feed, warm
+
+    session.add(DiscoveryState(user_id=admin_user.id, last_viewed_at=datetime.now(UTC)))
+    session.commit()
+    runtime = tmp_dirs["ctx"].discovery
+    ranked = _count_rankings(monkeypatch)
+    warmer = warm.Warmer(runtime)
+    lock = runtime.ranking(admin_user.id)
+    lock.acquire()  # A request is ranking.
+    try:
+        waiting = threading.Thread(target=warmer.run_once)
+        waiting.start()
+        deadline = time.monotonic() + 10
+        while not warmer._tracked and time.monotonic() < deadline:
+            time.sleep(0.01)
+        state = feed.feed_state(session, admin_user.id, feed.today_seed())
+        feed.rank(session, runtime, admin_user.id, state)
+    finally:
+        lock.release()
+    waiting.join(timeout=10)
+    assert not waiting.is_alive()
+    assert ranked == [admin_user.id]  # The request's, not a second one.
+
+
+def test_one_persons_failure_does_not_cost_the_others_their_ranking(
+    session, admin_user, member_user, tmp_dirs, monkeypatch
+):
+    from app.models import DiscoveryState
+    from app.services.discovery import feed, warm
+
+    now = datetime.now(UTC)
+    session.add(DiscoveryState(user_id=member_user.id, last_viewed_at=now))
+    session.add(
+        DiscoveryState(user_id=admin_user.id, last_viewed_at=now - timedelta(minutes=5))
+    )
+    session.commit()
+    ranked: list[int] = []
+    real = feed.build_feed
+
+    def failing(session, runtime, user_id, *args, **kwargs):
+        if user_id == member_user.id:  # The latest visitor: ranked first.
+            raise RuntimeError("no ranking for you")
+        ranked.append(user_id)
+        return real(session, runtime, user_id, *args, **kwargs)
+
+    monkeypatch.setattr(feed, "build_feed", failing)
+    warm.Warmer(tmp_dirs["ctx"].discovery).run_once()
+    assert ranked == [admin_user.id]
+
+
+def test_only_people_who_use_recommended_are_ranked_ahead(
+    session, admin_user, member_user, tmp_dirs, monkeypatch
+):
+    from app.models import DiscoveryState
+    from app.services.discovery import gather, warm
+
+    now = datetime.now(UTC)
+    session.add(DiscoveryState(user_id=admin_user.id, last_viewed_at=now))
+    session.add(
+        DiscoveryState(
+            user_id=member_user.id,
+            last_viewed_at=now - gather.ACTIVE_FOR - timedelta(hours=1),
+        )
+    )
+    session.commit()
+    ranked = _count_rankings(monkeypatch)
+    warm.Warmer(tmp_dirs["ctx"].discovery).run_once()
+    assert ranked == [admin_user.id]
+
+
+def test_a_kept_ranking_is_renewed_before_it_lapses(
+    client, session, admin_user, monkeypatch
+):
+    """A ranking is kept for a while only; the background makes the next one
+    shortly before, so a request never finds none."""
+    from types import SimpleNamespace
+
+    from app.services.discovery import runtime as runtime_mod
+    from app.services.discovery import warm
+
+    _discovered(session, admin_user, "found000001", "Found", "Chan")
+    _feed(client)
+    kept_since = [runtime_mod.time.monotonic()]
+    monkeypatch.setattr(
+        runtime_mod, "time", SimpleNamespace(monotonic=lambda: kept_since[0])
+    )
+    ranked = _count_rankings(monkeypatch)
+    warmer, _clock = _warmer()
+    kept_since[0] += runtime_mod.FEED_CACHE_TTL_SEC - warm.RENEW_EARLY_SEC - 1
+    warmer.run_once()
+    assert ranked == []
+    kept_since[0] += 2  # Still kept for requests, but not for long.
+    warmer.run_once()
+    assert ranked == [admin_user.id]
+    _feed(client)
+    assert ranked == [admin_user.id]
