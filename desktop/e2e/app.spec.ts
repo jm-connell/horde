@@ -442,9 +442,12 @@ test("killing the app also ends the server", async () => {
   const pid = await serverPid();
   await expect.poll(pingOk, { timeout: 120_000 }).toBe(true);
   const pot = HELPER ? await helperPort() : null;
-  const proc = current().process();
-  const gone = exited(proc);
-  proc.kill("SIGKILL");
+  // The app's own process. On Windows Playwright starts it through cmd.exe,
+  // so the process it hands back is that wrapper, and killing the wrapper
+  // leaves the app (and rightly its server) running.
+  const appPid = await current().evaluate(() => process.pid);
+  const gone = exited(current().process());
+  process.kill(appPid, "SIGKILL");
   await gone;
   app = null;
   // What matters is that the server stops answering. 30 s is its own limit
@@ -454,7 +457,7 @@ test("killing the app also ends the server", async () => {
     await new Promise((r) => setTimeout(r, 500));
   }
   const report = () =>
-    `server pid ${pid}, app pid ${proc.pid ?? "?"}; still running:\n${processTable()}`;
+    `server pid ${pid}, app pid ${appPid}; still running:\n${processTable()}`;
   expect(await accepts(port), `the server still answers. ${report()}`).toBe(
     false
   );
