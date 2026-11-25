@@ -23,10 +23,11 @@ export type HealthDowngrade = {
  * dropped once (a game still rendering on the other monitor) must not cap the
  * next one.
  */
-export type StreamDowngrade = Pick<
-  HealthDowngrade,
-  "maxHeight" | "blacklistAv1"
->;
+export type StreamDowngrade = {
+  maxHeight: number;
+  /** Codec families this stream no longer loads. */
+  skipCodecs: ("av01" | "vp09" | "avc1")[];
+};
 
 export type FrameSample = {
   now: number;

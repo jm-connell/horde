@@ -4,6 +4,8 @@ import { getItem, getJson, setItem, setJson } from "../storage";
 export type DecodeSupport = {
   /** True when any AV1 ladder step reports MediaCapabilities.supported. */
   av1Supported: boolean;
+  /** True when any probed VP9 height reports MediaCapabilities.supported. */
+  vp9Supported: boolean;
   /** True when AV1 at some step also reports powerEfficient. */
   av1Efficient: boolean;
   /**
@@ -82,8 +84,8 @@ export function trackQuality(t: {
   return bestQ;
 }
 
-// v3: AV1 and VP9 hardware decode heights (Auto's ceilings above 1080p).
-const CACHE_KEY = "horde.decode-capability.v3";
+// v4: adds vp9Supported (VP9 above 1080p joins the codec choice).
+const CACHE_KEY = "horde.decode-capability.v4";
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type Cached = DecodeSupport & { at: number };
@@ -101,6 +103,7 @@ function readCache(): DecodeSupport | null {
   return {
     av1Supported: Boolean(parsed.av1Supported),
     av1Efficient: Boolean(parsed.av1Efficient),
+    vp9Supported: Boolean(parsed.vp9Supported),
     maxSupportedHeight: Number(parsed.maxSupportedHeight) || 1080,
     maxAv1Efficient: Number(parsed.maxAv1Efficient) || 0,
     maxVp9Efficient: Number(parsed.maxVp9Efficient) || 0,
@@ -147,6 +150,7 @@ async function canDecode(
 export const DEFAULT_DECODE_SUPPORT: DecodeSupport = {
   av1Supported: false,
   av1Efficient: false,
+  vp9Supported: false,
   maxSupportedHeight: 1080,
   maxAv1Efficient: 0,
   maxVp9Efficient: 0,
@@ -171,6 +175,7 @@ export async function probeDecodeSupport(): Promise<DecodeSupport> {
 
   let av1Supported = false;
   let av1Efficient = false;
+  let vp9Supported = false;
   let maxAv1Supported = 0;
   let maxAv1Efficient = 0;
   let maxAvcSupported = 0;
@@ -195,6 +200,7 @@ export async function probeDecodeSupport(): Promise<DecodeSupport> {
     if (vp9Codec) {
       const vp9 = await canDecode(vp9Codec, h, "video/webm");
       if (vp9.supported) {
+        vp9Supported = true;
         maxVp9Supported = Math.max(maxVp9Supported, h);
         if (vp9.powerEfficient) {
           maxVp9Efficient = Math.max(maxVp9Efficient, h);
@@ -213,6 +219,7 @@ export async function probeDecodeSupport(): Promise<DecodeSupport> {
   const support: DecodeSupport = {
     av1Supported,
     av1Efficient,
+    vp9Supported,
     maxSupportedHeight,
     maxAv1Efficient,
     maxVp9Efficient,

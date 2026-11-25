@@ -121,56 +121,79 @@ function preferVideoCodecs(codecs: string[]) {
   }));
 }
 
+/** The codec families a stream's manifest offers (the prefix of the codec string). */
+export type CodecFamily = "av01" | "vp09" | "avc1";
+
+/** The family of a track's `videoCodec` string, or null for any other. */
+function codecFamily(
+  videoCodec: string | null | undefined
+): CodecFamily | null {
+  const codec = (videoCodec ?? "").toLowerCase();
+  for (const family of ["av01", "vp09", "avc1"] as const) {
+    if (codec.startsWith(family)) return family;
+  }
+  return null;
+}
+
 /**
- * Shaka's codec preference: AV1 first where it decodes well, else H.264. Live
- * keeps Shaka's default (no preference): its ladder is H.264 up to 1080p and
- * VP9 above, since YouTube serves 1440p and 2160p live only as VP9, and a
- * preference drops every variant in another codec.
+ * Shaka's codec preference, in order. Live keeps Shaka's default (no
+ * preference): its ladder is H.264 up to 1080p and VP9 above, since YouTube
+ * serves 1440p and 2160p live only as VP9, and a preference drops every
+ * variant in another codec.
  */
-export function videoCodecConfig(live: boolean, preferAv1: boolean) {
+export function videoCodecConfig(live: boolean, codecs: CodecFamily[]) {
   if (live) return {};
-  return {
-    preferredVideo: preferVideoCodecs(preferAv1 ? ["av01", "avc1"] : ["avc1"]),
-  };
+  return { preferredVideo: preferVideoCodecs(codecs) };
 }
 
 /** What one stream has learned or been asked for. Its reloads keep it. */
 export type StreamQualityState = {
   /** The automatic step-down in force. */
   downgrade: StreamDowngrade | null;
-  /** The viewer picked a quality only AV1 offers: load the AV1 ladder. */
-  av1Picked: boolean;
-  /** Qualities only the AV1 ladder has, while the H.264 one is loaded. */
-  av1Only: number[];
+  /** The viewer picked a quality only this codec offers: load its ladder. */
+  pickedCodec: CodecFamily | null;
+  /** Qualities only another codec's ladder has, while this one is loaded. */
+  otherCodecQualities: { quality: number; codec: CodecFamily }[];
 };
 
 /**
  * How a load of a stream plays on Auto. Shaka keeps one codec's ladder per
- * load: H.264 tops out at 1080p, and only AV1 (VP9 for live) goes higher.
- * AV1 decoded in software drops frames at the start of every high-quality
- * video, so a video loads AV1 only where it decodes in hardware, or for a
- * quality the viewer picked that only AV1 offers. Above 1080p Auto goes only
- * as high as that codec decodes in hardware.
+ * load, the first of `codecs` the manifest offers: H.264 tops out at 1080p,
+ * and only AV1 or VP9 go higher. Software decoding of either drops frames at
+ * the start of every high-quality video, so a codec is listed only where this
+ * device decodes it in hardware, or for a quality the viewer picked that only
+ * it offers. A codec the step-down skipped is left out. Above 1080p Auto goes
+ * only as high as the listed codecs decode in hardware. Live uses Shaka's
+ * default, so `codecs` is empty and its ceiling is VP9's.
  */
 export function streamLoadLimits(
   caps: DecodeSupport,
   live: boolean,
   state: StreamQualityState
-): { preferAv1: boolean; maxHeight: number } {
-  const { downgrade } = state;
-  const preferAv1 =
-    !live && !downgrade?.blacklistAv1 && (caps.av1Efficient || state.av1Picked);
-  const hardwareTop = live
-    ? caps.maxVp9Efficient
-    : preferAv1
-      ? caps.maxAv1Efficient
-      : 0;
+): { codecs: CodecFamily[]; maxHeight: number } {
+  const { downgrade, pickedCodec } = state;
+  let codecs: CodecFamily[] = [];
+  let hardwareTop = caps.maxVp9Efficient;
+  if (!live) {
+    codecs = pickedCodec
+      ? [pickedCodec, "avc1"]
+      : [
+          ...(caps.maxAv1Efficient > 0 ? (["av01"] as const) : []),
+          ...(caps.maxVp9Efficient > 0 ? (["vp09"] as const) : []),
+          "avc1",
+        ];
+    codecs = codecs.filter((c) => !downgrade?.skipCodecs.includes(c));
+    hardwareTop = Math.max(
+      codecs.includes("av01") ? caps.maxAv1Efficient : 0,
+      codecs.includes("vp09") ? caps.maxVp9Efficient : 0
+    );
+  }
   const maxHeight = Math.min(
     caps.maxSupportedHeight,
     Math.max(1080, hardwareTop),
     downgrade?.maxHeight ?? Infinity
   );
-  return { preferAv1, maxHeight };
+  return { codecs, maxHeight };
 }
 
 const attr = (tag: string, name: string): string | null =>
@@ -386,7 +409,7 @@ export function useShakaDashLoad({
         if (cancelled || !videoRef.current) return;
 
         const stream = streamStateRef.current;
-        const { preferAv1, maxHeight } = streamLoadLimits(caps, live, stream);
+        const { codecs, maxHeight } = streamLoadLimits(caps, live, stream);
         capabilityMaxHeightRef.current = maxHeight;
         const bwEstimate = persistedBw ?? 5_000_000;
         const initialChoice = qualityChoiceRef.current;
@@ -407,7 +430,7 @@ export function useShakaDashLoad({
             defaultBandwidthEstimate: bwEstimate,
             switchInterval: 8,
           },
-          ...videoCodecConfig(live, preferAv1),
+          ...videoCodecConfig(live, codecs),
           restrictions: {
             maxHeight: abrEnabled ? maxHeight : 8192,
             maxWidth: 8192,
@@ -497,7 +520,7 @@ export function useShakaDashLoad({
         }
         // The manifest's text, for the qualities only its AV1 ladder has.
         let manifestText: string | null = null;
-        if (!live && !preferAv1) {
+        if (!live && !codecs.includes("av01")) {
           p.getNetworkingEngine()?.registerResponseFilter((type, response) => {
             if (type === SHAKA_MANIFEST_REQUEST) {
               manifestText = new TextDecoder().decode(response.data);
@@ -512,10 +535,14 @@ export function useShakaDashLoad({
         const variants = p.getVariantTracks() ?? [];
         variantTracksRef.current = variants;
         const qualities = distinctQualities(variants);
-        stream.av1Only = manifestText
+        const av1Only = manifestText
           ? qualitiesOnlyInAv1(manifestText, qualities[0] ?? 0)
           : [];
-        setAvailableHeights([...stream.av1Only, ...qualities]);
+        stream.otherCodecQualities = av1Only.map((quality) => ({
+          quality,
+          codec: "av01",
+        }));
+        setAvailableHeights([...av1Only, ...qualities]);
         if (abrEnabled) {
           p.configure({
             restrictions: abrRestrictions(maxHeight, variants),
@@ -534,10 +561,10 @@ export function useShakaDashLoad({
             );
             candidates.sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0));
             if (candidates[0]) {
-              const codec = (candidates[0].videoCodec ?? "").toLowerCase();
-              if (codec.startsWith("av01")) {
+              const family = codecFamily(candidates[0].videoCodec);
+              if (family && family !== "avc1") {
                 p.configure({
-                  preferredVideo: preferVideoCodecs(["av01", "avc1"]),
+                  preferredVideo: preferVideoCodecs([family, "avc1"]),
                 });
               }
               selectQualityTrack(p, candidates[0]);
@@ -617,12 +644,12 @@ export function applyQualityPick(p: ShakaPlayer, choice: number) {
   const candidates = tracks.filter((t) => trackQuality(t) === target);
   candidates.sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0));
   if (candidates[0]) {
-    // YouTube 1440/4K is typically AV1-only; honor an explicit pick even
-    // when Auto prefers H.264 for power efficiency.
-    const codec = (candidates[0].videoCodec ?? "").toLowerCase();
-    if (codec.startsWith("av01")) {
+    // YouTube 1440/4K is typically AV1 or VP9 only; honor an explicit pick
+    // even when Auto prefers H.264 for power efficiency.
+    const family = codecFamily(candidates[0].videoCodec);
+    if (family && family !== "avc1") {
       p.configure({
-        preferredVideo: preferVideoCodecs(["av01", "avc1"]),
+        preferredVideo: preferVideoCodecs([family, "avc1"]),
       });
     }
     selectQualityTrack(p, candidates[0]);

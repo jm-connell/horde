@@ -26,8 +26,8 @@ import type { StreamType } from "../videoPlayerTypes";
 
 const freshStreamState = (): StreamQualityState => ({
   downgrade: null,
-  av1Picked: false,
-  av1Only: [],
+  pickedCodec: null,
+  otherCodecQualities: [],
 });
 
 interface Options {
@@ -161,20 +161,24 @@ export function useStreamQuality({
   const pickQuality = useCallback(
     (choice: QualityChoice) => {
       const stream = streamStateRef.current;
-      if (typeof choice === "number" && stream.av1Only.includes(choice)) {
-        // Only the AV1 ladder has it: load this video again with that ladder.
+      const other =
+        typeof choice === "number"
+          ? stream.otherCodecQualities.find((o) => o.quality === choice)
+          : undefined;
+      if (other) {
+        // Only another codec's ladder has it: load this video again with it.
         streamStateRef.current = {
           downgrade: null,
-          av1Picked: true,
-          av1Only: [],
+          pickedCodec: other.codec,
+          otherCodecQualities: [],
         };
         setQualityChoice(choice);
         reloadHere();
         return;
       }
-      if (choice === "auto" && stream.av1Picked) {
+      if (choice === "auto" && stream.pickedCodec) {
         // Auto plays the codec this device decodes in hardware again.
-        streamStateRef.current = { ...stream, av1Picked: false };
+        streamStateRef.current = { ...stream, pickedCodec: null };
         setQualityChoice("auto");
         reloadHere();
         return;
@@ -202,7 +206,12 @@ export function useStreamQuality({
       const prev = stream.downgrade;
       stream.downgrade = {
         maxHeight: Math.min(prev?.maxHeight ?? maxHeight, maxHeight),
-        blacklistAv1: Boolean(prev?.blacklistAv1) || blacklistAv1,
+        skipCodecs: [
+          ...(prev?.skipCodecs ?? []),
+          ...(blacklistAv1 && !prev?.skipCodecs.includes("av01")
+            ? (["av01"] as const)
+            : []),
+        ],
       };
       capabilityMaxHeightRef.current = Math.min(
         capabilityMaxHeightRef.current,
