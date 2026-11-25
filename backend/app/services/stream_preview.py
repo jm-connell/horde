@@ -473,6 +473,8 @@ def _webm_info_duration(body: bytes) -> float | None:
             return None
         raw = body[pos + head_len : pos + head_len + size]
         if elem_id == _EBML_TIMECODE_SCALE:
+            if size > 8:
+                return None
             scale = int.from_bytes(raw, "big")
         elif elem_id == _EBML_DURATION and size in (4, 8):
             duration = struct.unpack(">f" if size == 4 else ">d", raw)[0]

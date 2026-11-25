@@ -9,6 +9,7 @@ import {
   applyQualityPick,
   qualitiesInOtherCodecs,
   stateAfterDowngrade,
+  downgradeNeedsReload,
   stateAfterPick,
   selectQualityTrack,
   loadedCodecCeiling,
@@ -399,5 +400,14 @@ describe("stream state transitions", () => {
   it("a step-down on H.264 skips no codec", () => {
     const next = stateAfterDowngrade(fresh(), 720, null);
     expect(next.downgrade).toEqual({ maxHeight: 720, skipCodecs: [] });
+  });
+
+  it("reloads for a new codec skip only", () => {
+    const first = fresh();
+    expect(downgradeNeedsReload(first, "vp09")).toBe(true);
+    const after = stateAfterDowngrade(first, 1440, "vp09");
+    expect(downgradeNeedsReload(after, "vp09")).toBe(false);
+    expect(downgradeNeedsReload(after, "av01")).toBe(true);
+    expect(downgradeNeedsReload(fresh(), null)).toBe(false);
   });
 });

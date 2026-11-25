@@ -297,3 +297,8 @@ def test_vp9_codec_string_comes_from_the_resolution_and_rate():
     assert stream_preview._codecs_string(fmt, kind="video") == "vp09.00.50.08"
     dotted = _vp9(2160, vcodec="vp09.00.40.08")
     assert stream_preview._codecs_string(dotted, kind="video") == "vp09.00.40.08"
+
+
+def test_oversized_timecode_scale_is_malformed_not_an_overflow():
+    info = _el("2AD7B1", b"\x01" * 200) + _el("4489", struct.pack(">d", 1e300))
+    assert stream_preview._webm_info_duration(info) is None

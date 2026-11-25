@@ -289,6 +289,21 @@ export function stateAfterPick(
 }
 
 /**
+ * Whether a frame-drop step-down must reload the video: only when it skips a
+ * codec the state has not skipped yet. A repeat (a manifest whose only
+ * variants are the skipped codec's) restricts in place instead.
+ */
+export function downgradeNeedsReload(
+  state: StreamQualityState,
+  skipCodec: CodecFamily | null
+): boolean {
+  return (
+    skipCodec !== null &&
+    !(state.downgrade?.skipCodecs ?? []).includes(skipCodec)
+  );
+}
+
+/**
  * The stream state after a frame-drop step-down to `maxHeight`: the cut only
  * goes lower, and the codec that was dropping frames (null for H.264, which
  * has no other to fall back to) is skipped for the rest of the video.

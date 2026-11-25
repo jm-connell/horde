@@ -14,6 +14,7 @@ import {
   freshStreamState,
   selectQualityTrack,
   stateAfterDowngrade,
+  downgradeNeedsReload,
   stateAfterPick,
   useApplyShakaQuality,
   type StreamQualityState,
@@ -186,6 +187,7 @@ export function useStreamQuality({
     onDowngrade: ({ maxHeight, skipCodec, notice }) => {
       const p = shakaPlayerRef.current;
       if (!p) return;
+      const reload = downgradeNeedsReload(streamStateRef.current, skipCodec);
       streamStateRef.current = stateAfterDowngrade(
         streamStateRef.current,
         maxHeight,
@@ -198,7 +200,7 @@ export function useStreamQuality({
       // Relabel the menu to the new ceiling so UI matches what can play.
       setQualityChoice(maxHeight);
       try {
-        if (skipCodec) {
+        if (reload) {
           // Codec family change needs a reload so Shaka re-filters AdaptationSets.
           // The reload reads streamStateRef.
           reloadHere();
