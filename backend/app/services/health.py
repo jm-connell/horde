@@ -10,6 +10,7 @@ runs three COUNT queries.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from pathlib import Path
 from typing import Any
@@ -29,7 +30,8 @@ logger = logging.getLogger(__name__)
 POT_TTL_SEC = 30.0
 POT_TIMEOUT_SEC = 2.0
 #: Written by the Dockerfile: ``key=value`` lines (ffmpeg_flavor, ffmpeg: the first line of `ffmpeg -version`).
-BUILD_INFO_PATH = Path("/app/BUILD_INFO")
+#: ``BUILD_INFO_FILE`` points elsewhere (the desktop app ships it beside the backend).
+BUILD_INFO_PATH = Path(os.environ.get("BUILD_INFO_FILE") or "/app/BUILD_INFO")
 
 
 def read_build_info(path: Path = BUILD_INFO_PATH) -> dict[str, str]:

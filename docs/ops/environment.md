@@ -73,8 +73,10 @@ Cookie file wins over browser cookies when the file exists. Details: [YouTube ac
 | `HORDE_GITHUB_REPO` | `jm-connell/horde` | GitHub `owner/repo` for update checks. |
 | `HORDE_GIT_SHA` | `unknown` (baked at image build) | Deployed commit SHA; falls back to local `git rev-parse HEAD` in development. |
 | `HORDE_VERSION` | `dev` (baked at image build) | Release version (for example `1.2.3`) for images built from a release tag. Used by the update check. |
+| `HORDE_RUNTIME` | `server` | Set to `desktop` by the desktop app, not by you. Shown in `/api/health` for bug reports, and makes the server write `DATA_DIR/desktop/status.json` every few seconds for the app to read. |
+| `BUILD_INFO_FILE` | `/app/BUILD_INFO` | Where the build information file is. Only the desktop app, which keeps it beside the server, changes it. |
 
-The image also contains `/app/BUILD_INFO` (version, commit, ffmpeg flavor and `ffmpeg -version`), printed in the container log at start: `docker logs horde | grep build:`.
+The image also contains `/app/BUILD_INFO` (version, commit, ffmpeg flavor and `ffmpeg -version`), printed in the container log at start: `docker logs horde | grep build:`. `BUILD_INFO_FILE` points the server and the entrypoint at another copy.
 
 ## Container runtime
 

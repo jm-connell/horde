@@ -391,6 +391,8 @@ class HealthFull(BaseModel):
     review_pending_count: int
     active_downloads: int
     wiki_available: bool
+    #: ``desktop`` when the desktop app runs the server, for bug reports.
+    runtime: Literal["server", "desktop"] = "server"
     downloads: HealthDownloads
     workers: HealthWorkers
     youtube: HealthYoutube

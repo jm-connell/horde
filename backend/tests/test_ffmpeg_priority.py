@@ -46,6 +46,17 @@ def test_below_playback_off_posix_runs_the_command_as_is(monkeypatch):
     assert ffmpeg_bin.below_playback(["ffmpeg", "-i", "x"]) == ["ffmpeg", "-i", "x"]
 
 
+def test_low_priority_kwargs_lower_the_priority_on_windows_only(monkeypatch):
+    if ffmpeg_bin.os.name != "nt":
+        assert ffmpeg_bin.low_priority_kwargs() == {}
+    # Patch the module's os, not os.name itself: Path() reads os.name.
+    monkeypatch.setattr(ffmpeg_bin, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        subprocess, "BELOW_NORMAL_PRIORITY_CLASS", 0x4000, raising=False
+    )
+    assert ffmpeg_bin.low_priority_kwargs() == {"creationflags": 0x4000}
+
+
 def test_sprite_and_background_thumbnail_ffmpeg_are_low_priority(monkeypatch, tmp_path):
     calls = _record_run_ffmpeg(monkeypatch, "app.services.metadata.run_ffmpeg")
     video = tmp_path / "v.mp4"

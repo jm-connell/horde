@@ -7148,6 +7148,12 @@ export interface components {
             pot_provider?: components["schemas"]["PotProviderStatus"] | null;
             /** Review Pending Count */
             review_pending_count: number;
+            /**
+             * Runtime
+             * @default server
+             * @enum {string}
+             */
+            runtime: "server" | "desktop";
             /** Status */
             status: string;
             /** Storage Warning */

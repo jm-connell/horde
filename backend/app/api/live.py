@@ -36,7 +36,7 @@ from ..schemas import (
     LiveChatRead,
     LiveListResponse,
 )
-from ..services import follows, stream_preview
+from ..services import desktop_status, follows, stream_preview
 from ..services.auth.accounts import AuthUser
 from ..services.chat_replay.youtube import ChatReplayError
 from ..services.comments.fetch import LATER, RETRY
@@ -290,6 +290,7 @@ async def _segment(
         raise CodedHTTPException(
             502, "The live stream did not answer", "live_upstream"
         ) from exc
+    desktop_status.note_media_served()
 
     async def body() -> AsyncIterator[bytes]:
         try:

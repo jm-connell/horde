@@ -25,7 +25,7 @@ from ..schemas import (
     MediaTokenRead,
     VideoRead,
 )
-from ..services import library, media_sidecars, uploads
+from ..services import desktop_status, library, media_sidecars, uploads
 from ..services.auth import media_token as media_token_svc
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ConcurrencyLimit, thumbnail_grab_limit
@@ -305,6 +305,7 @@ def stream_video(
     compat = _resolve_rendition(video, rendition)
     path = compat or _resolve_media(video)
     file_size = path.stat().st_size
+    desktop_status.note_media_served()
 
     suffix = path.suffix.lower()
     content_type = CONTENT_TYPES.get(suffix, "application/octet-stream")
@@ -403,4 +404,5 @@ def download_video_file(
     content_type = CONTENT_TYPES.get(path.suffix.lower(), "application/octet-stream")
     tag = " (H.264)" if compat is not None else ""
     filename = f"{_safe_filename(video.title)}{tag}{path.suffix.lower()}"
+    desktop_status.note_media_served()
     return FileResponse(path, media_type=content_type, filename=filename)

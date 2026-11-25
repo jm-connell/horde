@@ -27,7 +27,14 @@ from ..openapi_responses import (
 )
 from ..parental_guard import NOT_ALLOWED, stream_guard
 from ..schemas import NextPartRead, StreamPreviewMeta, StreamRelatedPage
-from ..services import library, next_part, parental, stream_preview, stream_related
+from ..services import (
+    desktop_status,
+    library,
+    next_part,
+    parental,
+    stream_preview,
+    stream_related,
+)
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import history as stream_history
 from ..services.discovery.other_interests import Viewer
@@ -837,6 +844,7 @@ async def preview_media(
             status_code=400, detail=f"Could not open preview media: {exc}"
         ) from exc
 
+    desktop_status.note_media_served()
     return await _proxy_upstream(request, resolved, allow_refresh=(token, itag))
 
 
@@ -893,4 +901,5 @@ async def preview_stream(request: Request, url: str = Query(...)):
     delay = stream_preview.seconds_until_available(resolved)
     if delay > 0:
         await asyncio.sleep(delay)
+    desktop_status.note_media_served()
     return await _proxy_upstream(request, resolved, stream_url=cleaned)
