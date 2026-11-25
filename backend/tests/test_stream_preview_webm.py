@@ -91,3 +91,209 @@ def test_the_probe_grows_its_window(monkeypatch):
     start = data.index(bytes.fromhex("1C53BB6B"))
     assert sizes == [256 * 1024, 1024 * 1024]
     assert init == f"0-{start - 1}" and info["boundaries"] == []
+
+
+def test_info_child_overrunning_the_info_body_is_no_duration():
+    body = (
+        _el("2AD7B1", (1_000_000).to_bytes(4, "big")) + bytes.fromhex("4489") + b"\x88"
+    )
+    assert stream_preview._webm_info_duration(body + b"\x00" * 3) is None
+
+
+@pytest.mark.parametrize("value", [0.0, -5.0, float("inf"), float("nan")])
+def test_non_positive_or_non_finite_duration_is_none(value):
+    body = _el("4489", struct.pack(">d", value))
+    assert stream_preview._webm_info_duration(body) is None
+
+
+# --- VP9 in the manifest -------------------------------------------------------
+
+
+def _h264(height: int) -> dict:
+    return {
+        "url": f"https://cdn.example/avc{height}.mp4",
+        "format_id": f"avc{height}",
+        "ext": "mp4",
+        "vcodec": "avc1.640028",
+        "acodec": "none",
+        "height": height,
+        "width": height * 16 // 9,
+        "fps": 30,
+        "tbr": height,
+    }
+
+
+def _av1(height: int) -> dict:
+    return {**_h264(height), "format_id": f"av{height}", "vcodec": "av01.0.08M.08"}
+
+
+def _vp9(height: int, **extra) -> dict:
+    return {
+        "url": f"https://cdn.example/vp9-{height}.webm",
+        "format_id": f"vp9-{height}",
+        "ext": "webm",
+        "vcodec": "vp9",
+        "acodec": "none",
+        "height": height,
+        "width": height * 16 // 9,
+        "fps": 60 if height == 2160 else 30,
+        "tbr": height,
+        **extra,
+    }
+
+
+_AUDIO = {
+    "url": "https://cdn.example/a.m4a",
+    "format_id": "140",
+    "ext": "m4a",
+    "vcodec": "none",
+    "acodec": "mp4a.40.2",
+    "abr": 128,
+    "language": "en",
+}
+
+
+def _info(*formats: dict) -> dict:
+    return {"id": "abc", "formats": [*formats, _AUDIO]}
+
+
+_HEIGHTS = [144, 240, 360, 480, 720, 1080, 1440, 2160]
+
+
+def _families(videos: list[dict]) -> set[str]:
+    return {f["_codec_family"] for f in videos}
+
+
+def test_vp9_above_1080p_joins_the_ladder():
+    info = _info(*[_h264(h) for h in _HEIGHTS[:6]], *[_vp9(h) for h in _HEIGHTS])
+    videos, _ = stream_preview._pick_adaptive_formats(info)
+    assert {f["height"] for f in videos if f["_codec_family"] == "vp09"} == set(
+        _HEIGHTS
+    )
+
+
+def test_vp9_at_1080p_or_below_is_left_out():
+    info = _info(*[_h264(h) for h in (360, 720)], *[_vp9(h) for h in (360, 720, 1080)])
+    videos, _ = stream_preview._pick_adaptive_formats(info)
+    assert _families(videos) == {"avc1"}
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"dynamic_range": "HDR10", "vcodec": "vp09.02.51.10"},
+        {"vcodec": "vp09.02.51.10"},
+        {"dynamic_range": "HDR10"},
+    ],
+)
+def test_hdr_vp9_is_left_out(extra):
+    info = _info(_h264(1080), _vp9(1440), _vp9(2160, **extra))
+    videos, _ = stream_preview._pick_adaptive_formats(info)
+    assert {f["height"] for f in videos if f["_codec_family"] == "vp09"} == {1440}
+
+
+def test_sdr_vp9_profile_0_is_kept():
+    info = _info(_h264(1080), _vp9(2160, dynamic_range="SDR", vcodec="vp09.00.51.08"))
+    videos, _ = stream_preview._pick_adaptive_formats(info)
+    assert 2160 in {f["height"] for f in videos}
+
+
+def _patch_probes(monkeypatch, *, webm_raises: bool = False, duration=None):
+    def mp4(direct, headers):
+        sidx = {
+            "timescale": 1000,
+            "earliest_presentation_time": 0,
+            "duration_sec": 10.0,
+            "boundaries": [0.0, 5.0, 10.0],
+        }
+        return "0-100", "101-200", sidx
+
+    def webm(direct, headers):
+        if webm_raises:
+            raise RuntimeError("no cues")
+        info = {
+            "timescale": 0,
+            "earliest_presentation_time": 0,
+            "duration_sec": duration,
+            "boundaries": [],
+        }
+        return "0-218", "219-2413", info
+
+    monkeypatch.setattr(stream_preview, "_probe_mp4_ranges", mp4)
+    monkeypatch.setattr(stream_preview, "_probe_webm_ranges", webm)
+
+
+def _entry(monkeypatch, *formats, **kw):
+    _patch_probes(monkeypatch, **kw)
+    return stream_preview._build_manifest_entry("https://youtu.be/abc", _info(*formats))
+
+
+def test_manifest_lists_webm_between_av1_and_h264(monkeypatch):
+    entry = _entry(
+        monkeypatch,
+        _av1(1080),
+        _h264(1080),
+        *[_vp9(h) for h in (1080, 1440, 2160)],
+    )
+    mpd = stream_preview.build_dash_manifest(entry)
+    assert (
+        mpd.index('codecs="av01')
+        < mpd.index('mimeType="video/webm"')
+        < mpd.index('codecs="avc1')
+    )
+    assert 'codecs="vp09.00.51.08"' in mpd  # 3840x2160 at 60 fps
+    assert 'indexRange="219-2413"' in mpd
+    webm_set = mpd[mpd.index('mimeType="video/webm"') :].split("</AdaptationSet>")[0]
+    assert "segmentAlignment" not in webm_set
+    assert all(
+        r["content_type"] == "video/webm"
+        for r in entry["formats"].values()
+        if r["codec_family"] == "vp09"
+    )
+
+
+def test_a_single_vp9_rep_does_not_claim_alignment(monkeypatch):
+    entry = _entry(monkeypatch, _h264(1080), _vp9(2160))
+    mpd = stream_preview.build_dash_manifest(entry)
+    webm_set = mpd[mpd.index('mimeType="video/webm"') :].split("</AdaptationSet>")[0]
+    assert "segmentAlignment" not in webm_set
+
+
+def test_a_1080p_video_gets_the_manifest_it_got_before(monkeypatch):
+    base = [_av1(1080), _h264(720), _h264(1080)]
+    plain = _entry(monkeypatch, *base)
+    with_vp9 = _entry(monkeypatch, *base, _vp9(360))
+    plain["token"] = with_vp9["token"] = "t"
+    assert stream_preview.build_dash_manifest(
+        plain
+    ) == stream_preview.build_dash_manifest(with_vp9)
+    assert "webm" not in stream_preview.build_dash_manifest(with_vp9)
+
+
+def test_failed_vp9_probes_leave_the_other_ladders(monkeypatch):
+    entry = _entry(
+        monkeypatch,
+        _av1(1080),
+        _h264(1080),
+        _vp9(1440),
+        _vp9(2160),
+        webm_raises=True,
+    )
+    fams = {r["codec_family"] for r in entry["formats"].values()}
+    assert fams == {"av01", "avc1", "audio"}
+
+
+def test_webm_probe_without_a_duration_leaves_the_duration_to_mp4(monkeypatch):
+    entry = _entry(monkeypatch, _h264(1080), _vp9(2160), duration=None)
+    vp9 = [r for r in entry["formats"].values() if r["codec_family"] == "vp09"]
+    assert vp9 and vp9[0]["duration_sec"] is None
+    assert entry["duration"] == pytest.approx(10.0)
+
+
+def test_vp9_codec_string_comes_from_the_resolution_and_rate():
+    fmt = _vp9(2160)
+    assert stream_preview._codecs_string(fmt, kind="video") == "vp09.00.51.08"
+    fmt = _vp9(1440)
+    assert stream_preview._codecs_string(fmt, kind="video") == "vp09.00.50.08"
+    dotted = _vp9(2160, vcodec="vp09.00.40.08")
+    assert stream_preview._codecs_string(dotted, kind="video") == "vp09.00.40.08"

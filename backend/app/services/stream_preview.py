@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import math
 import secrets
 import struct
 import threading
@@ -16,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 from xml.sax.saxutils import escape as xml_escape
 
+from .media_info import vp9_level
 from .url_safety import UnsafeUrlError, fetch_bytes
 from .ytdlp_common import (
     EXTRACT_PRIORITY_INTERACTIVE,
@@ -161,16 +163,35 @@ def _video_codec_family(vcodec: str) -> str | None:
         return "av01"
     if v.startswith(("avc1", "avc")):
         return "avc1"
+    if v.startswith(("vp09", "vp9")):
+        return "vp09"
     return None
+
+
+#: VP9 joins the ladder only when it reaches above this height; below it the
+#: H.264 and AV1 ladders already cover the video and nothing changes.
+_VP9_MIN_TOP_HEIGHT = 1080
+
+
+#: Order of the video AdaptationSets: AV1, then VP9, then H.264.
+_FAMILY_ORDER = {"av01": 0, "vp09": 1}
+
+
+def _is_sdr_vp9_profile0(fmt: dict[str, Any], vcodec: str) -> bool:
+    """True for 8-bit SDR VP9 (profile 0), the only VP9 the stream tier offers."""
+    if fmt.get("dynamic_range") not in (None, "SDR"):
+        return False
+    return not vcodec.lower().startswith(("vp09.02", "vp9.2"))
 
 
 def _pick_adaptive_formats(
     info: dict[str, Any],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Select MP4 adaptive video (H.264/AV1) + AAC audio for DASH preview.
+    """Select adaptive video (H.264/AV1 in MP4, VP9 in WebM) + AAC audio.
 
     Video formats are kept per (codec family, height) so each AdaptationSet
-    stays codec-homogeneous. Audio prefers non-DRC, original-language AAC.
+    stays codec-homogeneous. VP9 is kept only for videos whose VP9 goes above
+    1080p. Audio prefers non-DRC, original-language AAC.
     """
     formats = info.get("formats") or []
     # (family, height) -> best format
@@ -180,7 +201,7 @@ def _pick_adaptive_formats(
         if not isinstance(fmt, dict) or not fmt.get("url"):
             continue
         ext = str(fmt.get("ext") or "").lower()
-        if ext not in ("mp4", "m4a"):
+        if ext not in ("mp4", "m4a", "webm"):
             continue
         # Skip storyboard / image formats.
         if str(fmt.get("format_note") or "").lower().startswith("storyboard"):
@@ -205,6 +226,11 @@ def _pick_adaptive_formats(
             family = _video_codec_family(vcodec)
             if family is None:
                 continue
+            # VP9 comes in WebM and the others in MP4; never the other way round.
+            if (family == "vp09") != (ext == "webm"):
+                continue
+            if family == "vp09" and not _is_sdr_vp9_profile0(fmt, vcodec):
+                continue
             score = height * 1000
             tbr = fmt.get("tbr") or fmt.get("vbr") or 0
             with contextlib.suppress(TypeError, ValueError):
@@ -217,10 +243,14 @@ def _pick_adaptive_formats(
                 entry["_codec_family"] = family
                 video_by_key[key] = entry
 
+    vp9_top = max((h for fam, h in video_by_key if fam == "vp09"), default=0)
+    if vp9_top <= _VP9_MIN_TOP_HEIGHT:
+        video_by_key = {k: v for k, v in video_by_key.items() if k[0] != "vp09"}
+
     videos = sorted(
         video_by_key.values(),
         key=lambda f: (
-            0 if f.get("_codec_family") == "av01" else 1,
+            _FAMILY_ORDER.get(str(f.get("_codec_family")), 2),
             -int(f.get("height") or 0),
         ),
     )
@@ -439,6 +469,8 @@ def _webm_info_duration(body: bytes) -> float | None:
         elem_id, size, head_len = head
         if size is None:
             break
+        if pos + head_len + size > len(body):
+            return None
         raw = body[pos + head_len : pos + head_len + size]
         if elem_id == _EBML_TIMECODE_SCALE:
             scale = int.from_bytes(raw, "big")
@@ -447,7 +479,8 @@ def _webm_info_duration(body: bytes) -> float | None:
         pos += head_len + size
     if duration is None:
         return None
-    return duration * scale / 1e9
+    seconds = duration * scale / 1e9
+    return seconds if math.isfinite(seconds) and seconds > 0 else None
 
 
 def _find_webm_ranges(data: bytes) -> tuple[str, str, float | None] | None:
@@ -551,7 +584,15 @@ def _bandwidth_bps(fmt: dict[str, Any], *, kind: str) -> int:
 
 def _codecs_string(fmt: dict[str, Any], *, kind: str) -> str:
     if kind == "video":
-        return str(fmt.get("vcodec") or "avc1.4D401F")
+        vcodec = str(fmt.get("vcodec") or "avc1.4D401F")
+        if _video_codec_family(vcodec) == "vp09":
+            if vcodec.lower().startswith("vp09."):
+                return vcodec
+            width = int(fmt.get("width") or 0)
+            height = int(fmt.get("height") or 0)
+            fps = float(fmt.get("fps") or 30)
+            return f"vp09.00.{vp9_level(width, height, fps):02d}.08"
+        return vcodec
     return str(fmt.get("acodec") or "mp4a.40.2")
 
 
@@ -566,12 +607,14 @@ def _build_representation(
         raise RuntimeError("Adaptive format has no URL")
     headers = _format_http_headers(fmt, info)
     _wait_until_available(fmt)
-    init_range, index_range, sidx = _probe_mp4_ranges(direct, headers)
+    webm = kind == "video" and fmt.get("_codec_family") == "vp09"
+    probe = _probe_webm_ranges if webm else _probe_mp4_ranges
+    init_range, index_range, sidx = probe(direct, headers)
     itag = str(fmt.get("format_id") or fmt.get("format") or "")
     if not itag:
         raise RuntimeError("Adaptive format missing format_id")
 
-    mime = "video/mp4" if kind == "video" else "audio/mp4"
+    mime = "audio/mp4" if kind == "audio" else "video/webm" if webm else "video/mp4"
     codecs = _codecs_string(fmt, kind=kind)
     family = fmt.get("_codec_family") or _video_codec_family(codecs) or "unknown"
     rep: dict[str, Any] = {
@@ -588,7 +631,7 @@ def _build_representation(
         "index_range": index_range,
         "timescale": int(sidx["timescale"]),
         "earliest_presentation_time": int(sidx["earliest_presentation_time"]),
-        "duration_sec": float(sidx["duration_sec"]),
+        "duration_sec": float(sidx["duration_sec"]) if sidx["duration_sec"] else None,
         "boundaries": list(sidx["boundaries"]),
     }
     if kind == "video":
@@ -971,7 +1014,7 @@ def _store_manifest_entry(url: str, entry: dict[str, Any]) -> None:
 def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
     videos, audios = _pick_adaptive_formats(info)
     if not videos or not audios:
-        raise RuntimeError("No MP4 adaptive formats available for DASH preview")
+        raise RuntimeError("No adaptive formats available for DASH preview")
 
     # Probe representations concurrently; extract semaphore already released.
     jobs: list[tuple[str, dict[str, Any]]] = [("video", fmt) for fmt in videos] + [
@@ -1000,9 +1043,7 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
     audio_reps = [r for r in reps.values() if r.get("kind") == "audio"]
     if not video_reps or not audio_reps:
         detail = f": {errors[0]}" if errors else ""
-        raise RuntimeError(
-            f"No MP4 adaptive formats available for DASH preview{detail}"
-        )
+        raise RuntimeError(f"No adaptive formats available for DASH preview{detail}")
 
     # Prefer exact sidx-derived duration over yt-dlp's rounded seconds.
     sidx_durs = [
@@ -1212,10 +1253,10 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
     for rep in videos:
         family = str(rep.get("codec_family") or "avc1")
         by_family.setdefault(family, []).append(rep)
-    # Prefer listing AV1 first so Shaka's preferredVideoCodecs can pick it.
+    # AV1 first so Shaka's preferredVideoCodecs can pick it, then VP9, H.264.
     family_order = sorted(
         by_family.keys(),
-        key=lambda f: (0 if f == "av01" else 1, f),
+        key=lambda f: (_FAMILY_ORDER.get(f, 2), f),
     )
 
     lines: list[str] = [
@@ -1234,7 +1275,9 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
     for family in family_order:
         family_reps = by_family[family]
         family_reps.sort(key=lambda r: int(r.get("height") or 0), reverse=True)
-        aligned = _boundaries_aligned(family_reps)
+        mime = str(family_reps[0].get("mime_type") or "video/mp4")
+        # A WebM set has no sidx boundaries, so it cannot claim alignment.
+        aligned = mime == "video/mp4" and _boundaries_aligned(family_reps)
         widths = [int(r.get("width") or 0) for r in family_reps]
         heights = [int(r.get("height") or 0) for r in family_reps]
         fps_vals = [int(r["fps"]) for r in family_reps if r.get("fps")]
@@ -1253,7 +1296,7 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
             extra += f' maxFrameRate="{max_fps}"'
         lines.append(
             f'<AdaptationSet id="{set_id}" contentType="video" '
-            f'mimeType="video/mp4" startWithSAP="1" '
+            f'mimeType="{mime}" startWithSAP="1" '
             f'subsegmentStartsWithSAP="1"{align_attrs}{extra}>'
         )
         lines.append('<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>')
