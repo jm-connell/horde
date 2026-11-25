@@ -30,6 +30,7 @@ from ..schemas import NextPartRead, StreamPreviewMeta, StreamRelatedPage
 from ..services import library, next_part, parental, stream_preview, stream_related
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import history as stream_history
+from ..services.discovery.other_interests import Viewer
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
 from ..services.url_safety import (
@@ -692,7 +693,13 @@ async def preview_related(
         else []
     )
     items = await run_in_threadpool(
-        _related, youtube_id, meta, limit, user.can("use_ai"), live_now
+        _related,
+        youtube_id,
+        meta,
+        limit,
+        user.can("use_ai"),
+        live_now,
+        Viewer(user.id, current().discovery, user.allowed),
     )
     if user.allowed is not None:
         # This member sees only allowed channels' videos.
@@ -720,7 +727,9 @@ def preview_next_part(
     return NextPartRead(entry=found.to_entry(), reason=found.reason)
 
 
-def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now):
+def _related(
+    youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now, viewer: Viewer
+):
     with Session(get_engine()) as session:
         return stream_related.related_for_stream(
             session,
@@ -729,6 +738,7 @@ def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now)
             limit=limit,
             may_embed=may_embed,
             live_now=live_now,
+            viewer=viewer,
         )
 
 

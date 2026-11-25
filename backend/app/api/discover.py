@@ -47,7 +47,6 @@ from ..response_schemas import (
     SuggestedChannelsRead,
 )
 from ..schemas import (
-    ChannelFeedEntry,
     RecAlgorithmUpdate,
     RecAlgorithmWrite,
     RecFeedbackWrite,
@@ -68,7 +67,7 @@ from ..services.discovery import (
     tuning,
 )
 from ..services.discovery import categories as discover_categories
-from ..services.discovery.candidates import Candidate
+from ..services.discovery.candidates import stream_entry
 from ..services.discovery.feed import ranked_feed, today_seed
 from ..services.discovery.picks import FeedItem
 from ..services.live import picks as live_picks
@@ -78,7 +77,6 @@ from ..services.pagination import (
     offset_cursor,
     parse_cursor,
 )
-from ..services.url_clean import youtube_thumbnail_url
 from .video_serialize import to_read_many
 
 logger = logging.getLogger(__name__)
@@ -86,23 +84,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/discover", tags=["discover"])
 
 _SORT = "discover"
-
-
-def _entry(c: Candidate) -> ChannelFeedEntry:
-    yt_id = c.yt_id or ""
-    return ChannelFeedEntry(
-        id=yt_id,
-        url=c.url,
-        title=c.title or None,
-        duration=c.duration,
-        thumbnail_url=c.thumbnail_url or youtube_thumbnail_url(yt_id),
-        view_count=c.view_count,
-        published_at=c.published_raw,
-        published_label=c.published_label,
-        channel=c.channel or None,
-        channel_url=c.source_channel_url,
-        live_status=c.live_status,
-    )
 
 
 def _why(item: FeedItem) -> DiscoverWhyRead:
@@ -260,7 +241,7 @@ def discover_feed(
             items.append(
                 DiscoverItemRead(
                     key=c.key,
-                    stream=_entry(c),
+                    stream=stream_entry(c),
                     reason=reason,
                     source="channels"
                     if item.followed or c.pool in ("catalog", "history")
@@ -553,7 +534,7 @@ def discover_channels(
                 name=s.name,
                 url=s.url,
                 reason=s.reason,
-                videos=[_entry(c) for c in s.videos if c.video_id is None],
+                videos=[stream_entry(c) for c in s.videos if c.video_id is None],
                 indexed=s.indexed,
                 typical_views=s.typical_views,
                 typical_minutes=s.typical_minutes,
