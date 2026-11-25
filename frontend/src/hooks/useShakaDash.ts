@@ -196,6 +196,29 @@ export function streamLoadLimits(
   return { codecs, maxHeight };
 }
 
+/**
+ * Auto's ceiling once a video has loaded: only the codec that loaded counts,
+ * since `streamLoadLimits` lists every codec that may load but the manifest
+ * decides which one does. Software decoding of a higher rung would stutter.
+ */
+export function loadedCodecCeiling(
+  caps: DecodeSupport,
+  loaded: CodecFamily | null,
+  state: StreamQualityState
+): number {
+  const hardware =
+    loaded === "av01"
+      ? caps.maxAv1Efficient
+      : loaded === "vp09"
+        ? caps.maxVp9Efficient
+        : 0;
+  return Math.min(
+    caps.maxSupportedHeight,
+    Math.max(1080, hardware),
+    state.downgrade?.maxHeight ?? Infinity
+  );
+}
+
 const attr = (tag: string, name: string): string | null =>
   new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1] ?? null;
 
@@ -543,9 +566,17 @@ export function useShakaDashLoad({
           codec: "av01",
         }));
         setAvailableHeights([...av1Only, ...qualities]);
+        const ceiling = live
+          ? maxHeight
+          : loadedCodecCeiling(
+              caps,
+              codecFamily(variants[0]?.videoCodec),
+              stream
+            );
+        capabilityMaxHeightRef.current = ceiling;
         if (abrEnabled) {
           p.configure({
-            restrictions: abrRestrictions(maxHeight, variants),
+            restrictions: abrRestrictions(ceiling, variants),
           });
         } else {
           const target =

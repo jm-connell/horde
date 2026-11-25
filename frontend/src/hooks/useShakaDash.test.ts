@@ -9,6 +9,7 @@ import {
   applyQualityPick,
   qualitiesOnlyInAv1,
   selectQualityTrack,
+  loadedCodecCeiling,
   streamLoadLimits,
   videoCodecConfig,
   type CodecFamily,
@@ -162,6 +163,34 @@ describe("streamLoadLimits", () => {
       codecs: [],
       maxHeight: 2160,
     });
+  });
+});
+
+describe("loadedCodecCeiling", () => {
+  const caps = (maxSupportedHeight = 2160): DecodeSupport => ({
+    av1Supported: true,
+    av1Efficient: true,
+    vp9Supported: true,
+    maxSupportedHeight,
+    maxAv1Efficient: 1440,
+    maxVp9Efficient: 2160,
+  });
+  const state = (maxHeight?: number): StreamQualityState => ({
+    downgrade: maxHeight ? { maxHeight, skipCodecs: [] } : null,
+    pickedCodec: null,
+    otherCodecQualities: [],
+  });
+
+  it("uses the hardware height of the codec that loaded", () => {
+    expect(loadedCodecCeiling(caps(), "av01", state())).toBe(1440);
+    expect(loadedCodecCeiling(caps(), "vp09", state())).toBe(2160);
+    expect(loadedCodecCeiling(caps(), "avc1", state())).toBe(1080);
+  });
+
+  it("stays under the step-down and the device's supported height", () => {
+    expect(loadedCodecCeiling(caps(), "vp09", state(720))).toBe(720);
+    expect(loadedCodecCeiling(caps(1080), "vp09", state())).toBe(1080);
+    expect(loadedCodecCeiling(caps(1080), "av01", state())).toBe(1080);
   });
 });
 
