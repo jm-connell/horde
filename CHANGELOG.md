@@ -27,8 +27,9 @@ All notable changes to Horde are documented here. The format follows
   a Mac only says a new version exists. The apps are not signed yet, so each
   system shows a warning the first time ([the steps are on the install
   page](docs/getting-started/install-desktop.md)); the Mac app is a preview.
-  Not there yet: pausing background work, waiting on battery, the YouTube
-  helper (so YouTube bot checks come sooner), Intel Macs and Windows on ARM.
+  The helper that keeps YouTube downloads from hitting bot checks comes with
+  it. Not there yet: pausing background work, waiting on battery, Intel Macs
+  and Windows on ARM.
 
 ### Changed
 

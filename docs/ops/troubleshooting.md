@@ -6,7 +6,7 @@
 
 **Checks:**
 
-1. Is `bgutil-pot` running? Health → `pot_provider` should be `ok` (`GET /api/health`).
+1. Is `bgutil-pot` running? Health → `pot_provider` should be `ok` (`GET /api/health`). The desktop app starts its own copy; lines from it in `horde.log` begin with `[helper]`.
 2. `YTDLP_POT_BASE_URL` reachable from the Horde container (`http://bgutil-pot:4416` in Compose).
 3. Add [cookies](youtube-access.md) for age-restricted or members-only videos you can watch signed-in. Horde only attaches them after that one video is blocked — not for bot checks or browsing. Status shows whether cookies are configured.
 4. Reduce bursty browsing — extracts are already serialized (1.25s spacing); avoid restarting jobs in a tight loop.

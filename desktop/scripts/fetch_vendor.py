@@ -3,9 +3,10 @@
 
     python desktop/scripts/fetch_vendor.py --target linux-x64
 
-Reads ``desktop/vendor.lock.json`` and, for Python, ffmpeg and deno, downloads
-the archive for the target, refuses it unless its SHA-256 matches the lock, and
-extracts it under ``--out`` (``python/``, ``ffmpeg/``, ``deno/``). Downloads are
+Reads ``desktop/vendor.lock.json`` and, for Python, ffmpeg, deno and the
+YouTube helper's source, downloads the archive for the target, refuses it unless
+its SHA-256 matches the lock, and extracts it under ``--out`` (``python/``,
+``ffmpeg/``, ``deno/``, ``pot/``). Downloads are
 kept in ``--cache`` by hash, so a second run fetches nothing.
 
 Standard library only: this runs on a bare CI runner before anything is
@@ -27,7 +28,7 @@ from pathlib import Path
 DESKTOP = Path(__file__).resolve().parent.parent
 LOCK = DESKTOP / "vendor.lock.json"
 TARGETS = ("win32-x64", "darwin-arm64", "linux-x64")
-PARTS = ("python", "ffmpeg", "deno")
+PARTS = ("python", "ffmpeg", "deno", "pot")
 _CHUNK = 1 << 20
 
 

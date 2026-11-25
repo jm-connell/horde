@@ -132,7 +132,7 @@ gh attestation verify Horde-linux-x64.AppImage --repo jm-connell/horde
 ## What the desktop app does not do yet
 
 - **Pause background work** from the tray, and waiting while the computer is on battery. Horde already runs thumbnails and similar work at low priority.
-- **The YouTube helper.** The Docker install runs a helper that keeps YouTube downloads from hitting bot checks. The desktop app does not have it yet, so it runs into those checks sooner. See [Troubleshooting](../ops/troubleshooting.md#bot-checks-youtube-blocks).
+- **Cookies for YouTube from the app.** The helper that keeps YouTube downloads from hitting bot checks is included and starts with Horde. Cookies for age-restricted or members-only videos can only be set through environment variables for now. See [Troubleshooting](../ops/troubleshooting.md#bot-checks-youtube-blocks).
 - **Signed apps.** That is why the first-open warnings exist, and why the Mac app cannot update itself.
 - **Automatic return to the previous version** when an update fails.
 - **Intel Macs and Windows on ARM.**

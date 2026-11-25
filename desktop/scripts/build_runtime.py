@@ -12,11 +12,13 @@ the image's ``/app`` so the server finds everything by its ordinary paths:
     backend/source          what "Ask about Horde" answers from
     backend/BUILD_INFO      version, commit, ffmpeg
     bin/                    ffmpeg, ffprobe, deno
+    pot/server              the YouTube helper with its dependencies installed
     licenses/               licence texts of the bundled programs
 
 The last step starts the bundled server with the bundled Python and checks that
 it answers, serves the web UI and the wiki, and stops when its standard input
-closes. A runtime that fails this never reaches the installer.
+closes, and does the same for the YouTube helper. A runtime that fails this
+never reaches the installer.
 
 Needs ``uv`` on PATH, a built ``frontend/dist`` and a built wiki.
 """
@@ -51,6 +53,36 @@ SOURCE_FILES = (
 )
 #: Standard-library parts the server never imports.
 UNUSED_STDLIB = ("test", "idlelib", "turtledemo", "ensurepip", "tkinter")
+#: The helper's build and lint tools. ``deno install`` fetches them with the
+#: rest (about 120 MB), and the helper never loads them at run time.
+POT_DEV_PACKAGES = (
+    "typescript",
+    "prettier",
+    "eslint",
+    "@swc",
+    "swc-node",
+    "@typescript-eslint",
+    "typescript-eslint",
+    "@eslint",
+    "@types",
+    "@oxc-resolver",
+    "@node-rs",
+    "eslint-plugin-prettier",
+    "eslint-plugin-only-warn",
+    "eslint-config-prettier",
+    "@commander-js",
+    ".bin",
+)
+#: How the shell starts the helper, from ``pot/server/node_modules``.
+POT_RUN_ARGS = (
+    "run",
+    "--cached-only",
+    "--allow-env",
+    "--allow-net",
+    "--allow-ffi=.",
+    "--allow-read=.",
+    "../horde_lifeline.ts",
+)
 _IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc")
 
 
@@ -145,6 +177,33 @@ def assemble_bin(vendor: Path, out: Path, target: str) -> Path:
     return bin_dir
 
 
+def assemble_pot(vendor: Path, out: Path, bin_dir: Path, target: str) -> Path:
+    """The YouTube helper (bgutil-ytdlp-pot-provider's server), ready to run offline.
+
+    Its npm dependencies are installed with the bundled deno into a flat
+    ``node_modules`` (the hoisted linker: no symlinks, which installers do not
+    carry reliably). ``--frozen`` keeps to the helper's own lock file.
+    """
+    server = out / "pot" / "server"
+    shutil.copytree(vendor / "pot" / "server", server)
+    # Ours, beside theirs: starts the helper and ends it with the desktop app.
+    shutil.copy2(DESKTOP / "pot" / "horde_lifeline.ts", server / "horde_lifeline.ts")
+    deno = bin_dir / exe("deno", target)
+    with tempfile.TemporaryDirectory(prefix="horde-deno-") as cache:
+        print("+ deno install (YouTube helper)", flush=True)
+        subprocess.run(
+            [str(deno), "install", "--node-modules-linker=hoisted",
+             "--allow-scripts=npm:canvas", "--frozen"],
+            cwd=server,
+            env={**os.environ, "DENO_DIR": cache, "DENO_NO_UPDATE_CHECK": "1"},
+            check=True,
+        )  # fmt: skip
+    modules = server / "node_modules"
+    for name in POT_DEV_PACKAGES:
+        shutil.rmtree(modules / name, ignore_errors=True)
+    return server
+
+
 def assemble_licenses(out: Path, lock: dict[str, dict[str, str]]) -> None:
     licenses = out / "licenses"
     shutil.copytree(DESKTOP / "licenses", licenses)
@@ -160,6 +219,12 @@ def assemble_licenses(out: Path, lock: dict[str, dict[str, str]]) -> None:
         f"deno {lock['deno']['version']}",
         "  Licence: MIT (deno-MIT.txt)",
         f"  Source:  {lock['deno']['source']}",
+        "",
+        f"bgutil-ytdlp-pot-provider {lock['pot']['version']} (the YouTube helper, in pot/server)",
+        "  Licence: GNU General Public License v3 (GPL-3.0.txt)",
+        f"  Source:  {lock['pot']['source']}",
+        "  Its npm packages keep their licence files in pot/server/node_modules.",
+        "  horde_lifeline.ts in that folder is Horde's own launcher, not part of it.",
         "",
         f"CPython {lock['python']['version']} (python-build-standalone {lock['python']['release']})",
         "  Licence: Python Software Foundation License; see the LICENSE file in python/",
@@ -279,6 +344,51 @@ def smoke_test(out: Path, target: str, lock: dict[str, dict[str, str]]) -> None:
     print("runtime smoke test passed:", checks, flush=True)
 
 
+def smoke_test_pot(out: Path, target: str, lock: dict[str, dict[str, str]]) -> None:
+    """Start the helper the way the shell does; it must answer and then stop."""
+    deno = out / "bin" / exe("deno", target)
+    port = _free_port()
+    with tempfile.TemporaryDirectory(prefix="horde pot ") as tmp:
+        log = Path(tmp) / "helper.log"
+        with log.open("wb") as fh:
+            proc = subprocess.Popen(
+                [str(deno), *POT_RUN_ARGS, "--port", str(port)],
+                cwd=out / "pot" / "server" / "node_modules",
+                env={**os.environ, "DENO_DIR": str(Path(tmp) / "deno"),
+                     "DENO_NO_UPDATE_CHECK": "1", "NO_COLOR": "1"},
+                stdin=subprocess.PIPE,
+                stdout=fh,
+                stderr=subprocess.STDOUT,
+            )  # fmt: skip
+            body = ""
+            try:
+                deadline = time.monotonic() + 60
+                while time.monotonic() < deadline and proc.poll() is None:
+                    try:
+                        with urllib.request.urlopen(  # noqa: S310 - loopback
+                            f"http://127.0.0.1:{port}/ping", timeout=5
+                        ) as resp:
+                            body = resp.read().decode("utf-8", "replace")
+                            break
+                    except OSError:
+                        time.sleep(0.5)
+                assert proc.stdin is not None
+                proc.stdin.close()
+                code: int | None = proc.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                code = None
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait(timeout=10)
+        if lock["pot"]["version"] not in body or code != 0:
+            print(log.read_text(encoding="utf-8", errors="replace"))
+            raise SystemExit(
+                f"YouTube helper smoke test failed: /ping said {body!r}, exit code {code}"
+            )
+    print("YouTube helper smoke test passed:", body.strip(), flush=True)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--target", required=True, choices=TARGETS)
@@ -298,10 +408,12 @@ def main() -> int:
     python = assemble_python(args.vendor, args.out, args.target)
     backend = assemble_backend(args.out, args.web, args.wiki)
     bin_dir = assemble_bin(args.vendor, args.out, args.target)
+    assemble_pot(args.vendor, args.out, bin_dir, args.target)
     assemble_licenses(args.out, lock)
     write_build_info(backend, bin_dir, args.target, args.version, args.sha)
     compile_bytecode(python, [args.out / "python", backend / "app"])
     smoke_test(args.out, args.target, lock)
+    smoke_test_pot(args.out, args.target, lock)
     return 0
 
 

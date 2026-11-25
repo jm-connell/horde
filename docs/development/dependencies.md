@@ -8,7 +8,7 @@ produces the same software as a rebuild today.
 | Python runtime deps | `backend/requirements.txt` (direct) and `backend/requirements.lock` (full tree, hashes) | `uv pip compile --universal --generate-hashes` |
 | Frontend deps | `frontend/package.json` and `frontend/package-lock.json` | `npm ci` |
 | Desktop shell deps | `desktop/package.json` and `desktop/package-lock.json` | `npm ci` |
-| Desktop bundled programs (Python, ffmpeg, deno) | `desktop/vendor.lock.json` | version, URL and SHA-256 for each of three targets |
+| Desktop bundled programs (Python, ffmpeg, deno, the YouTube helper) | `desktop/vendor.lock.json` | version, URL and SHA-256 for each of three targets |
 | Docs toolchain | `docs/requirements.txt` | exact `mkdocs-material` version |
 | pip in the image | `docker/pip.lock` | exact version plus hash |
 | Base images | `Dockerfile` `FROM` lines | exact version tag plus `@sha256` digest |
@@ -94,6 +94,7 @@ To bump one, change the `version` and, for **all three targets**, the `url` and 
 
 - **deno must equal the Dockerfile's** (`FROM denoland/deno:bin-<version>`), so the app and the image run the same one. Bump both in the same commit.
 - **ffmpeg** stays on the major the image uses.
+- **The YouTube helper** (`pot`) is the source of `bgutil-ytdlp-pot-provider`'s server at one tag, the same archive for all three targets. Its version must equal the plugin's pin in `backend/requirements.txt` (and should match the image tag in `docker-compose.yml`): the plugin and the server are released together. `build_runtime.py` installs its npm dependencies from the helper's own lock file and starts it once.
 - `scripts/check_vendor_lock.py` runs inside the backend suite (`backend/tests/test_vendor_lock.py`), so it is part of `scripts/check.sh` and CI. It fails when an entry or target is missing, a hash is not 64 hex characters, a URL is not on `github.com`, or the deno versions differ. It needs no network. Nothing bumps this file for you: Dependabot does not read it.
 
 The Desktop workflow then builds and starts the app with the new files, which is the real test of a bump.

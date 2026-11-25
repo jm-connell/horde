@@ -3,7 +3,9 @@
 
 The desktop app and the Docker image must ship the same deno, so the version
 pinned here has to equal the one in the Dockerfile's ``denoland/deno:bin-<version>``.
-Bump both together.
+The YouTube helper has two halves that must match: its server (pinned here as
+``pot``) and its yt-dlp plugin (``bgutil-ytdlp-pot-provider`` in
+backend/requirements.txt). Bump each pair together.
 """
 
 from __future__ import annotations
@@ -15,13 +17,14 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 TARGETS = ("win32-x64", "darwin-arm64", "linux-x64")
-PARTS = ("python", "ffmpeg", "deno")
+PARTS = ("python", "ffmpeg", "deno", "pot")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _DENO_IMAGE = re.compile(r"^FROM\s+denoland/deno:bin-([0-9.]+)", re.MULTILINE)
 _FFMPEG_PACKAGE = re.compile(r"jellyfin-ffmpeg(\d+)")
+_POT_PLUGIN = re.compile(r"^bgutil-ytdlp-pot-provider==([0-9.]+)", re.MULTILINE)
 
 
-def problems(lock_path: Path, dockerfile: Path) -> list[str]:
+def problems(lock_path: Path, dockerfile: Path, requirements: Path) -> list[str]:
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
     found: list[str] = []
     for part in PARTS:
@@ -57,17 +60,27 @@ def problems(lock_path: Path, dockerfile: Path) -> list[str]:
             f"ffmpeg is {lock_ffmpeg} in desktop/vendor.lock.json but the image "
             f"installs jellyfin-ffmpeg{image_ffmpeg.group(1)}; keep the same major"
         )
+    plugin = _POT_PLUGIN.search(requirements.read_text(encoding="utf-8"))
+    lock_pot = lock.get("pot", {}).get("version")
+    if plugin is None:
+        found.append("backend/requirements.txt: no bgutil-ytdlp-pot-provider pin found")
+    elif plugin.group(1) != lock_pot:
+        found.append(
+            f"the YouTube helper is {lock_pot} in desktop/vendor.lock.json but its "
+            f"plugin is {plugin.group(1)} in backend/requirements.txt; bump both together"
+        )
     return found
 
 
 def main(argv: list[str]) -> int:
     lock_path = Path(argv[1]) if len(argv) > 1 else REPO / "desktop" / "vendor.lock.json"
     dockerfile = Path(argv[2]) if len(argv) > 2 else REPO / "Dockerfile"
-    found = problems(lock_path, dockerfile)
+    requirements = REPO / "backend" / "requirements.txt"
+    found = problems(lock_path, dockerfile, requirements)
     for line in found:
         print(f"vendor lock: {line}", file=sys.stderr)
     if not found:
-        print("desktop/vendor.lock.json is complete and matches the Dockerfile")
+        print("desktop/vendor.lock.json is complete and matches the Dockerfile and requirements.txt")
     return 1 if found else 0
 
 

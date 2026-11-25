@@ -37,6 +37,16 @@ def test_a_deno_version_that_differs_from_the_image_fails(tmp_path):
     assert "bump both together" in done.stderr
 
 
+def test_a_helper_version_that_differs_from_its_plugin_fails(tmp_path):
+    lock = json.loads(LOCK.read_text(encoding="utf-8"))
+    lock["pot"]["version"] = "0.0.1"
+    changed = tmp_path / "vendor.lock.json"
+    changed.write_text(json.dumps(lock), encoding="utf-8")
+    done = _check(changed)
+    assert done.returncode == 1
+    assert "its plugin is" in done.stderr
+
+
 def test_a_missing_target_or_bad_hash_fails(tmp_path):
     lock = json.loads(LOCK.read_text(encoding="utf-8"))
     del lock["ffmpeg"]["targets"]["win32-x64"]

@@ -53,5 +53,23 @@
         "sha256": "e890975bc2549807bbcc0b584ffafda72cc7c93349dd99c80483dd784f6c4609"
       }
     }
+  },
+  "pot": {
+    "version": "2.0.2",
+    "source": "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/tree/2.0.2",
+    "targets": {
+      "win32-x64": {
+        "url": "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/archive/refs/tags/2.0.2.tar.gz",
+        "sha256": "1f2ae9ec39405b8e80397dfc2551f58deed09d8dff4b2b8fbc314df8e091c0a1"
+      },
+      "darwin-arm64": {
+        "url": "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/archive/refs/tags/2.0.2.tar.gz",
+        "sha256": "1f2ae9ec39405b8e80397dfc2551f58deed09d8dff4b2b8fbc314df8e091c0a1"
+      },
+      "linux-x64": {
+        "url": "https://github.com/Brainicism/bgutil-ytdlp-pot-provider/archive/refs/tags/2.0.2.tar.gz",
+        "sha256": "1f2ae9ec39405b8e80397dfc2551f58deed09d8dff4b2b8fbc314df8e091c0a1"
+      }
+    }
   }
 }
