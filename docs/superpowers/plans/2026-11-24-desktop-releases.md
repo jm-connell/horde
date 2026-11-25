@@ -195,7 +195,6 @@ Behaviour, each item as the spec defines it: start and wait for `/api/ping`; lif
 
 ## Not in this plan
 
-- Tray "Pause background work", waiting on battery, the bundled YouTube helper (spec Phase 5).
-- The upgrade smoke test, which needs a first desktop release to upgrade from.
+- Tray "Pause background work" and waiting on battery (spec Phase 5). The bundled YouTube helper and the upgrade smoke test were added after the first review, at the owner's request.
 - Signing (spec Phase 6).
 - The hands-on checks on a real Windows PC and Mac, which are the owner's.

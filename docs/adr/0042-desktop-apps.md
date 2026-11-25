@@ -36,7 +36,7 @@ The builds are Windows x64 (a per-user installer, no administrator prompt), macO
 - **A system webview (Tauri, pywebview).** A small download and a real window, but Safari's engine on a Mac and WebKitGTK on Linux run the player, which are its weakest playback paths, and keeping a bundled Python process alive and replaceable is a known problem there.
 - **Freezing Python with PyInstaller.** It needs hooks per package, changes how imports and data files resolve, and is a usual source of antivirus false positives. A second way to run the server is a second way for it to break.
 - **A separate desktop release workflow triggered by the tag.** The image and the installers could succeed or fail on their own, so half a release could ship, and what ships would not be what a pull request tested.
-- **Automatic rollback of a failed desktop update.** It means reinstalling the old program and restoring the database unattended, the riskiest part of `update.sh`, with nothing like it in the desktop updater. The shell instead shows "Horde X could not start" with "Open logs" and a link to the previous version, and the server backs up the database before a migration as always.
+- **Automatic rollback of a failed desktop update.** It means reinstalling the old program and restoring the database unattended, the riskiest part of `update.sh`, with nothing like it in the desktop updater. The shell instead shows "Horde X could not start" with "Open logs" and a link to the previous version, and the server backs up the database before a migration as always. The guard is earlier: every build is started on a data folder made by the newest published release (`desktop/scripts/upgrade_smoke.py`) before it can be packaged.
 
 ## Consequences
 

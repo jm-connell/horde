@@ -108,6 +108,18 @@ jobs:
             --sha "${GITHUB_SHA}" \
             --web web-in/dist --wiki web-in/wiki
 
+      # What an update does to someone's install: the newest published release
+      # makes a data folder, this build starts on it. Skips until a desktop
+      # release exists. The desktop app cannot go back by itself, so this is
+      # the guard against an update that will not start.
+      - name: Upgrade from the previous release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python desktop/scripts/upgrade_smoke.py \
+            --target "${{ matrix.target }}" \
+            --current-version "${HORDE_VERSION}"
+
       - name: Install the shell's dependencies
         working-directory: desktop
         run: npm ci
