@@ -1021,7 +1021,7 @@ def test_a_partly_failed_bulk_delete_still_reports_what_was_trashed(
     real = trash._move
 
     def fail_for_second(src, dst, **kw):
-        if second.file_path in str(src):
+        if second.file_path in Path(src).as_posix():
             raise OSError("disk went away")
         real(src, dst, **kw)
 

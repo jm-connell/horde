@@ -1,5 +1,6 @@
 """Background ffmpeg (sprites, scanner thumbnails) runs below playback priority."""
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -22,7 +23,11 @@ def _record_run_ffmpeg(monkeypatch, target: str) -> list[dict]:
     return calls
 
 
-@pytest.mark.skipif(shutil.which("nice") is None, reason="needs nice")
+@pytest.mark.skipif(
+    os.name != "posix" or shutil.which("nice") is None,
+    reason="runs a real nice, which Horde uses only on POSIX (Windows lowers the "
+    "priority with creationflags: test_low_priority_kwargs_lower_the_priority_...)",
+)
 def test_low_priority_wraps_after_the_progress_args():
     # The progress args go right after the ffmpeg binary, so nice must be
     # prefixed after them or they would be handed to nice instead.

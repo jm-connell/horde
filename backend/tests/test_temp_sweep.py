@@ -107,7 +107,10 @@ def test_sweep_never_follows_symlinks_or_leaves_the_library(init_db, tmp_path):
     (root / "link").symlink_to(outside, target_is_directory=True)
     file_link = root / "dangling.part"
     file_link.symlink_to(victim)
-    os.utime(file_link, (OLD, OLD), follow_symlinks=False)
+    if os.utime in os.supports_follow_symlinks:
+        # Old enough to sweep if the link were followed. Windows cannot date a
+        # link itself, so there it is also left alone for being new.
+        os.utime(file_link, (OLD, OLD), follow_symlinks=False)
 
     assert temp_sweep.sweep_temp_artifacts(6) == []
     assert victim.exists()
