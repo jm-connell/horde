@@ -601,6 +601,10 @@ def _backup_path(p: Path) -> Path:
 
 
 def _fsync_dir(directory: Path) -> None:
+    if os.name == "nt":
+        # Windows cannot open a directory as a file (PermissionError) and has no
+        # directory fsync; NTFS journals the rename itself.
+        return
     fd = os.open(directory, os.O_RDONLY)
     try:
         os.fsync(fd)
