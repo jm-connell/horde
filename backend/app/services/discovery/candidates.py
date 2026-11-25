@@ -33,8 +33,10 @@ from ...models import (
     Video,
     VideoTag,
 )
+from ...schemas import ChannelFeedEntry
 from ..channel_catalog.query import is_hidden_catalog_video
 from ..follows import normalize_channel_url
+from ..url_clean import youtube_thumbnail_url
 from ..ytdlp_common import cookie_configured
 from .history import library_key
 
@@ -88,6 +90,24 @@ class Candidate:
     duration: float | None = None
     view_count: int | None = None
     tags: list[str] = field(default_factory=list)
+
+
+def stream_entry(c: Candidate) -> ChannelFeedEntry:
+    """A candidate that is not downloaded, as the card that opens it as a stream."""
+    yt_id = c.yt_id or ""
+    return ChannelFeedEntry(
+        id=yt_id,
+        url=c.url,
+        title=c.title or None,
+        duration=c.duration,
+        thumbnail_url=c.thumbnail_url or youtube_thumbnail_url(yt_id),
+        view_count=c.view_count,
+        published_at=c.published_raw,
+        published_label=c.published_label,
+        channel=c.channel or None,
+        channel_url=c.source_channel_url,
+        live_status=c.live_status,
+    )
 
 
 def library_candidates(session: Session) -> list[Candidate]:
