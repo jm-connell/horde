@@ -32,6 +32,20 @@ export type StreamDowngrade = {
   skipCodecs: CodecFamily[];
 };
 
+/**
+ * The codec a step-down skips: the active track's, except H.264 (nothing to
+ * fall back to) and live (its ladder is one load of mixed codecs, restricted
+ * in place, never reloaded).
+ */
+export function codecToSkip(
+  videoCodec: string | null | undefined,
+  live: boolean
+): CodecFamily | null {
+  if (live) return null;
+  const family = codecFamily(videoCodec);
+  return family === "avc1" ? null : family;
+}
+
 export type FrameSample = {
   now: number;
   /** Shaka's running counts (`getStats()`). */
@@ -130,8 +144,7 @@ export function usePlaybackHealth({
         const currentQuality = active ? trackQuality(active) : 2160;
         const nextQuality =
           QUALITY_STEPS.find((q) => q < currentQuality) ?? 480;
-        const family = codecFamily(active?.videoCodec);
-        const skipCodec = family === "avc1" ? null : family;
+        const skipCodec = codecToSkip(active?.videoCodec, player.isLive());
 
         console.info("[preview-health] downgrade", {
           droppedFrames: dropped,

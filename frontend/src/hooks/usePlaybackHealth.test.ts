@@ -3,6 +3,7 @@ import {
   FrameDropWatch,
   POLL_MS,
   SUSTAINED_MS,
+  codecToSkip,
   type FrameSample,
 } from "./usePlaybackHealth";
 
@@ -76,5 +77,21 @@ describe("FrameDropWatch", () => {
       away.end
     );
     expect(back.downgraded).toBe(false);
+  });
+});
+
+describe("codecToSkip", () => {
+  it("skips the codec that was dropping frames on a video", () => {
+    expect(codecToSkip("vp09.00.50.08", false)).toBe("vp09");
+    expect(codecToSkip("av01.0.12M.08", false)).toBe("av01");
+  });
+
+  it("skips nothing on H.264", () => {
+    expect(codecToSkip("avc1.640028", false)).toBeNull();
+  });
+
+  it("skips nothing on live, which restricts in place and never reloads", () => {
+    expect(codecToSkip("vp09.00.50.08", true)).toBeNull();
+    expect(codecToSkip("av01.0.12M.08", true)).toBeNull();
   });
 });

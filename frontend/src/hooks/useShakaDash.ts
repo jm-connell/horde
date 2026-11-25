@@ -26,7 +26,6 @@ import {
   type CodecFamily,
   type DecodeSupport,
 } from "../utils/decodeCapability";
-export type { CodecFamily };
 import type { StreamDowngrade } from "./usePlaybackHealth";
 import {
   abrRestrictions,
@@ -34,6 +33,8 @@ import {
   type QualityChoice,
 } from "../components/videoPlayerQuality";
 import type { StreamType } from "../components/videoPlayerTypes";
+
+export type { CodecFamily };
 
 const VOD_STREAMING_CONFIG = {
   bufferingGoal: 30,
