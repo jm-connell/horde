@@ -13,12 +13,15 @@ line is ignored.
 
 from __future__ import annotations
 
+import faulthandler
 import logging
 import os
 import sys
 import threading
 import time
+from pathlib import Path
 
+import psutil
 import uvicorn
 
 from .config import HOST, PORT
@@ -29,6 +32,54 @@ logger = logging.getLogger(__name__)
 GRACEFUL_SHUTDOWN_SEC = 10
 #: How often a non-blocking standard input is polled for end of file.
 _POLL_SEC = 0.5
+#: Once the lifeline has ended, how long a graceful stop may take before the
+#: process ends itself. Nobody is left to stop a server whose shell is gone.
+FORCE_EXIT_AFTER_SEC = 30
+#: The desktop shell's process id, so its death is noticed even if the pipe is
+#: somehow kept open.
+PARENT_PID_ENV = "HORDE_DESKTOP_PARENT_PID"
+
+
+def _force_exit_later() -> None:
+    """End the process if the graceful stop has not finished in time.
+
+    Leaves every thread's stack in ``DATA_DIR/desktop/forced-exit.txt`` first, so
+    a stop that hangs can be diagnosed afterwards.
+    """
+    time.sleep(FORCE_EXIT_AFTER_SEC)
+    try:
+        folder = Path(os.environ.get("DATA_DIR", "./data")) / "desktop"
+        folder.mkdir(parents=True, exist_ok=True)
+        with (folder / "forced-exit.txt").open("w", encoding="utf-8") as fh:
+            fh.write(
+                f"The server did not stop within {FORCE_EXIT_AFTER_SEC} s of losing "
+                "the desktop app; it ended itself. Threads at that moment:\n"
+            )
+            fh.flush()
+            faulthandler.dump_traceback(file=fh, all_threads=True)
+    except OSError:
+        logger.warning("could not write the forced-exit report", exc_info=True)
+    os._exit(1)
+
+
+def _stop(server: uvicorn.Server) -> None:
+    """Ask for a graceful stop, with an exit of last resort behind it."""
+    server.should_exit = True
+    threading.Thread(
+        target=_force_exit_later, name="desktop-lifeline-backstop", daemon=True
+    ).start()
+
+
+def _parent() -> psutil.Process | None:
+    """The desktop shell's process, when it told us its id."""
+    raw = os.environ.get(PARENT_PID_ENV, "").strip()
+    if not raw.isdigit():
+        return None
+    try:
+        return psutil.Process(int(raw))
+    except psutil.Error:
+        logger.warning("the desktop app (pid %s) is not running", raw)
+        return None
 
 
 def _watch_lifeline(server: uvicorn.Server, fd: int) -> None:
@@ -70,7 +121,7 @@ def _watch_lifeline(server: uvicorn.Server, fd: int) -> None:
             "reading standard input failed (%r); stopping", exc, exc_info=True
         )
     finally:
-        server.should_exit = True
+        _stop(server)
 
 
 if sys.platform == "win32":
@@ -96,8 +147,12 @@ if sys.platform == "win32":
             logger.warning("no standard input handle: serving without a lifeline")
             return
         kind = _winapi.GetFileType(handle)
+        parent = _parent()
         first = True
         while True:
+            if parent is not None and not parent.is_running():
+                logger.warning("the desktop app's process is gone; stopping")
+                break
             try:
                 # (available, left in this message); with a size it would be
                 # (data, available, left), so the count is second from the end.
@@ -132,7 +187,7 @@ if sys.platform == "win32":
                 break
             first = False
             time.sleep(_POLL_SEC)
-        server.should_exit = True
+        _stop(server)
 
 
 def _stdin_fd() -> int | None:

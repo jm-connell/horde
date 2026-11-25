@@ -421,9 +421,17 @@ test("killing the app also ends the server", async () => {
   proc.kill("SIGKILL");
   await gone;
   app = null;
-  await expect.poll(() => alive(pid), { timeout: 20_000 }).toBe(false);
+  // 30 s is the server's own limit for a stop before it ends itself.
+  await expect.poll(() => alive(pid), { timeout: 60_000 }).toBe(false);
   expect(await accepts(port)).toBe(false);
   if (pot !== null) {
     await expect.poll(() => accepts(pot), { timeout: 20_000 }).toBe(false);
   }
+  // It must have stopped by itself, not through the exit of last resort
+  // (which leaves every thread's stack in this file).
+  const forced = path.join(home, "data", "desktop", "forced-exit.txt");
+  expect(
+    fs.existsSync(forced) ? fs.readFileSync(forced, "utf8") : "",
+    "the server had to end itself"
+  ).toBe("");
 });

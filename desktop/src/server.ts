@@ -99,6 +99,8 @@ export class HordeServer {
       HOST: opts.host,
       PORT: String(opts.port),
       HORDE_RUNTIME: "desktop",
+      // Lets the server notice this process dying even if the pipe stays open.
+      HORDE_DESKTOP_PARENT_PID: String(process.pid),
       PYTHONUNBUFFERED: "1",
       PYTHONUTF8: "1",
     };
