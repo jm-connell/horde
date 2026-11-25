@@ -5,7 +5,7 @@ produces the same software as a rebuild today.
 
 | What | Where | Pinned by |
 |------|-------|-----------|
-| Python runtime deps | `backend/requirements.txt` (direct) and `backend/requirements.lock` (full tree, hashes) | `uv pip compile --generate-hashes` |
+| Python runtime deps | `backend/requirements.txt` (direct) and `backend/requirements.lock` (full tree, hashes) | `uv pip compile --universal --generate-hashes` |
 | Frontend deps | `frontend/package.json` and `frontend/package-lock.json` | `npm ci` |
 | Docs toolchain | `docs/requirements.txt` | exact `mkdocs-material` version |
 | pip in the image | `docker/pip.lock` | exact version plus hash |
@@ -20,7 +20,7 @@ tampered or unexpectedly changed package fails the build instead of shipping.
 Edit `backend/requirements.txt` (the direct dependencies), then:
 
 ```bash
-uv pip compile --generate-hashes --python-version 3.14 \
+uv pip compile --universal --generate-hashes --python-version 3.14 \
     backend/requirements.txt -o backend/requirements.lock
 ```
 
