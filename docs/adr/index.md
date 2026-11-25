@@ -46,6 +46,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0038](0038-live-1440p-and-2160p-need-deno.md) | Live 1440p and 2160p come from a separate extraction that runs Deno | Accepted |
 | [0039](0039-deno-only-as-a-fallback.md) | Deno runs only as a fallback for videos the JS-less clients cannot open, not for all of yt-dlp | Accepted |
 | [0040](0040-streams-choose-a-codec-by-hardware-decoding.md) | A stream plays AV1, then VP9, then H.264 by what the device decodes in hardware | Accepted |
+| [0041](0041-related-lists-keep-other-interests.md) | A related list keeps one place in four for the viewer's other interests | Accepted |
 
 ## Writing a new record
 

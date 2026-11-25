@@ -29,6 +29,12 @@ All notable changes to Horde are documented here. The format follows
   after you watch something the feed is still ranked as you open it (the
   background waits until playback has stopped), and **Refresh** ranks a new
   order when you ask for it.
+- **Related videos are no longer all one topic.** Under a video on something
+  you have a lot of (a Counter-Strike stream, a GTA RP series), every related
+  video used to be the same topic. Now every fourth one is a pick from your
+  Recommended feed about something else, never from the same channel, so the
+  list is mostly the video's topic with a few of your other interests. The
+  first three stay on topic, so autoplay normally does too.
 
 ### Fixed
 
