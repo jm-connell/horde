@@ -11,7 +11,10 @@ import {
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 import { usePlaybackHealth } from "../../hooks/usePlaybackHealth";
 import {
+  freshStreamState,
   selectQualityTrack,
+  stateAfterDowngrade,
+  stateAfterPick,
   useApplyShakaQuality,
   type StreamQualityState,
 } from "../../hooks/useShakaDash";
@@ -23,12 +26,6 @@ import {
   type QualityChoice,
 } from "../videoPlayerQuality";
 import type { StreamType } from "../videoPlayerTypes";
-
-const freshStreamState = (): StreamQualityState => ({
-  downgrade: null,
-  pickedCodec: null,
-  otherCodecQualities: [],
-});
 
 interface Options {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -161,29 +158,16 @@ export function useStreamQuality({
   const pickQuality = useCallback(
     (choice: QualityChoice) => {
       const stream = streamStateRef.current;
-      const other =
-        typeof choice === "number"
-          ? stream.otherCodecQualities.find((o) => o.quality === choice)
-          : undefined;
-      if (other) {
-        // Only another codec's ladder has it: load this video again with it.
-        streamStateRef.current = {
-          downgrade: null,
-          pickedCodec: other.codec,
-          otherCodecQualities: [],
-        };
+      const next = stateAfterPick(stream, choice);
+      if (next) {
+        // Another codec's ladder has it (or Auto leaves that ladder): load
+        // this video again with the codecs the state now names.
+        streamStateRef.current = next;
         setQualityChoice(choice);
         reloadHere();
         return;
       }
-      if (choice === "auto" && stream.pickedCodec) {
-        // Auto plays the codec this device decodes in hardware again.
-        streamStateRef.current = { ...stream, pickedCodec: null };
-        setQualityChoice("auto");
-        reloadHere();
-        return;
-      }
-      // Explicit ladder picks override the step-down / AV1 blacklist.
+      // Explicit ladder picks override the step-down.
       if (choice !== "auto") {
         stream.downgrade = null;
         capabilityMaxHeightRef.current = Math.max(
@@ -199,20 +183,14 @@ export function useStreamQuality({
   usePlaybackHealth({
     enabled: effectiveStreamType === "dash" && shakaReady,
     player: shakaReady ? shakaPlayerRef.current : null,
-    onDowngrade: ({ maxHeight, blacklistAv1, notice }) => {
+    onDowngrade: ({ maxHeight, skipCodec, notice }) => {
       const p = shakaPlayerRef.current;
       if (!p) return;
-      const stream = streamStateRef.current;
-      const prev = stream.downgrade;
-      stream.downgrade = {
-        maxHeight: Math.min(prev?.maxHeight ?? maxHeight, maxHeight),
-        skipCodecs: [
-          ...(prev?.skipCodecs ?? []),
-          ...(blacklistAv1 && !prev?.skipCodecs.includes("av01")
-            ? (["av01"] as const)
-            : []),
-        ],
-      };
+      streamStateRef.current = stateAfterDowngrade(
+        streamStateRef.current,
+        maxHeight,
+        skipCodec
+      );
       capabilityMaxHeightRef.current = Math.min(
         capabilityMaxHeightRef.current,
         maxHeight
@@ -220,7 +198,7 @@ export function useStreamQuality({
       // Relabel the menu to the new ceiling so UI matches what can play.
       setQualityChoice(maxHeight);
       try {
-        if (blacklistAv1) {
+        if (skipCodec) {
           // Codec family change needs a reload so Shaka re-filters AdaptationSets.
           // The reload reads streamStateRef.
           reloadHere();

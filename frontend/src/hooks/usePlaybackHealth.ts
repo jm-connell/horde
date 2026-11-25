@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 import {
+  codecFamily,
   trackQuality,
+  type CodecFamily,
   writeBandwidthEstimate,
 } from "../utils/decodeCapability";
 
@@ -14,7 +16,8 @@ const QUALITY_STEPS = [2160, 1440, 1080, 720, 480];
 export type HealthDowngrade = {
   /** Nominal YouTube quality ceiling (1080, 720, …). */
   maxHeight: number;
-  blacklistAv1: boolean;
+  /** The codec that was dropping frames; null for H.264, which has no other to fall back to. */
+  skipCodec: CodecFamily | null;
   notice: string;
 };
 
@@ -26,7 +29,7 @@ export type HealthDowngrade = {
 export type StreamDowngrade = {
   maxHeight: number;
   /** Codec families this stream no longer loads. */
-  skipCodecs: ("av01" | "vp09" | "avc1")[];
+  skipCodecs: CodecFamily[];
 };
 
 export type FrameSample = {
@@ -127,9 +130,8 @@ export function usePlaybackHealth({
         const currentQuality = active ? trackQuality(active) : 2160;
         const nextQuality =
           QUALITY_STEPS.find((q) => q < currentQuality) ?? 480;
-        const isAv1 = (active?.videoCodec ?? "")
-          .toLowerCase()
-          .startsWith("av01");
+        const family = codecFamily(active?.videoCodec);
+        const skipCodec = family === "avc1" ? null : family;
 
         console.info("[preview-health] downgrade", {
           droppedFrames: dropped,
@@ -141,12 +143,12 @@ export function usePlaybackHealth({
           nextQuality,
           activeWidth: active?.width,
           activeHeight: active?.height,
-          isAv1,
+          skipCodec,
         });
 
         onDowngradeRef.current({
           maxHeight: nextQuality,
-          blacklistAv1: isAv1,
+          skipCodec,
           notice: "Reduced quality for smooth playback",
         });
       }

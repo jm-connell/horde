@@ -19,11 +19,14 @@ import type {
   ShakaVariantTrack,
 } from "shaka-player/dist/shaka-player.dash.js";
 import {
+  codecFamily,
   probeDecodeSupport,
   readBandwidthEstimate,
   trackQuality,
+  type CodecFamily,
   type DecodeSupport,
 } from "../utils/decodeCapability";
+export type { CodecFamily };
 import type { StreamDowngrade } from "./usePlaybackHealth";
 import {
   abrRestrictions,
@@ -121,20 +124,6 @@ function preferVideoCodecs(codecs: string[]) {
   }));
 }
 
-/** The codec families a stream's manifest offers (the prefix of the codec string). */
-export type CodecFamily = "av01" | "vp09" | "avc1";
-
-/** The family of a track's `videoCodec` string, or null for any other. */
-function codecFamily(
-  videoCodec: string | null | undefined
-): CodecFamily | null {
-  const codec = (videoCodec ?? "").toLowerCase();
-  for (const family of ["av01", "vp09", "avc1"] as const) {
-    if (codec.startsWith(family)) return family;
-  }
-  return null;
-}
-
 /**
  * Shaka's codec preference, in order. Live keeps Shaka's default (no
  * preference): its ladder is H.264 up to 1080p and VP9 above, since YouTube
@@ -223,27 +212,103 @@ const attr = (tag: string, name: string): string | null =>
   new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1] ?? null;
 
 /**
- * Qualities above `top` that a DASH manifest offers only in AV1, read from
- * the manifest text: Shaka drops the other codec's variants when it loads.
+ * Qualities above `top` that a DASH manifest offers only in AV1 or VP9, read
+ * from the manifest text: Shaka drops the other codecs' variants when it
+ * loads. Highest first, one entry per quality, with the codec to load for it:
+ * VP9 where this device decodes it in hardware, else AV1, else VP9. A quality
+ * only codecs the browser cannot decode offer is left out.
  */
-export function qualitiesOnlyInAv1(mpd: string, top: number): number[] {
-  const found = new Set<number>();
+export function qualitiesInOtherCodecs(
+  mpd: string,
+  top: number,
+  caps: DecodeSupport
+): { quality: number; codec: CodecFamily }[] {
+  const offered = new Map<number, Set<CodecFamily>>();
   const sets = mpd.matchAll(
     /<AdaptationSet\b([^>]*)>([\s\S]*?)<\/AdaptationSet>/g
   );
   for (const [, setAttrs, body] of sets) {
     const setCodecs = attr(setAttrs, "codecs");
     for (const [tag] of body.matchAll(/<Representation\b[^>]*>/g)) {
-      const codecs = attr(tag, "codecs") ?? setCodecs ?? "";
-      if (!codecs.startsWith("av01")) continue;
+      const family = codecFamily(attr(tag, "codecs") ?? setCodecs);
+      if (family !== "av01" && family !== "vp09") continue;
       const q = trackQuality({
         width: Number(attr(tag, "width")) || null,
         height: Number(attr(tag, "height")) || null,
       });
-      if (q > top) found.add(q);
+      if (q <= top) continue;
+      offered.set(q, (offered.get(q) ?? new Set()).add(family));
     }
   }
-  return [...found].sort((a, b) => b - a);
+  const found: { quality: number; codec: CodecFamily }[] = [];
+  for (const [quality, families] of offered) {
+    const av1 = families.has("av01") && caps.av1Supported;
+    const vp9 = families.has("vp09") && caps.vp9Supported;
+    const codec =
+      vp9 && (!av1 || caps.maxVp9Efficient >= quality)
+        ? "vp09"
+        : av1
+          ? "av01"
+          : null;
+    if (codec) found.push({ quality, codec });
+  }
+  return found.sort((a, b) => b.quality - a.quality);
+}
+
+export const freshStreamState = (): StreamQualityState => ({
+  downgrade: null,
+  pickedCodec: null,
+  otherCodecQualities: [],
+});
+
+/**
+ * The stream state after the viewer picks `choice`, or null when the pick
+ * needs no reload of the stream: a quality only another codec's ladder has
+ * loads that codec, and Auto after such a pick loads the default codecs again.
+ */
+export function stateAfterPick(
+  state: StreamQualityState,
+  choice: number | "auto"
+): StreamQualityState | null {
+  const other =
+    typeof choice === "number"
+      ? state.otherCodecQualities.find((o) => o.quality === choice)
+      : undefined;
+  if (other) {
+    return {
+      downgrade: null,
+      pickedCodec: other.codec,
+      otherCodecQualities: [],
+    };
+  }
+  if (choice === "auto" && state.pickedCodec) {
+    return { ...state, pickedCodec: null };
+  }
+  return null;
+}
+
+/**
+ * The stream state after a frame-drop step-down to `maxHeight`: the cut only
+ * goes lower, and the codec that was dropping frames (null for H.264, which
+ * has no other to fall back to) is skipped for the rest of the video.
+ */
+export function stateAfterDowngrade(
+  state: StreamQualityState,
+  maxHeight: number,
+  skipCodec: CodecFamily | null
+): StreamQualityState {
+  const prev = state.downgrade;
+  const skipCodecs = prev?.skipCodecs ?? [];
+  return {
+    ...state,
+    downgrade: {
+      maxHeight: Math.min(prev?.maxHeight ?? maxHeight, maxHeight),
+      skipCodecs:
+        skipCodec && !skipCodecs.includes(skipCodec)
+          ? [...skipCodecs, skipCodec]
+          : skipCodecs,
+    },
+  };
 }
 
 /**
@@ -541,9 +606,9 @@ export function useShakaDashLoad({
             return;
           }
         }
-        // The manifest's text, for the qualities only its AV1 ladder has.
+        // The manifest's text, for the qualities only another codec's ladder has.
         let manifestText: string | null = null;
-        if (!live && !codecs.includes("av01")) {
+        if (!live) {
           p.getNetworkingEngine()?.registerResponseFilter((type, response) => {
             if (type === SHAKA_MANIFEST_REQUEST) {
               manifestText = new TextDecoder().decode(response.data);
@@ -558,14 +623,11 @@ export function useShakaDashLoad({
         const variants = p.getVariantTracks() ?? [];
         variantTracksRef.current = variants;
         const qualities = distinctQualities(variants);
-        const av1Only = manifestText
-          ? qualitiesOnlyInAv1(manifestText, qualities[0] ?? 0)
+        const others = manifestText
+          ? qualitiesInOtherCodecs(manifestText, qualities[0] ?? 0, caps)
           : [];
-        stream.otherCodecQualities = av1Only.map((quality) => ({
-          quality,
-          codec: "av01",
-        }));
-        setAvailableHeights([...av1Only, ...qualities]);
+        stream.otherCodecQualities = others;
+        setAvailableHeights([...others.map((o) => o.quality), ...qualities]);
         const ceiling = live
           ? maxHeight
           : loadedCodecCeiling(

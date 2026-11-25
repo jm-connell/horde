@@ -7,11 +7,14 @@ import type { DecodeSupport } from "../utils/decodeCapability";
 import {
   LIVE_MANIFEST_CONFIG,
   applyQualityPick,
-  qualitiesOnlyInAv1,
+  qualitiesInOtherCodecs,
+  stateAfterDowngrade,
+  stateAfterPick,
   selectQualityTrack,
   loadedCodecCeiling,
   streamLoadLimits,
   videoCodecConfig,
+  freshStreamState,
   type CodecFamily,
   type StreamQualityState,
 } from "./useShakaDash";
@@ -93,6 +96,29 @@ describe("applyQualityPick", () => {
     expect(target).toBe(2160);
     expect(picked).toEqual([2160]);
     expect(tracks).toHaveLength(3);
+  });
+});
+
+describe("applyQualityPick codec preference", () => {
+  it("prefers VP9 then H.264 for a VP9 quality", () => {
+    const track = {
+      id: 1,
+      height: 2160,
+      width: 3840,
+      bandwidth: 1,
+      videoCodec: "vp09.00.50.08",
+    } as ShakaVariantTrack;
+    const configured: { preferredVideo?: { codec: string }[] }[] = [];
+    const player = {
+      isLive: () => false,
+      configure: (c: { preferredVideo?: { codec: string }[] }) =>
+        configured.push(c),
+      getVariantTracks: () => [track],
+      selectVariantTrack: () => undefined,
+    } as unknown as ShakaPlayer;
+    applyQualityPick(player, 2160);
+    const pref = configured.find((c) => c.preferredVideo)?.preferredVideo;
+    expect(pref?.map((p) => p.codec)).toEqual(["vp09", "avc1"]);
   });
 });
 
@@ -194,43 +220,184 @@ describe("loadedCodecCeiling", () => {
   });
 });
 
-describe("qualitiesOnlyInAv1", () => {
+describe("qualitiesInOtherCodecs", () => {
   const rep = (codecs: string, width: number, height: number) =>
     `<Representation id="${width}" bandwidth="1" codecs="${codecs}" width="${width}" height="${height}"><BaseURL>x</BaseURL></Representation>`;
-  const mpd = (...sets: string[][]) =>
+  const mpd = (...sets: { mime?: string; reps: string[] }[]) =>
     `<?xml version="1.0"?><MPD><Period>${sets
       .map(
-        (reps, i) =>
-          `<AdaptationSet id="${i}" contentType="video" mimeType="video/mp4">${reps.join("")}</AdaptationSet>`
+        ({ mime = "video/mp4", reps }, i) =>
+          `<AdaptationSet id="${i}" contentType="video" mimeType="${mime}">${reps.join("")}</AdaptationSet>`
       )
       .join(
         ""
       )}<AdaptationSet id="9" contentType="audio"><Representation id="140" bandwidth="1" codecs="mp4a.40.2"/></AdaptationSet></Period></MPD>`;
+  const caps = (over: Partial<DecodeSupport> = {}): DecodeSupport => ({
+    av1Supported: true,
+    av1Efficient: true,
+    vp9Supported: true,
+    maxSupportedHeight: 2160,
+    maxAv1Efficient: 0,
+    maxVp9Efficient: 0,
+    ...over,
+  });
+  const av1 = [
+    rep("av01.0.12M.08", 3840, 2160),
+    rep("av01.0.12M.08", 2560, 1440),
+    rep("av01.0.08M.08", 1920, 1080),
+  ];
+  const vp9 = [
+    rep("vp09.00.50.08", 3840, 2160),
+    rep("vp09.00.40.08", 2560, 1440),
+  ];
+  const avc = [rep("avc1.640028", 1920, 1080), rep("avc1.4d401f", 1280, 720)];
+  const both = mpd(
+    { reps: av1 },
+    { mime: "video/webm", reps: vp9 },
+    { reps: avc }
+  );
 
-  it("lists the AV1 qualities above the H.264 ladder", () => {
-    const text = mpd(
-      [
-        rep("av01.0.12M.08", 3840, 2160),
-        rep("av01.0.12M.08", 2560, 1440),
-        rep("av01.0.08M.08", 1920, 1080),
-      ],
-      [rep("avc1.640028", 1920, 1080), rep("avc1.4d401f", 1280, 720)]
-    );
-    expect(qualitiesOnlyInAv1(text, 1080)).toEqual([2160, 1440]);
+  it("takes VP9 where it decodes in hardware", () => {
+    expect(
+      qualitiesInOtherCodecs(both, 1080, caps({ maxVp9Efficient: 2160 }))
+    ).toEqual([
+      { quality: 2160, codec: "vp09" },
+      { quality: 1440, codec: "vp09" },
+    ]);
+  });
+
+  it("takes AV1 where VP9 is not hardware decoded", () => {
+    expect(qualitiesInOtherCodecs(both, 1080, caps())).toEqual([
+      { quality: 2160, codec: "av01" },
+      { quality: 1440, codec: "av01" },
+    ]);
+    expect(
+      qualitiesInOtherCodecs(both, 1080, caps({ maxVp9Efficient: 1440 }))
+    ).toEqual([
+      { quality: 2160, codec: "av01" },
+      { quality: 1440, codec: "vp09" },
+    ]);
+  });
+
+  it("falls back to VP9 when AV1 is not supported", () => {
+    expect(
+      qualitiesInOtherCodecs(both, 1080, caps({ av1Supported: false }))
+    ).toEqual([
+      { quality: 2160, codec: "vp09" },
+      { quality: 1440, codec: "vp09" },
+    ]);
+  });
+
+  it("lists a VP9-only manifest's qualities as VP9", () => {
+    expect(
+      qualitiesInOtherCodecs(
+        mpd({ mime: "video/webm", reps: vp9 }, { reps: avc }),
+        1080,
+        caps()
+      )
+    ).toEqual([
+      { quality: 2160, codec: "vp09" },
+      { quality: 1440, codec: "vp09" },
+    ]);
+  });
+
+  it("lists nothing the browser cannot decode", () => {
+    expect(
+      qualitiesInOtherCodecs(
+        both,
+        1080,
+        caps({ av1Supported: false, vp9Supported: false })
+      )
+    ).toEqual([]);
+    expect(
+      qualitiesInOtherCodecs(
+        mpd({ mime: "video/webm", reps: vp9 }),
+        1080,
+        caps({ vp9Supported: false })
+      )
+    ).toEqual([]);
   });
 
   it("reads a portrait video's quality from its short side", () => {
-    const text = mpd([rep("av01.0.12M.08", 2160, 3840)], []);
-    expect(qualitiesOnlyInAv1(text, 1080)).toEqual([2160]);
+    const text = mpd({ reps: [rep("av01.0.12M.08", 2160, 3840)] });
+    expect(qualitiesInOtherCodecs(text, 1080, caps())).toEqual([
+      { quality: 2160, codec: "av01" },
+    ]);
   });
 
   it("takes the codec from the adaptation set when representations omit it", () => {
-    const text = `<MPD><Period><AdaptationSet contentType="video" codecs="av01.0.12M.08"><Representation id="a" bandwidth="1" width="3840" height="2160"/></AdaptationSet></Period></MPD>`;
-    expect(qualitiesOnlyInAv1(text, 1080)).toEqual([2160]);
+    const text = `<MPD><Period><AdaptationSet contentType="video" codecs="vp09.00.50.08"><Representation id="a" bandwidth="1" width="3840" height="2160"/></AdaptationSet></Period></MPD>`;
+    expect(qualitiesInOtherCodecs(text, 1080, caps())).toEqual([
+      { quality: 2160, codec: "vp09" },
+    ]);
   });
 
-  it("lists nothing when AV1 goes no higher", () => {
-    const text = mpd([rep("av01.0.08M.08", 1920, 1080)], []);
-    expect(qualitiesOnlyInAv1(text, 1080)).toEqual([]);
+  it("lists nothing when the other codecs go no higher", () => {
+    const text = mpd({ reps: [av1[2]] }, { reps: avc });
+    expect(qualitiesInOtherCodecs(text, 1080, caps())).toEqual([]);
+  });
+});
+
+describe("stream state transitions", () => {
+  const fresh = (): StreamQualityState => ({
+    downgrade: null,
+    pickedCodec: null,
+    otherCodecQualities: [{ quality: 2160, codec: "vp09" }],
+  });
+
+  it("picking a quality only another codec has loads that codec", () => {
+    const next = stateAfterPick(fresh(), 2160);
+    expect(next).toEqual({
+      downgrade: null,
+      pickedCodec: "vp09",
+      otherCodecQualities: [],
+    });
+  });
+
+  it("picking a quality the loaded ladder has changes nothing here", () => {
+    expect(stateAfterPick(fresh(), 1080)).toBeNull();
+    expect(stateAfterPick(fresh(), "auto")).toBeNull();
+  });
+
+  it("picking Auto after a pick clears the picked codec", () => {
+    const state: StreamQualityState = { ...fresh(), pickedCodec: "vp09" };
+    expect(stateAfterPick(state, "auto")).toEqual({
+      ...state,
+      pickedCodec: null,
+    });
+  });
+
+  it("a step-down on VP9 skips VP9 for the rest of the video", () => {
+    const next = stateAfterDowngrade(fresh(), 1440, "vp09");
+    expect(next.downgrade).toEqual({ maxHeight: 1440, skipCodecs: ["vp09"] });
+    const caps: DecodeSupport = {
+      av1Supported: true,
+      av1Efficient: true,
+      vp9Supported: true,
+      maxSupportedHeight: 2160,
+      maxAv1Efficient: 0,
+      maxVp9Efficient: 2160,
+    };
+    expect(streamLoadLimits(caps, false, next).codecs).toEqual(["avc1"]);
+    // Another video starts clean.
+    expect(streamLoadLimits(caps, false, freshStreamState()).codecs).toEqual([
+      "vp09",
+      "avc1",
+    ]);
+  });
+
+  it("steps keep earlier skips, lower heights and add no duplicates", () => {
+    const first = stateAfterDowngrade(fresh(), 1440, "av01");
+    const second = stateAfterDowngrade(first, 1080, "vp09");
+    const third = stateAfterDowngrade(second, 1080, "vp09");
+    expect(third.downgrade).toEqual({
+      maxHeight: 1080,
+      skipCodecs: ["av01", "vp09"],
+    });
+  });
+
+  it("a step-down on H.264 skips no codec", () => {
+    const next = stateAfterDowngrade(fresh(), 720, null);
+    expect(next.downgrade).toEqual({ maxHeight: 720, skipCodecs: [] });
   });
 });

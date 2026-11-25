@@ -1,6 +1,21 @@
 /** Probe decode capability for preview DASH gating. */
 import { getItem, getJson, setItem, setJson } from "../storage";
 
+/** The codec families a stream's manifest offers (the prefix of the codec string). */
+export type CodecFamily = "av01" | "vp09" | "avc1";
+
+/** The family of a track's `videoCodec` string, or null for any other. */
+export function codecFamily(
+  videoCodec: string | null | undefined
+): CodecFamily | null {
+  const codec = (videoCodec ?? "").toLowerCase();
+  if (codec.startsWith("vp9")) return "vp09";
+  for (const family of ["av01", "vp09", "avc1"] as const) {
+    if (codec.startsWith(family)) return family;
+  }
+  return null;
+}
+
 export type DecodeSupport = {
   /** True when any AV1 ladder step reports MediaCapabilities.supported. */
   av1Supported: boolean;
