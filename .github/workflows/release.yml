@@ -1,8 +1,14 @@
 name: Release
 
-# Pushing a tag like v1.2.3 publishes a multi-arch image to GHCR and creates a
-# GitHub Release whose notes are the tag's CHANGELOG.md section followed by
-# the generated list of merged pull requests. See docs/development/release-process.md.
+# Pushing a tag like v1.2.3 builds the desktop apps, publishes a multi-arch image
+# to GHCR and creates a GitHub Release whose notes are the tag's CHANGELOG.md
+# section followed by the generated list of merged pull requests.
+#
+#   preflight -> desktop -> image -> publish
+#
+# The release is created as a draft, every desktop file is uploaded and checked,
+# and only then is it published: the updater and the download links never see a
+# release with a file missing. See docs/development/release-process.md.
 
 on:
   push:
@@ -23,9 +29,12 @@ env:
   IMAGE: ghcr.io/jm-connell/horde
 
 jobs:
-  release:
+  preflight:
+    name: Preflight
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 50
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,15 +54,26 @@ jobs:
           {
             python3 scripts/release_notes.py "${GITHUB_REF_NAME}" "${GITHUB_REPOSITORY}"
             printf '\n**Image:** `%s:%s`\n' "${IMAGE}" "${GITHUB_REF_NAME#v}"
-          } > "${RUNNER_TEMP}/notes.md"
+            printf '\n**Desktop apps:** the files below. [How to install](https://jm-connell.github.io/horde/getting-started/install-desktop/)\n'
+          } > notes.md
 
-      - name: CI and Image workflows must be green on the tagged commit
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-notes
+          path: notes.md
+          retention-days: 7
+
+      - name: Version from the tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: CI, Image and Desktop workflows must be green on the tagged commit
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Tag only commits that passed: wait for runs that are still going
           # (up to 40 minutes), fail if a workflow has no successful run.
-          for wf in ci.yml image.yml; do
+          for wf in ci.yml image.yml desktop.yml; do
             for _ in $(seq 1 80); do
               runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${wf}/runs?head_sha=${GITHUB_SHA}&per_page=50" --jq '.workflow_runs')"
               ok="$(jq '[.[] | select(.conclusion == "success")] | length' <<<"${runs}")"
@@ -74,6 +94,24 @@ jobs:
               exit 1
             fi
           done
+
+  # The installers are built and started on each system before anything is
+  # pushed: a desktop failure stops the release with nothing published.
+  desktop:
+    name: Desktop
+    needs: preflight
+    uses: ./.github/workflows/desktop-build.yml
+    with:
+      version: ${{ needs.preflight.outputs.version }}
+      retention-days: 7
+
+  image:
+    name: Image
+    needs: [preflight, desktop]
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -110,12 +148,69 @@ jobs:
           cache-from: type=gha,scope=release
           cache-to: type=gha,scope=release,mode=max
 
-      - name: Create the GitHub Release
+  publish:
+    name: Publish
+    needs: [preflight, desktop, image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-notes
+          path: notes
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: desktop-{windows,mac,linux}
+          path: assets
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: assets
+        run: |
+          sha256sum Horde-*.exe Horde-*.dmg Horde-*.zip Horde-*.AppImage > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Every desktop file is present
+        run: python3 scripts/check_release_assets.py assets
+
+      - name: Attest where the installers were built
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: assets/SHA256SUMS
+
+      # A draft first: nobody (and no updater) sees the release until every
+      # file is on it. A re-run reuses its own draft and never touches a
+      # release that is already published.
+      - name: Create the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          flags=(--verify-tag --generate-notes --title "Horde ${GITHUB_REF_NAME#v}")
-          if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
-            flags+=(--prerelease)
+          state="$(gh release view "${GITHUB_REF_NAME}" --json isDraft --jq .isDraft 2>/dev/null || echo none)"
+          if [ "${state}" = "false" ]; then
+            echo "::error::${GITHUB_REF_NAME} is already published; fix forward with a new tag."
+            exit 1
           fi
-          gh release create "${GITHUB_REF_NAME}" "${flags[@]}" --notes "$(cat "${RUNNER_TEMP}/notes.md")"
+          if [ "${state}" = "none" ]; then
+            flags=(--draft --verify-tag --generate-notes --title "Horde ${GITHUB_REF_NAME#v}")
+            if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
+              flags+=(--prerelease)
+            fi
+            gh release create "${GITHUB_REF_NAME}" "${flags[@]}" --notes "$(cat notes/notes.md)"
+          fi
+
+      - name: Upload the desktop files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${GITHUB_REF_NAME}" assets/* --clobber
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${GITHUB_REF_NAME}" --draft=false
