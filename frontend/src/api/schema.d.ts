@@ -2952,7 +2952,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Preview Meta */
+        /**
+         * Preview Meta
+         * @description A stream's details for the watch page.
+         *
+         *     ``background=true`` marks a lookup nobody is waiting on yet (a hover
+         *     warm-up): it queues behind the videos people are opening.
+         */
         get: operations["preview_meta_api_preview_meta_get"];
         put?: never;
         post?: never;
@@ -17428,6 +17434,7 @@ export interface operations {
         parameters: {
             query: {
                 url: string;
+                background?: boolean;
             };
             header?: never;
             path?: never;

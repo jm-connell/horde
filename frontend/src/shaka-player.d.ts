@@ -64,6 +64,12 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     addEventListener(type: string, listener: EventListener): void;
     removeEventListener(type: string, listener: EventListener): void;
     getVariantTracks(): ShakaVariantTrack[];
+    /** Hooks into the player's requests (a response filter sees each answer). */
+    getNetworkingEngine(): {
+      registerResponseFilter(
+        filter: (type: number, response: { data: BufferSource }) => void
+      ): void;
+    } | null;
     selectVariantTrack(track: ShakaVariantTrack, clearBuffer?: boolean): void;
     getStats(): ShakaStats;
     retryStreaming(retryDelay?: number): boolean;

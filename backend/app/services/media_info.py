@@ -114,7 +114,7 @@ def _av1_level(width: int, height: int, fps: float) -> int:
     return 16  # 6.0
 
 
-def _vp9_level(width: int, height: int, fps: float) -> int:
+def vp9_level(width: int, height: int, fps: float) -> int:
     pixels = width * height
     if pixels <= 1280 * 720:
         return 31
@@ -166,7 +166,7 @@ def codec_string_for(stream: dict[str, Any]) -> str | None:
         p = 2 if depth >= 10 else 0
         if "profile" in profile:
             p = _int(profile.replace("profile", "").strip()) or p
-        lvl = level if level and level > 0 else _vp9_level(width, height, fps)
+        lvl = level if level and level > 0 else vp9_level(width, height, fps)
         return f"vp09.{p:02d}.{lvl:02d}.{depth:02d}"
     if family == "av1":
         p = {"main": 0, "high": 1, "professional": 2}.get(profile, 0)

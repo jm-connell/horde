@@ -152,6 +152,7 @@ nav:
       - 0037 Live chat follows the viewer: adr/0037-live-chat-follows-the-viewer.md
       - 0038 Live 1440p and 2160p need Deno: adr/0038-live-1440p-and-2160p-need-deno.md
       - 0039 Deno only as a fallback: adr/0039-deno-only-as-a-fallback.md
+      - 0040 Streams choose a codec by hardware decoding: adr/0040-streams-choose-a-codec-by-hardware-decoding.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

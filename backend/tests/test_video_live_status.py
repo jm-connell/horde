@@ -101,7 +101,7 @@ def test_preview_meta_tells_past_streams_from_ones_still_processing(monkeypatch)
     monkeypatch.setattr(
         stream_preview,
         "_extract_preview_info",
-        lambda url: {"id": VID, "title": "x", "live_status": "post_live"},
+        lambda url, **_kw: {"id": VID, "title": "x", "live_status": "post_live"},
     )
     meta = stream_preview.extract_stream_preview_meta(
         f"https://www.youtube.com/watch?v={VID}"
@@ -114,7 +114,7 @@ def test_preview_meta_tells_past_streams_from_ones_still_processing(monkeypatch)
 def test_preview_meta_api_passes_live_status(client, monkeypatch):
     monkeypatch.setattr(
         "app.services.stream_preview.extract_stream_preview_meta",
-        lambda url: {
+        lambda url, **_kw: {
             "id": VID,
             "title": "x",
             "was_live": True,

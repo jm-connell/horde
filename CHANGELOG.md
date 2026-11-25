@@ -7,6 +7,37 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **1440p and 4K for videos that have no AV1.** Every video above 1080p has a
+  VP9 version, and about a third of them have no AV1 at all (long videos, small
+  channels, new uploads), so they stopped at 1080p. A stream's quality menu now
+  lists VP9's qualities too, and Auto plays them on devices with hardware VP9
+  decoding (Intel since 2016, NVIDIA since the GTX 950, AMD since Raven Ridge,
+  Apple M1 and later). When the browser drops frames in AV1 or VP9, Horde
+  switches that video to the next codec down. Qualities your browser cannot
+  decode at all are no longer listed.
+
+### Fixed
+
+- **Streams no longer get stuck at 480p.** When the browser keeps dropping
+  frames (a game still rendering on the other monitor, say), Horde lowers
+  that video's quality as before, but the next video starts at full quality
+  again. Before, the cut lasted a day for every stream in that browser, a
+  refresh did not clear it, and the quality menu could not go above it.
+- **High-quality streams start smoothly on more devices.** On Auto, a video
+  that isn't downloaded plays AV1 where the browser decodes it in hardware,
+  otherwise VP9 where it decodes that in hardware, otherwise H.264 up to
+  1080p, instead of stuttering through software AV1 first. Live broadcasts go
+  above 1080p only with hardware VP9 decoding. 1440p and 4K stay in the
+  quality menu: picking one loads that video in the codec that has it. Chrome
+  on Linux has no hardware video decoding by default, so Auto stays at 1080p
+  there.
+- **Opening a stream is no longer held up by cards you point past.** A video
+  starts loading ahead of the click only once the mouse rests on its card
+  for a moment, so cards the mouse crosses on the way are left alone, and
+  those early lookups now wait behind the video you click.
+
 ## [1.4.2] - 2026-11-24
 
 ### Added

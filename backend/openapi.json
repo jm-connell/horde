@@ -25303,6 +25303,7 @@
     },
     "/api/preview/meta": {
       "get": {
+        "description": "A stream's details for the watch page.\n\n``background=true`` marks a lookup nobody is waiting on yet (a hover\nwarm-up): it queues behind the videos people are opening.",
         "operationId": "preview_meta_api_preview_meta_get",
         "parameters": [
           {
@@ -25312,6 +25313,16 @@
             "schema": {
               "title": "Url",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "background",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Background",
+              "type": "boolean"
             }
           }
         ],
