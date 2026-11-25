@@ -1,0 +1,159 @@
+name: Desktop build
+
+# Builds the desktop app for Windows, macOS and Linux and proves each one
+# starts. Reusable: the Desktop workflow calls it on pull requests and main, the
+# Release workflow calls it on a tag, so what ships is what was tested.
+# See docs/development/release-process.md.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version baked into the app (the tag without the leading v).
+        type: string
+        default: "0.0.0-dev"
+      retention-days:
+        type: number
+        default: 3
+
+permissions:
+  contents: read
+
+jobs:
+  # The web UI and the wiki are the same files on every system: build them once.
+  web:
+    name: Web UI and wiki
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build the web UI
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Build the wiki
+        run: |
+          python -m pip install -r docs/requirements.txt
+          mkdocs build -d web-out/wiki --strict
+      - name: Collect
+        run: cp -r frontend/dist web-out/dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-web
+          path: web-out/
+          retention-days: 1
+
+  build:
+    name: Build and smoke test (${{ matrix.name }})
+    needs: web
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-2025
+            target: win32-x64
+            app: release/win-unpacked/Horde.exe
+          - name: mac
+            os: macos-15
+            target: darwin-arm64
+            app: release/mac-arm64/Horde.app/Contents/MacOS/Horde
+          - name: linux
+            os: ubuntu-24.04
+            target: linux-x64
+            app: release/linux-unpacked/horde
+    defaults:
+      run:
+        shell: bash
+    env:
+      # From a tag name on releases: passed as data, never pasted into a script.
+      HORDE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: desktop-web
+          path: web-in
+
+      - name: Fetch the pinned Python, ffmpeg and deno
+        run: python desktop/scripts/fetch_vendor.py --target "${{ matrix.target }}"
+
+      # Installs requirements.lock into the bundled Python, lays the files out
+      # like the image's /app and starts the bundled server once to prove it.
+      - name: Assemble the bundled server and run it
+        run: |
+          python -m pip install uv==0.13.1
+          python desktop/scripts/build_runtime.py \
+            --target "${{ matrix.target }}" \
+            --version "${HORDE_VERSION}" \
+            --sha "${GITHUB_SHA}" \
+            --web web-in/dist --wiki web-in/wiki
+
+      - name: Install the shell's dependencies
+        working-directory: desktop
+        run: npm ci
+
+      - name: Build the installer
+        working-directory: desktop
+        env:
+          # Unsigned for now (docs/adr/0042-desktop-apps.md): never pick up a
+          # certificate that happens to be on the runner. Signing is switched on
+          # here, with CSC_LINK and CSC_KEY_PASSWORD from secrets
+          # (docs/development/release-process.md).
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run dist -- --publish never "-c.extraMetadata.version=${HORDE_VERSION}"
+
+      # The packaged app itself, driven by Playwright: window, tray, second
+      # launch, quit, and that no server is left behind.
+      - name: End-to-end test of the packaged app
+        working-directory: desktop
+        env:
+          HORDE_DESKTOP_APP: ${{ github.workspace }}/desktop/${{ matrix.app }}
+        run: |
+          if [ "${RUNNER_OS}" = "Linux" ]; then
+            xvfb-run -a npx playwright test
+          else
+            npx playwright test
+          fi
+
+      - name: Collect the release files
+        run: |
+          mkdir -p out
+          cd desktop/release
+          for f in Horde-* latest*.yml; do
+            [ -f "$f" ] && cp "$f" ../../out/
+          done
+          ls -l ../../out
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-${{ matrix.name }}
+          path: out/
+          if-no-files-found: error
+          retention-days: ${{ inputs.retention-days }}
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: desktop-${{ matrix.name }}-test-results
+          path: desktop/test-results/
+          retention-days: 3
