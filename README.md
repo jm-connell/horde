@@ -137,6 +137,12 @@ including how to reset a lost admin password.
 
 ## Quick start
 
+**On your own computer:** the [desktop app](https://jm-connell.github.io/horde/getting-started/install-desktop/)
+installs from one file on Windows, macOS (Apple silicon, a preview) and Linux,
+with no Docker. It is not signed yet, so the page shows the clicks to get past
+the first-open warning. The rest of this section is the Docker install, the
+better choice for a home server or NAS.
+
 Full walkthroughs: [Install with Docker](https://jm-connell.github.io/horde/getting-started/install-docker/)
 and [TrueNAS / Dockge](https://jm-connell.github.io/horde/getting-started/truenas-dockge/).
 

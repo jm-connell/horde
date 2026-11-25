@@ -8,8 +8,9 @@
 | TrueNAS SCALE | [TrueNAS / Dockge](truenas-dockge.md) |
 | Raspberry Pi or another ARM board | [Raspberry Pi](#raspberry-pi), then Install with Docker |
 | Proxmox | [Proxmox](#proxmox), then Install with Docker |
-| Windows | [Windows](#windows) |
-| macOS | [macOS](#macos) |
+| A Windows PC, a Mac with Apple silicon, or a Linux desktop, for your own use | [Install the desktop app](install-desktop.md) |
+| Windows, as a server | [Windows](#windows) |
+| macOS, as a server | [macOS](#macos) |
 | Unraid, Synology, Portainer | The sections below |
 | Anything else that runs containers | [Plain `docker run`](#plain-docker-run) |
 
@@ -42,6 +43,8 @@ Run Horde in a Debian or Ubuntu **VM** (simplest), or in an **LXC container** wi
 
 ## Windows { #windows }
 
+For a Windows PC you use yourself, the [desktop app](install-desktop.md) is the simple way: one installer, no Docker. The rest of this section is for running Horde as a server on Windows with Docker.
+
 Horde runs on Windows through **WSL 2**, the Linux that Windows includes. Less tested than Linux; please report problems.
 
 1. Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) with the WSL 2 backend (the default), and Ubuntu from the Microsoft Store (or `wsl --install -d Ubuntu` in PowerShell).
@@ -51,6 +54,8 @@ Horde runs on Windows through **WSL 2**, the Linux that Windows includes. Less t
 Keep both folders inside Ubuntu's own disk (such as `/home/<you>/horde-data`), not under `/mnt/c/...`: the Windows drives are mounted like a network share, where the database can corrupt. To reach the videos from Windows, open `\\wsl$\Ubuntu\home\<you>\horde-media` in File Explorer. Open Horde at `http://localhost:8686` on the PC; other devices use the PC's address, after allowing port 8686 in Windows Firewall. Update from the Ubuntu terminal with `bash update.sh`. The **Update now** button needs a cron job running in Ubuntu, which only runs while WSL keeps Ubuntu started, so the terminal is the dependable way here.
 
 ## macOS { #macos }
+
+For a Mac you use yourself, the [desktop app](install-desktop.md) is the simple way (Apple silicon only; it is a preview). The rest of this section is for running Horde as a server on a Mac with Docker.
 
 Install [Docker Desktop](https://docs.docker.com/desktop/setup/install/mac-install/) (or OrbStack), then follow [Install with Docker](install-docker.md) from step 1 in Terminal (Git comes with the Xcode command line tools: `xcode-select --install`). Less tested than Linux; please report problems.
 

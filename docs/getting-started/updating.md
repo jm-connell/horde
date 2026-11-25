@@ -8,6 +8,15 @@ First-time install is a `git clone` plus Compose/Dockge deploy — [Install with
 
 Library media (`DOWNLOADS_PATH`) and app data (`DATA_PATH`) live on host volumes and are **not** wiped by a rebuild. `update.sh` snapshots bind mounts from the running container into `.env` *before* `git pull`, so a compose-file refresh cannot remount Horde onto empty default directories (which looks like "settings reset" and "storage paths changed").
 
+## Desktop app { #desktop-app }
+
+Everything below is for the Docker install. The [desktop app](install-desktop.md) updates differently, and needs no cron job or shell:
+
+- **Windows and Linux** check GitHub Releases when Horde starts and every six hours, and download a new stable version in the background (pre-releases are never offered). The update installs when you quit Horde, or by itself when Horde is idle: the window is closed, nothing is downloading or being processed, and no video has been served for 15 minutes. Horde tells you when it has updated, and the tray shows **Restart to update to X** while one is waiting.
+- **Update now** in Settings → System → Updates works on Windows and Linux, through the same files ([ADR 0011](../adr/0011-in-app-updates.md)). There is nothing to set up.
+- **macOS** only checks. While the app is unsigned it cannot install itself, so Horde says **A new version is available** and opens the download page; **Update now** is not shown. Download the new `.dmg` and replace the app in Applications.
+- Horde backs up the database before it changes it, as in Docker. If a new version will not start, Horde says so, offers **Open logs** and a link to the previous version, and does not go back by itself.
+
 ## Update from the app (recommended) { #update-from-the-app }
 
 Administrators can update Horde with one click, without opening a shell.

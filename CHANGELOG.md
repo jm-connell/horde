@@ -17,8 +17,27 @@ All notable changes to Horde are documented here. The format follows
   Apple M1 and later). When the browser drops frames in AV1 or VP9, Horde
   switches that video to the next codec down. Qualities your browser cannot
   decode at all are no longer listed.
+- **A desktop app for Windows, macOS and Linux.** Download one file, open it,
+  and Horde runs on your own computer with no Docker: a window of its own, an
+  icon in the tray, and downloads that carry on after you close the window.
+  It is the same server and web pages, with its own Python, ffmpeg and deno
+  inside. It listens on this computer only until you turn on **Share on my
+  home network**, and it can start when you sign in. Windows and Linux update
+  themselves (when you quit, or when Horde is idle) and **Update now** works;
+  a Mac only says a new version exists. The apps are not signed yet, so each
+  system shows a warning the first time ([the steps are on the install
+  page](docs/getting-started/install-desktop.md)); the Mac app is a preview.
+  Not there yet: pausing background work, waiting on battery, the YouTube
+  helper (so YouTube bot checks come sooner), Intel Macs and Windows on ARM.
 
 ### Changed
+
+- **A release now builds the desktop apps too.** Pushing a tag builds and starts
+  the installers on Windows, macOS and Linux first, then the image, and
+  publishes the release only when every file is on it, with checksums and build
+  attestations. A failed installer stops the release before anything is pushed.
+  `backend/requirements.lock` now resolves for Windows and macOS as well as
+  Linux, and the backend tests run on all three.
 
 - **Recommended opens without the wait.** The feed was ranked when you opened
   it, which took a second or more on a large library every time the server

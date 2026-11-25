@@ -48,6 +48,7 @@ E2E_SHARDS=4 scripts/check.sh --e2e   # ...as four parallel shards (much faster)
 | 6 | Types | `npm run typecheck` (`tsc --noEmit`) |
 | 7 | Frontend tests | `npm test` (Vitest) |
 | 8 | Production bundle | `npm run build` |
+| 8b | Desktop shell | `npm run lint`, `npm run format:check`, `npm run typecheck` and `npm test` in `desktop/` (needs `npm ci` there first) |
 | 9 | Wiki | `mkdocs build --strict` (skipped when mkdocs is not installed) |
 | 10 | Browser UI (`--e2e` only) | `npx playwright test`, or `scripts/e2e-shards.sh` with `E2E_SHARDS` > 1 |
 
@@ -107,6 +108,26 @@ pip install "mkdocs-material>=9.5,<10"
 mkdocs build --strict
 ```
 
+Desktop shell (from `desktop/`, Node 24 or newer):
+
+```bash
+cd desktop
+npm ci
+npm run lint && npm run format:check && npm run typecheck
+npm test                   # Vitest: the shell's own logic
+npm run e2e                # builds the shell, then Playwright starts the real Electron app and server
+```
+
+`npm run e2e` runs the shell unpackaged against the repository's own Python (`.venv/bin/python`, or `HORDE_DESKTOP_PYTHON`) and a temporary home (`HORDE_DESKTOP_HOME`), so it never touches your real Horde folders. Set `HORDE_DESKTOP_HEADLESS=1` to run Electron with no display on a machine with a desktop session open. To test an installer build instead, point `HORDE_DESKTOP_APP` at the packaged program. Packaging runs in CI, not in `scripts/check.sh`, but you can do what the workflow does on your own system (use your own target: `win32-x64`, `darwin-arm64` or `linux-x64`), after building the web UI (`frontend/dist`) and the wiki:
+
+```bash
+python desktop/scripts/fetch_vendor.py --target linux-x64
+pip install uv==0.13.1   # the version desktop-build.yml uses
+python desktop/scripts/build_runtime.py --target linux-x64 --version 0.0.0-dev --sha "$(git rev-parse HEAD)" --web frontend/dist --wiki <wiki-build-dir>
+cd desktop && npm ci && CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist -- --publish never
+HORDE_DESKTOP_APP="$PWD/release/linux-unpacked/horde" npx playwright test
+```
+
 Optional full image (slow; matches Dockge):
 
 ```bash
@@ -126,6 +147,8 @@ The workflow file is `.github/workflows/ci.yml`. It runs on:
 | **`workflow_dispatch`** | **Actions → CI → Run workflow** after a large local change if you want a fresh run without a new commit |
 
 Jobs (parallel): **backend** (pytest), **frontend** (Vitest + production build), **e2e** (Playwright against the built SPA, split into four `e2e (n/4)` shard jobs that each start their own servers; the `e2e` job only reports whether all four passed), **docs** (MkDocs `--strict`), **image** (`docker build` of the single-container app).
+
+The **Desktop** workflow (`.github/workflows/desktop.yml`) runs on the same events and has three parts: the backend suite on **Windows and macOS** (CI runs it on Linux), the shell's lint, format, types and unit tests (**Shell checks**), and a full build (`desktop-build.yml`, shared with the Release workflow) that packages the app on Windows, macOS and Linux, starts the bundled server, and drives the packaged app with Playwright: the window, the tray, a second launch, quitting, and that no server is left behind. Its jobs are required checks ([release process](../development/release-process.md#recommended-branch-protection-repository-owner)).
 
 A red X on the commit or PR means “do not merge until it is green.” Open the failed job log; pytest and Vitest names map to files under `backend/tests/` and `frontend/src/`.
 

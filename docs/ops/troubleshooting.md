@@ -33,6 +33,10 @@
 
 A download that fails with "ffmpeg is not installed on the server, so the video and audio streams can't be merged" ran on a machine without ffmpeg. YouTube serves most qualities as separate video and audio streams, and yt-dlp needs ffmpeg to join them. The Docker image ships ffmpeg; this comes up in [local development](../getting-started/local-dev.md) or a container that lacks it. Install ffmpeg on the server's `PATH` (for example `sudo apt install ffmpeg` or `sudo dnf install ffmpeg-free`) and retry the download.
 
+## Desktop app: logs and a server that will not start { #desktop-app }
+
+The [desktop app](../getting-started/install-desktop.md) writes one rotating log, `horde.log`, with the shell's and the server's output. **Open logs** in the tray menu opens it; the folder is listed under [Where things are kept](../getting-started/install-desktop.md#where-things-are-kept). If the server crashes, Horde restarts it up to three times in five minutes and then shows an error with **Open logs** and **Quit**. Attach the end of the log to a bug report.
+
 ## Restart recovery
 
 On process start Horde:
