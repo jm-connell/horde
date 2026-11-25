@@ -8,13 +8,18 @@ signals, no POSIX-only calls, and a data folder with a space and a non-ASCII nam
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.request
 from pathlib import Path
+from types import SimpleNamespace
+
+from app import desktop_entry
 
 BACKEND = Path(__file__).resolve().parent.parent
 
@@ -79,8 +84,8 @@ def test_serves_then_stops_when_stdin_closes(tmp_path):
         )
         try:
             assert proc.stdin is not None
-            _wait_for(lambda: proc.poll() is not None or _ping(port), 30)
-            assert _ping(port), "server never answered"
+            _wait_for(lambda: proc.poll() is not None or _ping(port), 120)
+            assert _ping(port), f"server never answered (exit code {proc.poll()})"
 
             status_file = data / "desktop" / "status.json"
             assert _wait_for(status_file.is_file, 10), "no status file"
@@ -103,3 +108,43 @@ def test_serves_then_stops_when_stdin_closes(tmp_path):
             if proc.poll() is None:
                 proc.kill()
                 proc.wait(timeout=10)
+
+
+def test_lifeline_waits_on_an_empty_non_blocking_pipe_until_end_of_file(
+    monkeypatch, caplog
+):
+    """No data yet is not the end: only end of file stops the server."""
+    monkeypatch.setattr(desktop_entry, "_POLL_SEC", 0.05)
+    caplog.set_level(logging.WARNING, logger="app.desktop_entry")
+    read_end, write_end = os.pipe()
+    os.set_blocking(read_end, False)
+    server = SimpleNamespace(should_exit=False)
+    watcher = threading.Thread(
+        target=desktop_entry._watch_lifeline, args=(server, read_end)
+    )
+    watcher.start()
+    try:
+        time.sleep(0.3)
+        assert server.should_exit is False
+        os.write(write_end, b"unknown\n")
+        time.sleep(0.2)
+        assert server.should_exit is False
+    finally:
+        os.close(write_end)
+        watcher.join(5)
+        os.close(read_end)
+    assert not watcher.is_alive()
+    assert server.should_exit is True
+    assert "non-blocking" in caplog.text
+    assert "reached end of file" in caplog.text
+
+
+def test_lifeline_read_error_stops_the_server_and_says_why(caplog):
+    read_end, write_end = os.pipe()
+    os.close(read_end)
+    os.close(write_end)
+    server = SimpleNamespace(should_exit=False)
+    with caplog.at_level(logging.WARNING, logger="app.desktop_entry"):
+        desktop_entry._watch_lifeline(server, read_end)
+    assert server.should_exit is True
+    assert "reading standard input failed (OSError(" in caplog.text

@@ -40,5 +40,7 @@ def test_a_video_being_sent_counts_as_busy_until_it_has_been_sent(client, init_d
     assert all(s["busy"] for s in seen)
     after = desktop_status.build_status(ctx)
     assert after["media_active"] == 0
-    assert after["busy"] is False
+    # Other tests in this worker process may leave work running or queued, so
+    # assert only that the finished video no longer counts towards busy.
+    assert after["busy"] is (bool(after["running"]) or after["queued"] > 0)
     assert after["last_media_at"] is not None

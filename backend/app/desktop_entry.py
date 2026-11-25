@@ -12,11 +12,11 @@ line is ignored.
 
 from __future__ import annotations
 
-import io
 import logging
+import os
 import sys
 import threading
-from typing import BinaryIO
+import time
 
 import uvicorn
 
@@ -26,19 +26,61 @@ logger = logging.getLogger(__name__)
 
 #: As the image's ``--timeout-graceful-shutdown 10``.
 GRACEFUL_SHUTDOWN_SEC = 10
+#: How often a non-blocking standard input is polled for end of file.
+_POLL_SEC = 0.5
 
 
-def _watch_lifeline(server: uvicorn.Server, stream: BinaryIO | io.RawIOBase) -> None:
-    """Read lines until end of file, then ask the server to stop."""
+def _watch_lifeline(server: uvicorn.Server, fd: int) -> None:
+    """Read standard input until end of file, then ask the server to stop.
+
+    ``os.read`` on the file descriptor, not the buffered reader: a thread blocked
+    in the reader holds its lock, and interpreter shutdown then aborts with
+    "could not acquire lock" on any stop that is not end of file. Only end of file
+    (an empty read) or a read error stops the server, and each says why at
+    WARNING, which shows even if it happens before ``app.main`` has configured
+    logging (until then only Python's last-resort handler, WARNING and up, runs).
+    """
+    said_no_data = False
     try:
-        while stream.readline():
-            pass  # No commands yet: unknown lines are ignored.
-        logger.info("the desktop app closed standard input; stopping")
-    except OSError, ValueError:
-        # A broken pipe means the shell is gone too: stop rather than linger.
-        logger.warning("reading standard input failed; stopping", exc_info=True)
+        while True:
+            try:
+                chunk = os.read(fd, 4096)
+            except BlockingIOError:
+                # A non-blocking pipe with nothing in it yet: the shell is still
+                # there. Poll instead of treating it as the end.
+                if not said_no_data:
+                    logger.warning(
+                        "standard input is non-blocking; polling it for end of file"
+                    )
+                    said_no_data = True
+                time.sleep(_POLL_SEC)
+                continue
+            if not chunk:
+                logger.warning(
+                    "standard input reached end of file (the desktop app closed "
+                    "it or exited); stopping"
+                )
+                return
+            # No commands yet: whatever the shell sends is ignored.
+    except OSError as exc:
+        # A broken pipe or a bad handle means the shell is gone too: stop rather
+        # than linger.
+        logger.warning(
+            "reading standard input failed (%r); stopping", exc, exc_info=True
+        )
     finally:
         server.should_exit = True
+
+
+def _stdin_fd() -> int | None:
+    stdin = sys.stdin
+    if stdin is None or stdin.closed:
+        return None
+    try:
+        return stdin.fileno()
+    except OSError, ValueError:  # io.UnsupportedOperation is both
+        logger.warning("standard input has no file descriptor", exc_info=True)
+        return None
 
 
 def main() -> int:
@@ -49,18 +91,13 @@ def main() -> int:
         timeout_graceful_shutdown=GRACEFUL_SHUTDOWN_SEC,
     )
     server = uvicorn.Server(config)
-    stdin = sys.stdin
-    if stdin is None or stdin.closed:
+    fd = _stdin_fd()
+    if fd is None:
         logger.warning("no standard input: serving without a lifeline")
     else:
-        # The raw file, not the buffered reader: a thread blocked in the reader
-        # holds its lock, and interpreter shutdown then aborts with "could not
-        # acquire lock" on any stop that is not end of file.
-        reader = stdin.buffer
-        stream = reader.raw if isinstance(reader, io.BufferedReader) else reader
         threading.Thread(
             target=_watch_lifeline,
-            args=(server, stream),
+            args=(server, fd),
             name="desktop-lifeline",
             daemon=True,
         ).start()
