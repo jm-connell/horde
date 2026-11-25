@@ -4,7 +4,7 @@
 // HORDE_DESKTOP_APP=<packaged executable> runs it against an installer build.
 // HORDE_DESKTOP_HEADLESS=1 runs Electron with no display at all (local runs on
 // a desktop session); CI runs it under xvfb or on a real desktop instead.
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -408,6 +408,32 @@ test("Quit Horde stops the server and frees the port", async () => {
   if (pot !== null) expect(await accepts(pot)).toBe(false);
 });
 
+/** What is still running, for a failure message (the app's log dies with it). */
+function processTable(): string {
+  try {
+    if (process.platform === "win32") {
+      return execFileSync(
+        "powershell",
+        [
+          "-NoProfile",
+          "-Command",
+          "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'Horde|python|deno|electron' } | Select-Object ProcessId,ParentProcessId,Name | Format-Table -AutoSize | Out-String -Width 200",
+        ],
+        { encoding: "utf8", timeout: 30_000 }
+      );
+    }
+    return execFileSync("ps", ["-eo", "pid,ppid,comm"], {
+      encoding: "utf8",
+      timeout: 30_000,
+    })
+      .split("\n")
+      .filter((line) => /horde|python|deno|electron|PID/i.test(line))
+      .join("\n");
+  } catch (err) {
+    return `could not list processes: ${String(err)}`;
+  }
+}
+
 test("killing the app also ends the server", async () => {
   // The server, not the window: Playwright stalls a page that the service
   // worker from the first launch controls (checked by hand: without
@@ -421,9 +447,22 @@ test("killing the app also ends the server", async () => {
   proc.kill("SIGKILL");
   await gone;
   app = null;
-  // 30 s is the server's own limit for a stop before it ends itself.
-  await expect.poll(() => alive(pid), { timeout: 60_000 }).toBe(false);
-  expect(await accepts(port)).toBe(false);
+  // What matters is that the server stops answering. 30 s is its own limit
+  // for a stop before it ends itself, so 60 s covers that too.
+  const deadline = Date.now() + 60_000;
+  while ((await accepts(port)) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  const report = () =>
+    `server pid ${pid}, app pid ${proc.pid ?? "?"}; still running:\n${processTable()}`;
+  expect(await accepts(port), `the server still answers. ${report()}`).toBe(
+    false
+  );
+  // A pid can be reused at once on Windows, so this is checked second and
+  // says what holds it.
+  await expect
+    .poll(() => alive(pid), { timeout: 10_000, message: report() })
+    .toBe(false);
   if (pot !== null) {
     await expect.poll(() => accepts(pot), { timeout: 20_000 }).toBe(false);
   }
