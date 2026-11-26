@@ -15,6 +15,7 @@ import {
   formatResolution,
   formatViewCount,
   joinDotList,
+  youtubeListThumbnailUrl,
   youtubeThumbnailUrl,
 } from "../utils";
 import { enqueueYtPreview } from "../utils/ytPreviewQueue";
@@ -202,6 +203,11 @@ function FeedThumbnail({
 }) {
   const previewing = previewActive && Boolean(previewSrc);
 
+  // YouTube's standard size exists for every video: tried when the stored
+  // address (a size the video lacks, or one that went stale) gives nothing.
+  const thumbRetrySrc = thumbSrc
+    ? youtubeListThumbnailUrl(null, thumbSrc)
+    : null;
   return (
     // min-h-0: in the card's flex column an aspect-ratio box would otherwise
     // grow to its image's own shape (YouTube's 4:3 live thumbnails, with
@@ -219,6 +225,7 @@ function FeedThumbnail({
               width={320}
               height={180}
               src={thumbSrc}
+              retrySrc={thumbRetrySrc}
               alt=""
               loading="lazy"
               className="h-full w-full object-cover"

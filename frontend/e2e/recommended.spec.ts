@@ -511,3 +511,61 @@ test("a thumbnail that fails to load leaves the card's plain placeholder", async
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf.locator("img.ui-fade-img")).toHaveCount(0);
 });
+
+test("a thumbnail that fails falls back to YouTube's standard one", async ({
+  page,
+}) => {
+  // What the card asks for first is missing: for one video the request
+  // fails, for the other YouTube answers with its grey 120x90 "no thumbnail"
+  // picture (which loads, so no error is raised). The standard size works.
+  const svg = (w: number, h: number) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#888"/></svg>`;
+  const asked: string[] = [];
+  await page.route(/i\.ytimg\.com\/vi\/[^/]+\//, (route) => {
+    const url = route.request().url();
+    asked.push(url);
+    if (url.includes("/mqdefault.jpg"))
+      return route.fulfill({
+        contentType: "image/svg+xml",
+        body: svg(320, 180),
+      });
+    if (url.includes("discover001")) return route.abort();
+    return route.fulfill({ contentType: "image/svg+xml", body: svg(120, 90) });
+  });
+  await page.route(/\/api\/discover\/feed\?/, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const found = body.items.find(
+      (i: { key: string }) => i.key === "discover001"
+    );
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        items: [
+          found,
+          {
+            ...found,
+            key: "greyplace01",
+            stream: {
+              ...found.stream,
+              id: "greyplace01",
+              title: "Another night sky",
+              thumbnail_url: "https://i.ytimg.com/vi/greyplace01/hq720.jpg",
+            },
+          },
+        ],
+      },
+    });
+  });
+  await openRecommended(page);
+  for (const key of ["discover001", "greyplace01"]) {
+    const img = page.locator(`[data-rec-key="${key}"] img.ui-fade-img`);
+    await expect(img).toHaveAttribute(
+      "src",
+      `https://i.ytimg.com/vi/${key}/mqdefault.jpg`
+    );
+    await expect(img).toHaveAttribute("data-loaded", "true");
+  }
+  expect(asked.some((u) => u.includes("greyplace01/hq720.jpg"))).toBe(true);
+});
