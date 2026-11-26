@@ -51,10 +51,12 @@ All notable changes to Horde are documented here. The format follows
   order when you ask for it.
 - **Related videos are no longer all one topic.** Under a video on something
   you have a lot of (a Counter-Strike stream, a GTA RP series), every related
-  video used to be the same topic. Now every fourth one is a pick from your
-  Recommended feed about something else, never from the same channel, so the
-  list is mostly the video's topic with a few of your other interests. The
-  first three stay on topic, so autoplay normally does too.
+  video used to be the same topic. Now some of them are picks from your
+  Recommended feed about something else, never from the same channel. How many
+  depends on how crowded the topic is (none when it has only a few videos) and
+  on your recommendation algorithm (Explorer more, Familiar less). Interests
+  close to the video come first and each of your interests takes a turn. The
+  first three places stay on topic, so autoplay normally does too.
 
 ### Fixed
 

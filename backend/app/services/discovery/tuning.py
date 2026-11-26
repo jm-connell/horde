@@ -164,6 +164,16 @@ class Tuning(BaseModel):
         return TasteWindow(self.recent_days, self.throwback_max_days)
 
     @property
+    def related_other_share(self) -> float:
+        """The most of a related list (0..1) given to the user's other interests
+        under a video on a crowded topic: the feed's share of new channels and
+        throwbacks, the part that leaves what the user watches now, mapped to
+        0.1..0.45 (Balanced about 0.29, Familiar 0.18, Explorer 0.41)."""
+        shares = self.shares.normalized()
+        leaving = shares["new"] + shares["throwback"]
+        return min(0.45, max(0.1, 0.1 + 0.5 * leaving))
+
+    @property
     def library_bonus(self) -> float:
         """Added to a downloaded pick's score: enough at 100 to put it ahead of
         closer matches in its bucket."""
