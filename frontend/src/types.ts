@@ -117,6 +117,7 @@ export type AiJobFailure = S["AiJobFailure"];
 export type AiJobRow = S["AiJobRow"];
 export type DiscoverFeed = S["DiscoverFeedRead"];
 export type DiscoverItem = S["DiscoverItemRead"];
+export type DiscoverCategory = S["DiscoverCategoryRead"];
 export type DiscoverReason = S["DiscoverReasonRead"];
 export type DiscoverStatus = S["DiscoverStatusRead"];
 export type DiscoverRefresh = S["DiscoverRefreshRead"];

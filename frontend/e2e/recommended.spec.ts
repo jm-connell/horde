@@ -354,45 +354,113 @@ test("coming back to Recommended later shows the last page while it loads", asyn
   release();
 });
 
-test("Recommended can be browsed by AI category", async ({ page }) => {
-  // The browser suite has no AI: the server's answer gets a category, and a
-  // category request keeps only the night sky video.
+test("Recommended can be browsed by the user's categories", async ({
+  page,
+}) => {
+  // The browser suite has no AI, so no interests to group: the server's
+  // answers are given a category here. Its list is one close match, one
+  // looser one, and one more that is found while the page waits at the end.
   const asked: (string | null)[] = [];
+  type Item = { key: string; stream?: { title?: string } | null };
+  let all: Item[] = [];
+  let waits = 0;
   await page.route(/\/api\/discover\/feed\?/, async (route) => {
     const url = new URL(route.request().url());
     const category = url.searchParams.get("category");
+    const cursor = url.searchParams.get("cursor");
     asked.push(category);
+    if (category && cursor) {
+      // At the end: nothing yet the first time, then what was found.
+      waits += 1;
+      const found = all[0];
+      await route.fulfill({
+        json:
+          waits < 2
+            ? { items: [], next_cursor: "end", more: "loading", status }
+            : {
+                items: found ? [{ ...found, key: "foundlater1" }] : [],
+                next_cursor: null,
+                more: "exhausted",
+                status,
+              },
+      });
+      return;
+    }
     url.searchParams.delete("category");
     let response;
-    let body: { items: { key: string }[]; categories?: string[] };
+    let body: { items: Item[]; status: unknown };
     try {
       response = await route.fetch({ url: url.toString() });
       body = await response.json();
     } catch {
       return; // the page moved on while this answer was in flight
     }
+    all = body.items;
+    status = body.status;
+    const close = body.items.filter((i) => i.key === "discover001");
+    const loose = body.items.filter((i) => i.key !== "discover001").slice(0, 1);
     await route.fulfill({
       response,
       json: {
         ...body,
-        categories: ["Night sky"],
-        items: category
-          ? body.items.filter((i) => i.key === "discover001")
-          : body.items,
+        categories: [{ id: 7, name: "Night sky" }],
+        ...(category
+          ? {
+              items: [...close, ...loose],
+              loose_from: 1,
+              more: "loading",
+              next_cursor: "end",
+            }
+          : {}),
       },
     });
   });
+  let status: unknown = null;
+  await page.route(/\/api\/discover\/channels\?.*category=7/, (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            name: "Sky Channel",
+            url: "https://www.youtube.com/@skychannel",
+            reason: null,
+            videos: [],
+            indexed: false,
+            tags: [],
+          },
+        ],
+      },
+    })
+  );
   await openRecommended(page);
+  // Algorithm and Refresh sit at the end of the chip row.
+  const row = page.locator('[data-horde="rec-category-row"]');
+  await expect(row.getByRole("button", { name: "Algorithm" })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Refresh" })).toBeVisible();
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf).toBeVisible();
-  await page.getByRole("button", { name: "Night sky", exact: true }).click();
-  await expect(page.locator("[data-rec-key]")).toHaveCount(1);
+
+  await row.getByRole("button", { name: "Night sky", exact: true }).click();
   await expect(page.getByText(FOUND)).toBeVisible();
-  expect(asked).toContain("Night sky");
-  // The channel shelf belongs to the whole feed.
-  await expect(shelf).toHaveCount(0);
-  await page.getByRole("button", { name: "For you", exact: true }).click();
-  await expect(shelf).toBeVisible();
+  expect(asked).toContain("7");
+  // The looser match comes after the divider.
+  const divider = page.locator('[data-horde="rec-further-afield"]');
+  await expect(divider).toHaveText(/Further afield/);
+  // Scrolled to the end: more was looked for, arrived, and then there was
+  // no more.
+  await page.locator("[data-rec-key]").last().scrollIntoViewIfNeeded();
+  await page.mouse.wheel(0, 2000);
+  await expect(page.locator('[data-rec-key="foundlater1"]')).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.locator("[data-rec-key]")).toHaveCount(3);
+  await expect(page.locator('[data-horde="rec-category-end"]')).toBeVisible();
+  // The category has its own channels to suggest.
+  await expect(shelf.getByText("Sky Channel")).toBeVisible();
+
+  await row.getByRole("button", { name: "For you", exact: true }).click();
+  await expect(divider).toHaveCount(0);
+  await expect(shelf.getByText("Sky Channel")).toHaveCount(0);
 });
 
 test("Refresh shows that new picks are loading until they arrive", async ({

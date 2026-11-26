@@ -352,7 +352,7 @@ test("the Recommended tab has no sort control", async ({ page }) => {
   await expect(sort).toBeVisible();
 });
 
-test("the Recommended actions share the home tabs' row", async ({ page }) => {
+test("the Recommended actions end the category row", async ({ page }) => {
   await page.goto("/");
   const tabs = page.getByRole("tablist", { name: "Home" });
   const recommended = tabs.getByRole("tab", { name: "Recommended" });
@@ -363,14 +363,29 @@ test("the Recommended actions share the home tabs' row", async ({ page }) => {
     "false"
   );
 
-  // One row on every width: the buttons sit level with the tabs.
-  const algorithm = page.getByRole("button", { name: "Algorithm" });
+  // One row on every width, below the tabs: "For you" (and the categories)
+  // at the left, the buttons at the right end, level with it.
+  const row = page.locator('[data-horde="rec-category-row"]');
+  const algorithm = row.getByRole("button", { name: "Algorithm" });
+  const forYou = row.getByRole("button", { name: "For you", exact: true });
   await expect(algorithm).toBeVisible();
+  await expect(row.getByRole("button", { name: "Refresh" })).toBeVisible();
   const tabsBox = (await tabs.boundingBox())!;
   const algoBox = (await algorithm.boundingBox())!;
+  const chipBox = (await forYou.boundingBox())!;
+  const rowBox = (await row.boundingBox())!;
+  expect(algoBox.y).toBeGreaterThan(tabsBox.y + tabsBox.height - 1);
   expect(
-    Math.abs(algoBox.y + algoBox.height / 2 - (tabsBox.y + tabsBox.height / 2))
+    Math.abs(algoBox.y + algoBox.height / 2 - (chipBox.y + chipBox.height / 2))
   ).toBeLessThan(8);
+  expect(chipBox.x).toBeLessThan(algoBox.x);
+  // Right aligned: Refresh ends where the row does.
+  const refreshBox = (await row
+    .getByRole("button", { name: "Refresh" })
+    .boundingBox())!;
+  expect(
+    Math.abs(refreshBox.x + refreshBox.width - (rowBox.x + rowBox.width))
+  ).toBeLessThan(2);
 
   // The seed does not look on YouTube: the note says so, links the admin to
   // the setting, and stays closed once closed.

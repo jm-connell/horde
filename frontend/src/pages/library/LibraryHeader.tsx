@@ -28,8 +28,9 @@ export default function LibraryHeader({
   settings: Settings;
   children: ReactNode;
 }) {
-  // Recommended's actions are two small buttons: on phones they stay on the
-  // tabs' row instead of taking a full row like the library's sort controls.
+  // Recommended has no controls on this row (Algorithm and Refresh sit with
+  // its category chips), so on phones the slot takes no row of its own as
+  // the library's sort controls do.
   const onRecommended = showHomeTabs && homeTab === "recommended";
   return (
     <div
