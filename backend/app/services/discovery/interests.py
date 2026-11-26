@@ -95,6 +95,10 @@ class Interest:
     weights: list[float]
     centroid: np.ndarray | None = None
     queries: list[str] = field(default_factory=list)
+    #: A word or three on what it is about (a category chip); see ``name_from``.
+    name: str | None = None
+    #: llm | keywords
+    named_by: str = "keywords"
 
     @property
     def weight(self) -> float:
@@ -327,8 +331,11 @@ def _query_prompt(groups: list[Interest]) -> str:
         "Rules: 2 to 6 words each; specific to the group's topic, never generic "
         '(not "funny videos" or "tutorial"); no channel names; in the language '
         "of the titles.",
-        'Return {"groups": [{"group": 1, "queries": ["...", "..."]}]} with one '
-        "entry per group.",
+        "Also give each group a name of 1 to 3 words for its topic, as a "
+        'browse category would be called ("Home servers", "Formula 1"): no '
+        "channel names, no two groups alike.",
+        'Return {"groups": [{"group": 1, "name": "...", "queries": ["...", '
+        '"..."]}]} with one entry per group.',
         "",
     ]
     for n, g in enumerate(groups, start=1):
@@ -351,8 +358,20 @@ def clean_query(text: str, channels: list[str]) -> str | None:
     return q
 
 
+def clean_name(text: object, channels: list[str]) -> str | None:
+    """A usable category name, or None (empty, long, or a channel's name)."""
+    name = " ".join(str(text or "").replace('"', " ").split()).strip(" -.,:;")
+    if not (2 <= len(name) <= 40) or len(name.split()) > 4:
+        return None
+    lowered = name.lower()
+    if any(ch and ch.lower() == lowered for ch in channels):
+        return None
+    return name
+
+
 def llm_queries(groups: list[Interest]) -> bool:
-    """Fill each group's ``queries`` from the chat model; False when it cannot."""
+    """Fill each group's ``queries`` (and ``name``) from the chat model; False
+    when it cannot."""
     allowed, _reason = llm_features_allowed()
     llm = get_llm_provider() if allowed else None
     if llm is None or not groups:
@@ -391,6 +410,9 @@ def llm_queries(groups: list[Interest]) -> bool:
         if not isinstance(queries, list):
             continue
         g = groups[n - 1]
+        named = clean_name(item.get("name"), g.channels)
+        if named:
+            g.name, g.named_by = named, "llm"
         for q in queries[:6]:
             if len(g.queries) >= 3:
                 break
@@ -423,7 +445,7 @@ def keyword_queries(
         ).all():
             tags_of[vid].append(tag.lower().strip())
     for g in groups:
-        if g.queries:
+        if g.queries and g.name:
             continue
         banned = {part for name in g.channels for part in _words(name)}
         scores: dict[str, float] = defaultdict(float)
@@ -433,8 +455,6 @@ def keyword_queries(
                     continue
                 scores[word] += weight * math.log(1 + total / df[word])
         top = _top(scores, 3)
-        if len(top) >= 2:
-            g.queries.append(" ".join(top))
         tag_weight: dict[str, float] = defaultdict(float)
         for w, weight in zip(g.watches, g.weights, strict=True):
             if w.video_id is None:
@@ -443,6 +463,14 @@ def keyword_queries(
                 if tag and not set(_words(tag)) & banned:
                     tag_weight[tag] += weight
         tags = _top(tag_weight, 2)
+        if not g.name:
+            # A tag people wrote reads better than two title words.
+            label = tags[0] if tags else " ".join(top[:2])
+            g.name = clean_name(label.title(), g.channels)
+        if g.queries:
+            continue
+        if len(top) >= 2:
+            g.queries.append(" ".join(top))
         if len(tags) == 2:
             q = clean_query(" ".join(tags), g.channels)
             if q and q.lower() not in {x.lower() for x in g.queries}:

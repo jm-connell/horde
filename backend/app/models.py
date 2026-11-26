@@ -1049,6 +1049,41 @@ class RecTopic(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class RecCategory(SQLModel, table=True):
+    """One of a user's interests, as a category chip on Recommended.
+
+    ``services/discovery/category_store.py`` keeps these in step with the
+    interest groups made from the user's watches (``discovery/interests.py``):
+    a group that comes back keeps its row, and so its id and name.
+    """
+
+    __tablename__ = "rec_categories"
+    __table_args__ = (_AUTOINCREMENT,)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    name: str
+    #: llm | keywords (a chat model's name replaces one made from title words).
+    named_by: str = "keywords"
+    #: recent | throwback
+    era: str = "recent"
+    #: The group's centre (a packed unit vector of ``dim`` floats).
+    centroid: bytes = Field(default=b"")
+    dim: int = 0
+    weight: float = 0.0
+    #: How fast a video's age counts against it here; NULL: age does not matter.
+    half_life_days: float | None = None
+    #: JSON list of YouTube searches for more of it.
+    queries_json: str = Field(default="[]")
+    #: JSON list of [YouTube id, title]: watches whose up next lists are read.
+    seeds_json: str = Field(default="[]")
+    #: The user last opened it (its searches go first for a day).
+    wanted_at: datetime | None = None
+    #: A group last matched it (rows no group matches for a while are deleted).
+    seen_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class RecFeedback(SQLModel, table=True):
     """What a user told recommendations to leave out.
 
