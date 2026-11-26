@@ -432,7 +432,7 @@ class FontList(BaseModel):
 
 
 class DiscoverReasonRead(BaseModel):
-    #: subscription | similar | new_channel | throwback | library | live
+    #: subscription | similar | new_channel | throwback | library | live | category
     kind: str
     text: str
     #: A longer why (``Because you watched ...``) for a tooltip.
@@ -497,17 +497,32 @@ class DiscoverMixRead(BaseModel):
     actual: float
 
 
+class DiscoverCategoryRead(BaseModel):
+    """One of the user's interests, offered as a chip above Recommended."""
+
+    id: int
+    name: str
+
+
 class DiscoverFeedRead(BaseModel):
     items: list[DiscoverItemRead]
+    #: With ``more`` "loading" it points at the end of the list: ask again
+    #: with it in a few seconds for what was found meanwhile.
     next_cursor: str | None = None
     status: DiscoverStatusRead
     #: Asked-for and actual share of each kind of pick (first page only).
     mix: list[DiscoverMixRead] = Field(default_factory=list)
     #: What each blocked topic left out (first page only).
     blocked: list[DiscoverBlockedRead] = Field(default_factory=list)
-    #: The AI categories with picks in this feed, by name (first page only;
-    #: empty without AI categories).
-    categories: list[str] = Field(default_factory=list)
+    #: The user's categories with enough to show (first page only; empty
+    #: without embeddings): what they watch most first.
+    categories: list[DiscoverCategoryRead] = Field(default_factory=list)
+    #: In a category: where on this page the close matches end and the looser
+    #: ones ("Further afield") begin; null when that is not on this page.
+    loose_from: int | None = None
+    #: In a category, at the end of what Horde knows: ``loading`` while more is
+    #: looked for on YouTube, ``exhausted`` when there is no more for now.
+    more: Literal["none", "loading", "exhausted"] = "none"
 
 
 class HistoryWatchRead(BaseModel):

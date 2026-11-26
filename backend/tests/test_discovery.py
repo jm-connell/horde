@@ -1413,20 +1413,51 @@ def test_a_prefetched_page_does_not_count_as_shown(client, session, admin_user):
     assert row is not None and row.shown_count == 1
 
 
-def test_recommended_plus_can_be_browsed_by_category(
-    client, session, add_video, admin_user
-):
-    """The AI categories of Recommended apply to every pick with an embedding:
-    found on YouTube and downloaded alike, in the feed's order."""
-    from app.models import AiCategory
-
-    for name, vec in (("Night sky", _vec(0.0)), ("Rock pools", _vec(0.0, axis=2))):
-        session.add(
-            AiCategory(
-                name=name, embedding=embeddings.pack_vector(vec), dim=4, model="m"
-            )
+def _two_interests(session, add_video, set_watch, user):
+    """Watches on two subjects, so the user has two categories."""
+    for n in range(6):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            user,
+            _vec(0.01 * n),
+            channel="Sky Lab",
+            title=f"Telescope stars part {n}",
+            days_ago=n + 1,
         )
-    session.commit()
+    for n in range(6):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            user,
+            _vec(0.01 * n, axis=2),
+            channel="Shore",
+            title=f"Rock pools crabs part {n}",
+            days_ago=n + 1,
+        )
+
+
+@pytest.fixture
+def small_categories(monkeypatch):
+    """A handful of matches is a category (the tests' libraries are tiny)."""
+    from app.services.discovery import category_feed
+
+    monkeypatch.setattr(category_feed, "MIN_CATEGORY_PICKS", 1)
+
+
+def _category(body, word):
+    [found] = [c for c in body["categories"] if word in c["name"].lower()]
+    return found["id"]
+
+
+def test_recommended_can_be_browsed_by_the_users_own_categories(
+    client, session, add_video, set_watch, admin_user, ai_on, small_categories
+):
+    """The chips are the user's interests, and a category lists every video
+    Horde knows that fits it: found on YouTube, listed and downloaded alike."""
+    _two_interests(session, add_video, set_watch, admin_user)
     _discovered(session, admin_user, "skyfound001", "Stars", "Sky A", _vec(0.02))
     _discovered(session, admin_user, "skyfound002", "Aurora", "Sky B", _vec(0.05))
     _discovered(
@@ -1437,26 +1468,134 @@ def test_recommended_plus_can_be_browsed_by_category(
     _embed(session, downloaded, _vec(0.04))
 
     body = _feed(client)
-    assert body["categories"] == ["Night sky", "Rock pools"]
-    everything = [i["key"] for i in body["items"]]
+    assert len(body["categories"]) == 2
+    sky, pools = _category(body, "telescope"), _category(body, "pools")
 
-    sky = _feed(client, category="Night sky")
-    keys = [i["key"] for i in sky["items"]]
-    assert set(keys) == {"skyfound001", "skyfound002", "milkyway001"}
-    assert keys == [k for k in everything if k in set(keys)]
-    pools = [i["key"] for i in _feed(client, category="Rock pools")["items"]]
-    assert pools == ["poolfound01"]
-    assert _feed(client, category="Nothing like it")["items"] == []
+    listed = _feed(client, category=sky)
+    assert {i["key"] for i in listed["items"] if i["key"] != "poolfound01"} == {
+        "skyfound001",
+        "skyfound002",
+        "milkyway001",
+    }
+    assert listed["more"] in ("none", "exhausted", "loading")
+    assert [i["reason"]["kind"] for i in listed["items"]][0] == "category"
+    assert "poolfound01" in [i["key"] for i in _feed(client, category=pools)["items"]]
+    assert "novector001" not in [i["key"] for i in listed["items"]]
+    # A category that is gone (or someone else's) is an empty page, not an error.
+    gone = client.get("/api/discover/feed", params={"category": 999999})
+    assert gone.status_code == 200
+    assert gone.json()["items"] == []
 
-    # A category refresh (here a rename) is seen without re-ranking the feed.
-    row = session.exec(select(AiCategory).where(AiCategory.name == "Rock pools")).one()
-    row.name = "Tide pools"
-    row.updated_at = datetime.now(UTC)
-    session.add(row)
-    session.commit()
-    assert _feed(client)["categories"] == ["Night sky", "Tide pools"]
-    tide = [i["key"] for i in _feed(client, category="Tide pools")["items"]]
-    assert tide == ["poolfound01"]
+    # The ids stay when the same interests are grouped again.
+    from app.services.discovery import category_store
+
+    category_store.sync(
+        session,
+        admin_user.id,
+        sum(
+            category_store.groups_for(
+                session,
+                client.app.state.ctx.discovery,
+                admin_user.id,
+                datetime.now(UTC),
+                use_llm=False,
+            )[:2],
+            [],
+        ),
+        datetime.now(UTC),
+    )
+    assert {c["id"] for c in _feed(client)["categories"]} == {sky, pools}
+
+
+def test_a_category_goes_past_the_feed_and_pages_in_one_order(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    monkeypatch,
+):
+    from app.services.discovery import feed as feed_module
+
+    _two_interests(session, add_video, set_watch, admin_user)
+    _catalog(
+        session,
+        "Observatory",
+        [(f"obs{n:08d}", f"Night sky {n}", n, _vec(0.002 * n)) for n in range(40)],
+    )
+    # The feed itself keeps only a few picks; the category is not cut to them.
+    monkeypatch.setattr(feed_module, "FEED_MAX", 5)
+    body = _feed(client)
+    assert len(body["items"]) <= 5
+    sky = _category(body, "telescope")
+    keys: list[str] = []
+    cursor = None
+    loose_at = []
+    for _ in range(10):
+        params = {"category": sky, "limit": 12}
+        if cursor:
+            params["cursor"] = cursor
+        page = _feed(client, **params)
+        if page["loose_from"] is not None:
+            loose_at.append(len(keys) + page["loose_from"])
+        keys += [i["key"] for i in page["items"]]
+        cursor = page["next_cursor"]
+        if not cursor or not page["items"]:
+            break
+    assert len(keys) == len(set(keys)) >= 40
+    assert len(loose_at) <= 1  # one divider at most
+
+
+def test_opening_a_category_never_asks_youtube(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    monkeypatch,
+):
+    from app.services.discovery import gather
+
+    def boom(*_a, **_k):
+        raise AssertionError("YouTube was asked during a request")
+
+    monkeypatch.setattr(gather, "search_youtube_for_discovery", boom)
+    monkeypatch.setattr(gather, "youtube_up_next", boom)
+    _two_interests(session, add_video, set_watch, admin_user)
+    _discovered(session, admin_user, "skyfound001", "Stars", "Sky A", _vec(0.02))
+    body = _feed(client)
+    assert _feed(client, category=_category(body, "telescope"))["items"]
+
+
+def test_a_category_suggests_its_own_new_channels(
+    client, session, add_video, set_watch, admin_user, ai_on, small_categories
+):
+    _two_interests(session, add_video, set_watch, admin_user)
+    for n in range(3):
+        _discovered(
+            session, admin_user, f"skyfound{n:03d}", f"Stars {n}", "Sky A", _vec(0.02)
+        )
+        _discovered(
+            session,
+            admin_user,
+            f"poolfnd{n:04d}",
+            f"Crabs {n}",
+            "Pools",
+            _vec(0.03, axis=2),
+        )
+    body = _feed(client)
+    sky = _category(body, "telescope")
+    names = [
+        c["name"]
+        for c in client.get("/api/discover/channels", params={"category": sky}).json()[
+            "items"
+        ]
+    ]
+    assert names == ["Sky A"]
 
 
 def test_the_cached_catalog_follows_the_catalog(client, session, admin_user):

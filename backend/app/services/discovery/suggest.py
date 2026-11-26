@@ -18,7 +18,7 @@ from statistics import median
 
 from .candidates import Candidate
 from .feedback import Exclusions
-from .picks import Feed, short
+from .picks import ChannelStat, Feed, short
 
 MAX_SUGGESTIONS = 8
 MAX_TAGS = 2
@@ -67,10 +67,16 @@ def suggestions(
     feed: Feed,
     excluded: Exclusions,
     categories: dict[str, set[str]] | None = None,
+    *,
+    channels: dict[str, ChannelStat] | None = None,
 ) -> list[Suggestion]:
-    """The best channels to follow; ``categories``: each AI category's picks."""
+    """The best channels to follow; ``categories``: each AI category's picks.
+
+    ``channels``: the new channels to choose from instead of the feed's own
+    (those of one of the user's categories, ``category_feed.Listing``).
+    """
     out: list[Suggestion] = []
-    for stat in feed.new_channels.values():
+    for stat in (feed.new_channels if channels is None else channels).values():
         if not stat.url or len(stat.items) < MIN_SUPPORT:
             continue
         if excluded.blocks_channel(stat.url, stat.name) or excluded.dismissed(

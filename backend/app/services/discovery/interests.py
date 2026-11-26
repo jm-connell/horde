@@ -450,7 +450,9 @@ def keyword_queries(
         banned = {part for name in g.channels for part in _words(name)}
         scores: dict[str, float] = defaultdict(float)
         for w, weight in zip(g.watches, g.weights, strict=True):
-            for word in set(_words(w.title)):
+            # In title order, so equally distinctive words rank the same way
+            # every time (a set's order changes between runs).
+            for word in dict.fromkeys(_words(w.title)):
                 if word in _STOPWORDS or word in banned:
                     continue
                 scores[word] += weight * math.log(1 + total / df[word])
