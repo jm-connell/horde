@@ -27,7 +27,7 @@ from sqlmodel import Session, col, select
 
 from ..models import ChannelCatalogVideo, Video, as_utc, require_id
 from ..schemas import ChannelFeedEntry
-from . import app_settings, library, next_part, ytdlp_extract
+from . import app_settings, library, next_part, parental, ytdlp_extract
 from .ai import embeddings as ai_embeddings
 from .ai.provider import get_embed_provider
 from .channel_catalog import query as catalog_query
@@ -268,7 +268,10 @@ def related_for_stream(
         logger.warning("stream related: no other interests", exc_info=True)
         return out.items
     mixed = _Collector(limit, youtube_id)
-    other_interests.weave(out.items, others, mixed.add, share)
+    # A restricted member's endpoint drops other channels' videos: drop them
+    # before mixing, so the lead and the spacing of the picks hold.
+    on_topic = [e for e in out.items if parental.entry_allowed(viewer.allowed, e)]
+    other_interests.weave(on_topic, others, mixed.add, share)
     return mixed.items
 
 

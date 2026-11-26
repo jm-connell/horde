@@ -228,8 +228,9 @@ def test_a_stream_lists_mostly_its_topic_and_some_other_interests(
 def test_a_library_video_lists_some_other_interests_on_every_page(
     client, session, add_video, two_interests, ai_on
 ):
-    source = _cs_library(session, add_video)
-    _cook_library(session, add_video)
+    # A crowded topic: other interests get Balanced's full share.
+    source = _cs_library(session, add_video, count=60)
+    _cook_library(session, add_video, count=24)
 
     def page(offset: int, limit: int = 8) -> list[dict]:
         res = client.get(
@@ -244,17 +245,19 @@ def test_a_library_video_lists_some_other_interests_on_every_page(
     assert len({v["id"] for v in whole}) == 16
     channels = [v["channel"] for v in whole]
     assert channels[: other_interests.LEAD] == ["CS"] * other_interests.LEAD
-    assert "Cook" in channels
+    assert "Cook" in channels[:8]
+    assert "Cook" in channels[8:]
 
 
 def test_related_lists_stay_on_topic_without_a_watch_history(
     client, session, add_video, ai_on
 ):
-    source = _cs_library(session, add_video, count=8)
-    _cook_library(session, add_video, count=1)
+    # Crowded enough for other interests, but there are none to show.
+    source = _cs_library(session, add_video, count=60)
+    _cook_library(session, add_video, count=6)
 
-    res = client.get(f"/api/videos/{source.id}/related", params={"limit": 8})
-    assert [v["channel"] for v in res.json()] == ["CS"] * 8
+    res = client.get(f"/api/videos/{source.id}/related", params={"limit": 24})
+    assert [v["channel"] for v in res.json()] == ["CS"] * 24
 
 
 def _others(session, user, **kwargs) -> other_interests.Others:
@@ -320,17 +323,63 @@ def test_a_restricted_member_still_gets_full_pages(
     client, member_client, member_user, session, add_video, set_watch, ai_on
 ):
     _watch_two_interests(session, add_video, set_watch, member_user)
-    source = _cs_library(session, add_video)
-    _cook_library(session, add_video)
+    source = _cs_library(session, add_video, count=60)
+    _cook_library(session, add_video, count=24)
+
+    def related() -> list[str]:
+        res = member_client.get(
+            f"/api/videos/{source.id}/related", params={"limit": 24}
+        )
+        assert res.status_code == 200, res.text
+        return [v["channel"] for v in res.json()]
+
+    assert "Cook" in related()
     res = client.put(
         f"/api/users/{member_user.id}/allowed-channels",
         json={"channels": [{"url": CS_URL, "name": "CS"}]},
     )
     assert res.status_code == 200, res.text
-
-    related = member_client.get(f"/api/videos/{source.id}/related", params={"limit": 8})
     # Cooking is not theirs to see, and its places are not left empty either.
-    assert [v["channel"] for v in related.json()] == ["CS"] * 8
+    assert related() == ["CS"] * 24
+
+
+def test_disallowed_related_videos_are_dropped_before_the_mix(
+    session, add_video, set_watch, member_user, ai_on
+):
+    """The endpoint drops a restricted member's other channels after the mix;
+    dropping them first keeps the lead on topic and the picks apart."""
+    from app.services import library
+    from app.services.parental import AllowedChannel, AllowList
+
+    _watch_two_interests(session, add_video, set_watch, member_user)
+    _cs_library(session, add_video, count=60)
+    # A clip channel's video, whose nearest related videos are a channel this
+    # member may not watch (no channel is nudged up as the video's own).
+    clips = "https://www.youtube.com/@clips"
+    source = add_video(title="Clip", channel="Clips", channel_url=clips)
+    _embed(session, source, _vec(0.0))
+    for n in range(6):
+        video = add_video(
+            title=f"Banned {n}", channel="Banned", yt_id=f"bannedvi{n:03d}"
+        )
+        _embed(session, video, _vec(0.0001 * (n + 1)))
+    _cook_library(session, add_video, count=24)
+    allowed = AllowList(
+        (
+            AllowedChannel(CS_URL, "CS"),
+            AllowedChannel(clips, "Clips"),
+            AllowedChannel(None, "Cook"),
+        )
+    )
+    viewer = other_interests.Viewer(member_user.id, current().discovery, allowed)
+    rows = library.related_videos(
+        session, source.id, limit=24, user_id=member_user.id, viewer=viewer
+    )
+    channels = [v.channel for v in rows]
+    assert "Banned" not in channels
+    assert channels[: other_interests.LEAD] == ["CS"] * other_interests.LEAD
+    pattern = "".join("O" if c == "Cook" else "." for c in channels)
+    assert "OO" not in pattern and "O" in pattern, pattern
 
 
 def test_pages_agree_when_a_pick_is_already_in_the_list(

@@ -16,7 +16,7 @@ from sqlmodel import Session, col, select
 from ..models import ChannelRetention, UserVideoState, Video, VideoTag, require_id
 from . import next_part, parental
 from .pagination import PageRequest, random_key
-from .parental import AllowList
+from .parental import AllowList, video_allowed
 from .search_text import fts_match_expression, keyword_match_clause
 
 if TYPE_CHECKING:
@@ -778,5 +778,8 @@ def _with_other_interests(
         mixed.append(video)
         return True
 
-    other_interests.weave(related, others, add, found.share)
+    # A restricted member's endpoint drops other channels' videos: drop them
+    # before mixing, so the lead and the spacing of the picks hold.
+    allowed = [v for v in related if video_allowed(viewer.allowed, v)]
+    other_interests.weave(allowed, others, add, found.share)
     return mixed
