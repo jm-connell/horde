@@ -1,6 +1,6 @@
 # 0041: A related list keeps one place in four for the viewer's other interests
 
-Status: Accepted
+Status: Superseded by [0043](0043-related-lists-adapt-to-the-topic.md)
 
 ## Context
 
