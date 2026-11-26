@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
@@ -17,6 +18,7 @@ from ..models import (
     DiscoveryHit,
     DiscoveryState,
     RecAlgorithm,
+    RecCategory,
     RecFeedback,
     RecTopic,
     Video,
@@ -67,6 +69,7 @@ from ..services.discovery import (
     history,
     suggest,
     topics,
+    topup,
     tuning,
 )
 from ..services.discovery import categories as discover_categories
@@ -87,6 +90,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/discover", tags=["discover"])
 
 _SORT = "discover"
+#: A category asks for more this many pages before its end.
+_TOPUP_AHEAD_PAGES = 2
 
 
 def _why(item: FeedItem) -> DiscoverWhyRead:
@@ -143,6 +148,19 @@ def _status(
         cold=cold,
         backing_off=backing_off,
     )
+
+
+def _category_opened(
+    session: Session, ctx: AppContext, user_id: int, category: int
+) -> None:
+    """The user opened a category: its searches go first on the gatherer's next
+    run, which is asked for now (never waited for)."""
+    row = session.get(RecCategory, category)
+    if row is None or row.user_id != user_id:
+        return
+    category_feed.wanted(session, row, utcnow())
+    if gather.enabled():
+        gather.request_refresh(session, ctx.discovery, user_id)
 
 
 def _browse(
@@ -222,10 +240,13 @@ def discover_feed(
     feed = ranked_feed(session, ctx.discovery, user.id, use_seed, fresh=not cursor)
     browse = _browse(session, ctx, user.id, feed, use_seed, refresh=not cursor)
     picks = feed.items
+    listing: category_feed.Listing | None = None
     if category is not None:
         # A category that has gone since (re-grouped, or another account's): empty.
         listing = browse.listing(category) if browse is not None else None
         picks = listing.items if listing is not None else []
+        if listing is not None and not cursor and not prefetch:
+            _category_opened(session, ctx, user.id, category)
     if user.allowed is not None:
         # Parental controls: only the allowed channels' picks.
         picks = [
@@ -305,12 +326,29 @@ def discover_feed(
         )
     if not prefetch:
         feedback.record_shown(session, user.id, (i.key for i in items))
+    # Near the end of a category: look for more now, so it is there (or nearly)
+    # when the user arrives. A restricted member sees no new channels anyway.
+    end: Literal["none", "loading", "exhausted"] = "none"
+    if (
+        category is not None
+        and listing is not None
+        and page.offset + (_TOPUP_AHEAD_PAGES + 1) * limit >= len(picks)
+    ):
+        asked = (
+            "exhausted"
+            if user.allowed is not None
+            else topup.request(session, ctx.discovery, user.id, category)
+        )
+        end = "none" if more else asked
+    next_offset = page.offset + limit if more else page.offset + len(window)
     return DiscoverFeedRead(
         items=items,
+        more=end,
+        # At the end while more is looked for: the same place, to ask again.
         next_cursor=offset_cursor(
-            sort=_SORT, order="desc", offset=page.offset + limit, seed=use_seed
+            sort=_SORT, order="desc", offset=next_offset, seed=use_seed
         )
-        if more
+        if more or end == "loading"
         else None,
         status=_status(session, ctx, user.id, cold=feed.cold),
         mix=[

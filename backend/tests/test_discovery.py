@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -1880,3 +1881,190 @@ def test_a_kept_ranking_is_renewed_before_it_lapses(
     assert ranked == [admin_user.id]
     _feed(client)
     assert ranked == [admin_user.id]
+
+
+# --- the end of a category ------------------------------------------------------
+
+
+class _Worker:
+    """Stands in for the gatherer's thread: alive, and counts its wake-ups."""
+
+    is_alive = True
+
+    def __init__(self):
+        self.woken = 0
+
+    def wake(self):
+        self.woken += 1
+
+
+class _Embedder:
+    """Titles about the sky sit by the sky watches, anything else by the shore."""
+
+    def embed_many(self, texts, _model, **_kw):
+        return [_vec(0.02) if "sky" in t.lower() else _vec(0.02, axis=2) for t in texts]
+
+
+@pytest.fixture
+def topping_up(monkeypatch, tmp_dirs, youtube):
+    from app.services.discovery import gather
+
+    runtime = tmp_dirs["ctx"].discovery
+    runtime.worker = _Worker()
+    monkeypatch.setattr(gather, "get_embed_provider", lambda: _Embedder())
+    monkeypatch.setattr(gather, "resolve_embed_model", lambda _p: "m")
+    return runtime
+
+
+def _sky_category(client, session, add_video, set_watch, user):
+    _two_interests(session, add_video, set_watch, user)
+    _discovered(session, user, "skyfound001", "Stars", "Sky A", _vec(0.02))
+    return _category(_feed(client), "telescope")
+
+
+def test_the_end_of_a_category_looks_for_more_and_adds_it(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+):
+    from app.services.discovery import topup
+
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    first = _feed(client, category=sky)
+    before = [i["key"] for i in first["items"]]
+    # The whole list fits on one page: it is at its end, and more is on its way.
+    assert first["more"] == "loading"
+    assert first["next_cursor"]
+    assert topping_up.worker.woken >= 1
+    # Asking again before the worker ran: still loading, nothing new, no error.
+    again = _feed(client, category=sky, cursor=first["next_cursor"])
+    assert (again["items"], again["more"]) == ([], "loading")
+
+    topup.run_pending(topping_up)
+    more = _feed(client, category=sky, cursor=first["next_cursor"])
+    added = [i["key"] for i in more["items"]]
+    assert added and not set(added) & set(before)
+    # The first page of the same visit is unchanged: only the end grew.
+    kept = _feed(client, category=sky)
+    assert [i["key"] for i in kept["items"]][: len(before)] == before
+
+
+def test_a_top_up_asks_each_thing_once_then_says_there_is_no_more(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+    youtube,
+):
+    from app.services.discovery import gather, topup
+
+    calls, _answers = youtube
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    assert _feed(client, category=sky)["more"] == "loading"
+    topup.run_pending(topping_up)
+    assert 1 <= len(calls) <= topup.TOPUP_REQUESTS
+    asked = list(calls)
+    # Until nothing is left to ask: no request is ever repeated.
+    for _ in range(12):
+        topping_up.finish_topup((admin_user.id, sky), None)
+        topping_up.queue_topup((admin_user.id, sky), time.monotonic())
+        topup.run_pending(topping_up)
+    assert len(calls) > len(asked)
+    # (A search runs twice at most: at any age, and for this year.)
+    counts = Counter(calls)
+    assert all(n <= (2 if kind == "search" else 1) for (kind, _), n in counts.items())
+    # Nothing left: the end of the category says so, and queues nothing.
+    end = _feed(client, category=sky, limit=60)
+    assert (end["more"], end["next_cursor"]) == ("exhausted", None)
+    assert topping_up.next_topup() is None
+    assert gather.RESULTS_PER_SEARCH  # (the searches used the gatherer's limit)
+
+
+def test_no_top_up_when_youtube_may_not_be_asked(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+    youtube,
+):
+    from app.services import app_settings
+    from app.services.discovery import topup
+
+    calls, _answers = youtube
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    data = app_settings.load()
+    data["discovery_enabled"] = False
+    app_settings.save(data)
+    end = _feed(client, category=sky)
+    assert (end["more"], end["next_cursor"]) == ("exhausted", None)
+    topup.run_pending(topping_up)
+    assert calls == []
+
+
+def test_a_top_up_keeps_to_the_hourly_cap_and_the_kept_feeds(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+    youtube,
+):
+    from app.services.discovery import gather, topup
+
+    calls, _answers = youtube
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    first = _feed(client, category=sky)
+    kept = len(topping_up.feeds_of(admin_user.id))
+    topping_up.recent_requests = [time.monotonic()] * gather.HOURLY_REQUEST_CAP
+    topup.run_pending(topping_up)
+    assert calls == []
+    # A top-up never drops the rankings a visit is paging through.
+    assert len(topping_up.feeds_of(admin_user.id)) == kept >= 1
+    assert (
+        _feed(client, category=sky, cursor=first["next_cursor"])["more"] == "exhausted"
+    )
+
+
+def test_searches_of_an_opened_category_go_first():
+    from app.services.discovery import gather
+    from app.services.discovery.interests import Interest
+
+    now = datetime.now(UTC)
+    groups = [Interest("recent", [], [], queries=["usual search", "another one"])]
+    plan = gather.plan_requests(
+        groups, [], [], {}, now, ["typed interest"], ["wanted search", "wanted two"]
+    )
+    assert [r.key for r in plan if r.kind == "search"][:3] == [
+        "wanted search",
+        "wanted two",
+        "typed interest",
+    ]
+    assert len([r for r in plan if r.kind == "search"]) <= gather.SEARCHES_PER_RUN
+
+
+def test_opening_a_category_marks_it_wanted(
+    client, session, add_video, set_watch, admin_user, ai_on, small_categories
+):
+    from app.models import RecCategory
+
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    assert session.get(RecCategory, sky).wanted_at is None
+    _feed(client, category=sky)
+    session.expire_all()
+    assert session.get(RecCategory, sky).wanted_at is not None
