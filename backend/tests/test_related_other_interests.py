@@ -12,8 +12,10 @@ import pytest
 
 from app.context import current
 from app.services import stream_preview
-from app.services.discovery import other_interests
+from app.services.discovery import other_interests, tuning
+from app.services.discovery.candidates import Candidate
 from app.services.discovery.feed import ranked_feed, today_seed
+from app.services.discovery.picks import FeedItem, Reason
 from tests.test_discovery import (
     _catalog,
     _discovered,
@@ -98,7 +100,36 @@ def _cook_library(session, add_video, count=6):
         _embed(session, video, _cook(0.002 * n))
 
 
-def test_weave_gives_every_fourth_place_to_another_interest():
+def _woven(on_topic: list[str], others: list[str], share: float, size: int) -> str:
+    """The pattern ``weave`` lays out: "." on the topic, "O" another interest."""
+    out: list[str] = []
+
+    def add(item: str) -> bool:
+        if item in out or len(out) >= size:
+            return False
+        out.append(item)
+        return True
+
+    other_interests.weave(on_topic, others, add, share)
+    return "".join("O" if item.isupper() else "." for item in out)
+
+
+def test_weave_leads_with_the_topic_and_mixes_in_more_further_down():
+    on_topic = [f"t{n}" for n in range(60)]
+    others = [f"O{n}" for n in range(60)]
+    assert _woven(on_topic, others, 0.0, 24) == "." * 24
+    for share in (0.2, 0.35, 0.5):
+        pattern = _woven(on_topic, others, share, 24)
+        assert pattern.startswith("." * other_interests.LEAD)
+        # About the share overall, and more in the second half than the first.
+        assert abs(pattern.count("O") - share * 24) <= 2
+        assert pattern[12:].count("O") > pattern[:12].count("O")
+    # A bigger share never gives fewer places.
+    counts = [_woven(on_topic, others, s / 10, 24).count("O") for s in range(6)]
+    assert counts == sorted(counts)
+
+
+def test_weave_counts_only_the_items_it_took():
     out: list[str] = []
 
     def add(item: str) -> bool:
@@ -108,11 +139,43 @@ def test_weave_gives_every_fourth_place_to_another_interest():
         return True
 
     other_interests.weave(
-        ["a", "b", "b", "c", "d", "e", "f", "g", "h"], ["c", "X", "Y", "Z"], add
+        ["a", "b", "b", "c", "d", "e", "f", "g", "h"], ["c", "X", "Y", "Z"], add, 0.5
     )
     # The second "b" is a duplicate and does not count as a place; "c" is
     # already listed, so the next other pick takes its turn.
-    assert out == ["a", "b", "c", "X", "d", "e", "f", "Y", "g"]
+    assert out == ["a", "b", "c", "d", "X", "e", "f", "Y", "g"]
+
+
+def _item(channel: str, topic: int | None) -> FeedItem:
+    return FeedItem(
+        candidate=Candidate(
+            key=f"yt:{channel}",
+            pool="catalog",
+            title=channel,
+            channel=channel,
+            channel_url="",
+        ),
+        bucket="similar",
+        score=1.0,
+        reason=Reason("similar", ""),
+        topic=topic,
+    )
+
+
+def test_interests_take_turns_and_nearby_ones_lead():
+    # Feed order: three cooking picks, then two of another shooter (nearby to
+    # the playing video), then a channel the feed has no interest for.
+    items = [
+        _item("Cook A", 1),
+        _item("Cook B", 1),
+        _item("Cook C", 1),
+        _item("Shooter A", 2),
+        _item("Shooter B", 2),
+        _item("Loner", None),
+    ]
+    nearby = [False, False, False, True, False, False]
+    order = [c.channel for c in other_interests._order(items, nearby)]
+    assert order == ["Shooter A", "Cook A", "Loner", "Cook B", "Shooter B", "Cook C"]
 
 
 def test_a_stream_lists_mostly_its_topic_and_some_other_interests(
@@ -151,9 +214,14 @@ def test_a_stream_lists_mostly_its_topic_and_some_other_interests(
     assert res.status_code == 200, res.text
     channels = [i["channel"] for i in res.json()["items"]]
     assert len(channels) == 24
-    # Three on the stream's topic, then one of the viewer's other interests.
-    assert channels[:8] == ["CS", "CS", "CS", "Cook", "CS", "CS", "CS", "Cook"]
-    assert channels.count("Cook") == 6
+    # The lead is the stream's topic; the viewer's other interest comes in
+    # after it, more often further down the list, and never twice in a row.
+    lead = other_interests.LEAD
+    assert channels[:lead] == ["CS"] * lead
+    pattern = "".join("O" if c == "Cook" else "." for c in channels)
+    assert 4 <= pattern.count("O") <= 8, pattern
+    assert pattern[12:].count("O") > pattern[:12].count("O"), pattern
+    assert "OO" not in pattern
     assert STREAM_ID not in [i["id"] for i in res.json()["items"]]
 
 
@@ -163,18 +231,20 @@ def test_a_library_video_lists_some_other_interests_on_every_page(
     source = _cs_library(session, add_video)
     _cook_library(session, add_video)
 
-    def page(offset: int) -> list[dict]:
+    def page(offset: int, limit: int = 8) -> list[dict]:
         res = client.get(
-            f"/api/videos/{source.id}/related", params={"limit": 8, "offset": offset}
+            f"/api/videos/{source.id}/related",
+            params={"limit": limit, "offset": offset},
         )
         assert res.status_code == 200, res.text
         return res.json()
 
-    first, second = page(0), page(8)
-    pattern = ["CS", "CS", "CS", "Cook", "CS", "CS", "CS", "Cook"]
-    assert [v["channel"] for v in first] == pattern
-    assert [v["channel"] for v in second] == pattern
-    assert len({v["id"] for v in first + second}) == 16
+    first, second, whole = page(0), page(8), page(0, 16)
+    assert [v["id"] for v in first + second] == [v["id"] for v in whole]
+    assert len({v["id"] for v in whole}) == 16
+    channels = [v["channel"] for v in whole]
+    assert channels[: other_interests.LEAD] == ["CS"] * other_interests.LEAD
+    assert "Cook" in channels
 
 
 def test_related_lists_stay_on_topic_without_a_watch_history(
@@ -187,12 +257,13 @@ def test_related_lists_stay_on_topic_without_a_watch_history(
     assert [v["channel"] for v in res.json()] == ["CS"] * 8
 
 
-def _picks(session, user, **kwargs) -> list[str]:
+def _others(session, user, **kwargs) -> other_interests.Others:
     viewer = other_interests.Viewer(user.id, current().discovery)
-    return [
-        c.channel
-        for c in other_interests.other_interest_picks(session, viewer, **kwargs)
-    ]
+    return other_interests.other_interest_picks(session, viewer, **kwargs)
+
+
+def _picks(session, user, **kwargs) -> list[str]:
+    return [c.channel for c in _others(session, user, **kwargs).picks]
 
 
 def test_another_interest_is_told_by_closeness_not_by_channel(
@@ -290,3 +361,65 @@ def test_pages_agree_when_a_pick_is_already_in_the_list(
     whole = ids(24, 0)
     assert len(set(whole)) == 24
     assert ids(8, 0) + ids(8, 8) + ids(8, 16) == whole
+
+
+def test_a_crowded_topic_gives_other_interests_more_places(
+    session, add_video, admin_user, two_interests, ai_on
+):
+    _cook_library(session, add_video)
+    # The five Counter-Strike watches and the playing video: a thin topic,
+    # which runs out by itself, so nothing is mixed in.
+    thin = _others(session, admin_user, vector=_vec(0.0), channel="CS")
+    assert thin.share == 0
+    _cs_library(session, add_video, count=60)
+    crowded = _others(session, admin_user, vector=_vec(0.0), channel="CS")
+    assert crowded.share == pytest.approx(tuning.DEFAULTS.related_other_share)
+    assert {c.channel for c in crowded.picks} == {"Cook"}
+
+
+def test_the_viewers_algorithm_sets_how_far_a_list_leaves_the_topic(
+    client, session, add_video, admin_user, two_interests, ai_on
+):
+    source = _cs_library(session, add_video, count=60)
+    _cook_library(session, add_video, count=24)
+
+    def cooking_places(preset: str) -> int:
+        tuning.save(session, admin_user.id, tuning.Selection(active=preset))
+        res = client.get(f"/api/videos/{source.id}/related", params={"limit": 24})
+        assert res.status_code == 200, res.text
+        return [v["channel"] for v in res.json()].count("Cook")
+
+    familiar, balanced, explorer = (
+        cooking_places(p) for p in ("familiar", "balanced", "explorer")
+    )
+    assert 0 < familiar < balanced < explorer
+
+
+def test_a_nearby_interest_comes_before_an_unrelated_one(
+    session, add_video, set_watch, admin_user, two_interests, ai_on
+):
+    _cs_library(session, add_video)
+    # The viewer also watches another shooter: not Counter-Strike, but far
+    # closer to it than cooking. Cooking is first in their feed.
+    for n in range(2):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            admin_user,
+            _vec(1.2),
+            channel="Shooter",
+            title=f"Shooter watched {n}",
+            yt_id=f"shootwatc{n:02d}",
+            days_ago=3,
+        )
+    for name, vec in (("Cook", _cook(0.0)), ("Shooter", _vec(1.2))):
+        _catalog(
+            session,
+            name,
+            [(f"{name.lower()}up{n:04d}", f"{name} {n}", n + 1, vec) for n in range(3)],
+        )
+    picks = _picks(session, admin_user, vector=_vec(0.0), channel="CS")
+    assert set(picks) == {"Shooter", "Cook"}
+    # Each interest takes a turn, the nearby one first.
+    assert picks[:2] == ["Shooter", "Cook"]

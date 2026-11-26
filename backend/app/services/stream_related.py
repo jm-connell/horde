@@ -13,9 +13,9 @@ A live stream first lists the channel's other broadcasts that are live now, so
 a tournament's A and B streams sit side by side (``live_now_on_channel``).
 Otherwise the channel's next part of the same series leads (``next_part``).
 
-Every fourth place then goes to one of the viewer's Recommended picks that is
-about something else (``discovery/other_interests.py``), so a list is mostly,
-not only, the stream's topic.
+Some places then go to the viewer's Recommended picks that are about something
+else, more when the topic is crowded (``discovery/other_interests.py``), so a
+list is mostly, not only, the stream's topic.
 """
 
 from __future__ import annotations
@@ -178,8 +178,8 @@ def related_for_stream(
     ``meta`` is the stream's preview metadata (title, channel, channel_url,
     description). ``may_embed`` allows one embedding call when the stream has no
     stored embedding (the caller may use AI). ``live_now`` (the channel's live
-    broadcasts, for a live stream) goes first. ``viewer`` gives every fourth
-    place to one of that user's other interests.
+    broadcasts, for a live stream) goes first. ``viewer`` gives some places to
+    that user's other interests.
     """
     out = _Collector(limit, youtube_id)
     lib_map = _LibraryIds(session)
@@ -263,12 +263,12 @@ def related_for_stream(
     if viewer is None:
         return out.items
     try:
-        others = _other_interests(session, viewer, vec, channel)
+        others, share = _other_interests(session, viewer, vec, channel)
     except Exception:
         logger.warning("stream related: no other interests", exc_info=True)
         return out.items
     mixed = _Collector(limit, youtube_id)
-    other_interests.weave(out.items, others, mixed.add)
+    other_interests.weave(out.items, others, mixed.add, share)
     return mixed.items
 
 
@@ -277,11 +277,13 @@ def _other_interests(
     viewer: other_interests.Viewer,
     vec: list[float] | None,
     channel: str,
-) -> list[ChannelFeedEntry]:
-    """The viewer's Recommended picks about something else, as entries."""
-    picks: list[Candidate] = other_interests.other_interest_picks(
+) -> tuple[list[ChannelFeedEntry], float]:
+    """The viewer's Recommended picks about something else, as entries, and
+    the share of the list they get."""
+    found = other_interests.other_interest_picks(
         session, viewer, vector=vec, channel=channel
     )
+    picks: list[Candidate] = found.picks
     videos = {
         require_id(v): v
         for v in session.exec(
@@ -297,4 +299,4 @@ def _other_interests(
             entries.append(stream_entry(c))
         elif c.video_id in videos:
             entries.append(_library_entry(videos[c.video_id]))
-    return entries
+    return entries, found.share

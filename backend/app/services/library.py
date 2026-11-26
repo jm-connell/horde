@@ -645,9 +645,9 @@ def related_videos(
     Then ranked by embedding similarity of the whole videos when AI is ready,
     nudged up for the same channel and for shared tags (rare tags count more),
     and down for videos ``user_id`` has already watched. Same-channel, shared-tag
-    and random videos fill the rest. With ``viewer``, every fourth place goes to
-    one of that user's Recommended picks about something else
-    (``discovery/other_interests.py``).
+    and random videos fill the rest. With ``viewer``, some places go to that
+    user's Recommended picks about something else, more when the topic is
+    crowded (``discovery/other_interests.py``).
     Every page slices the same ranking.
     """
     source = session.get(Video, video_id)
@@ -743,7 +743,7 @@ def _with_other_interests(
     related: list[Video],
     limit: int,
 ) -> list[Video]:
-    """``related`` with a downloaded pick from another interest in every fourth place."""
+    """``related`` with some places for downloaded picks from other interests."""
     from .ai import vector_index
     from .ai.provider import get_embed_provider
     from .discovery import other_interests
@@ -754,9 +754,10 @@ def _with_other_interests(
         if get_embed_provider() is not None
         else None
     )
-    picks = other_interests.other_interest_picks(
+    found = other_interests.other_interest_picks(
         session, viewer, vector=vector, channel=source.channel, library_only=True
     )
+    picks = found.picks
     by_id = {
         require_id(v): v
         for v in session.exec(
@@ -777,5 +778,5 @@ def _with_other_interests(
         mixed.append(video)
         return True
 
-    other_interests.weave(related, others, add)
+    other_interests.weave(related, others, add, found.share)
     return mixed
