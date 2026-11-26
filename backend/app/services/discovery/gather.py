@@ -84,7 +84,7 @@ TOPIC_SEARCHES_PER_RUN = 2
 TOPIC_COOLDOWN = timedelta(days=1)
 #: Searches of the categories the user opened in the last ``WANTED_FOR`` go
 #: first, at most this many a run.
-WANTED_SEARCHES_PER_RUN = 2
+WANTED_SEARCHES_PER_RUN = 1
 WANTED_FOR = timedelta(days=1)
 BACKOFF_START_SEC = 30 * 60.0
 BACKOFF_MAX_SEC = 12 * 3600.0
@@ -659,7 +659,9 @@ def _loop(worker: BackgroundWorker) -> None:
     while not worker.stopping:
         try:
             # Someone is waiting at the end of a category: before the rounds.
-            topup.run_pending(runtime, lambda: worker.stopping, worker.sleep)
+            ran = topup.run_pending(runtime, lambda: worker.stopping, worker.sleep)
+            if ran and worker.sleep(REQUEST_PAUSE_SEC):
+                return
             run_due(runtime, worker)
             with Session(get_engine()) as session:
                 prune(session)

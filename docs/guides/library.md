@@ -116,7 +116,7 @@ Pick a category when you want to browse one subject:
 - **Age counts where you watch recent videos.** In a category where you watch uploads soon after they come out, old videos move down below **Further afield**; where you have been watching old videos, they stay.
 - **Further afield** marks where the close matches end. Past it the matches get looser instead of the list stopping.
 - **Channels you might like** in a category suggests channels for that subject.
-- **The end.** Opening a category tells Horde to search YouTube for it on its next background run. Scrolling near the end starts a search for more of it; a loading mark shows only if you get there first, and **That's everything for now** when YouTube has no more for the moment (or looking on YouTube is off).
+- **The end.** Opening a category puts it first in line the next time Horde looks on YouTube in the background. Scrolling near the end starts a search for more of it; a loading mark shows only if you get there first, and **That's everything for now** when YouTube has no more for the moment (or looking on YouTube is off).
 
 With a chat model the category names are written by it ("Home servers"); otherwise they are the words that set the watched titles apart.
 

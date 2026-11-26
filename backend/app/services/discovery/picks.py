@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import threading
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any
@@ -80,6 +82,12 @@ class Feed:
     #: The user's categories measured against ``pool`` (a
     #: ``category_feed.Browse``), made once per version of the categories.
     browse: Any = None
+    #: Whether the feed's own filters let a candidate in (watched, blocked,
+    #: the algorithm's sources, lengths and ages): for videos that arrive
+    #: after the ranking (a category's top-up).
+    admits: Callable[[Candidate], bool] = lambda _c: True
+    #: Held while ``browse`` is made or one of its lists is built or added to.
+    lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
 
 @lru_cache(maxsize=16384)

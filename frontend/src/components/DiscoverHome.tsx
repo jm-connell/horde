@@ -170,12 +170,15 @@ export default function DiscoverHome({
   const setChannels = (
     update: (prev: SuggestedChannel[]) => SuggestedChannel[]
   ) => setSuggested((s) => ({ ...s, items: update(s.items) }));
-  /** In a category: the first of the looser matches ("Further afield"). */
-  const [looseKey, setLooseKey] = useState<string | null>(null);
+  /** In a category: the looser matches (they follow "Further afield"). */
+  const [looseKeys, setLooseKeys] = useState<Set<string>>(() => new Set());
   /** In a category, at the end of what Horde knows: is more on its way? */
   const [more, setMore] = useState<DiscoverFeed["more"]>("none");
-  /** Bumped to ask again at the end of a category while more is looked for. */
-  const [moreTick, setMoreTick] = useState(0);
+  /**
+   * At the end of a category with more on its way and none arrived yet: the
+   * next request waits `MORE_POLL_MS` instead of following the scroll.
+   */
+  const [waitingMore, setWaitingMore] = useState(false);
   const morePolls = useRef(0);
   const [loading, setLoading] = useState(!preview);
   const [categories, setCategories] = useState<DiscoverCategory[]>(
@@ -209,6 +212,8 @@ export default function DiscoverHome({
     else setLoading(true);
     setError(null);
     setFreshReady(false);
+    // A request waiting on the old list's end must not land on the new one.
+    setWaitingMore(false);
     api
       .getDiscoverFeed({
         limit: DISCOVER_PAGE_SIZE,
@@ -226,12 +231,15 @@ export default function DiscoverHome({
           !(page.categories ?? []).some((c) => c.id === category)
         )
           setCategory(null);
-        setLooseKey(
-          page.loose_from != null
-            ? (page.items[page.loose_from]?.key ?? null)
-            : null
+        setLooseKeys(
+          new Set(
+            page.loose_from != null
+              ? page.items.slice(page.loose_from).map((i) => i.key)
+              : []
+          )
         );
         setMore(page.more ?? "none");
+        setWaitingMore(false);
         morePolls.current = 0;
         setCursor(page.next_cursor ?? null);
         setStatus(page.status);
@@ -311,26 +319,28 @@ export default function DiscoverHome({
         const seen = new Set(prev.map((i) => i.key));
         return [...prev, ...page.items.filter((i) => !seen.has(i.key))];
       });
-      if (page.loose_from != null) {
-        const first = page.items[page.loose_from]?.key ?? null;
-        setLooseKey((prev) => prev ?? first);
-      }
+      // Loose from here on this page, or already on an earlier one.
+      setLooseKeys((prev) => {
+        const from = prev.size > 0 ? 0 : page.loose_from;
+        if (from == null) return prev;
+        const next = new Set(prev);
+        for (const item of page.items.slice(from)) next.add(item.key);
+        return next;
+      });
       // More is being looked for and none has come yet: ask again shortly,
       // for a while, then call it the end.
       const waiting = page.more === "loading" && page.items.length === 0;
       if (waiting) morePolls.current += 1;
       else morePolls.current = 0;
       if (waiting && morePolls.current > MORE_POLL_MAX) {
+        setWaitingMore(false);
         setMore("exhausted");
         setCursor(null);
         return;
       }
+      setWaitingMore(waiting);
       setMore(page.more ?? "none");
       setCursor(page.next_cursor ?? null);
-      if (waiting)
-        window.setTimeout(() => {
-          if (gen === generation.current) setMoreTick((n) => n + 1);
-        }, MORE_POLL_MS);
     } catch {
       if (gen === generation.current) setCursor(null);
     } finally {
@@ -339,7 +349,9 @@ export default function DiscoverHome({
   }, [cursor, loadingMore, category]);
 
   useEffect(() => {
-    if (!cursor) return;
+    // Waiting for more at the end: the timer below asks, not the scroll (a
+    // new observer reports at once, which would ask again without a pause).
+    if (!cursor || waitingMore) return;
     const el = sentinelRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
@@ -350,8 +362,13 @@ export default function DiscoverHome({
     );
     io.observe(el);
     return () => io.disconnect();
-    // moreTick: watch again (the sentinel has not moved) to ask once more.
-  }, [cursor, loadMore, moreTick]);
+  }, [cursor, loadMore, waitingMore]);
+
+  useEffect(() => {
+    if (!waitingMore || loadingMore) return;
+    const timer = window.setTimeout(() => void loadMore(), MORE_POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [waitingMore, loadingMore, loadMore]);
 
   const refresh = () => {
     setSeed(newSeed());
@@ -565,12 +582,14 @@ export default function DiscoverHome({
     </>
   );
 
+  /** The first card past the close matches still on screen: the divider's. */
+  const firstLooseKey = items.find((i) => looseKeys.has(i.key))?.key ?? null;
   const card = (item: DiscoverItem) => {
     const channel = channelOf(item);
     const video = item.video;
     return (
       <Fragment key={item.key}>
-        {item.key === looseKey && (
+        {item.key === firstLooseKey && (
           <h2
             data-horde="rec-further-afield"
             className="col-span-full flex items-center gap-3 pt-2 text-sm font-medium text-muted max-sm:px-3"

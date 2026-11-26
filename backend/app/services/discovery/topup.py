@@ -136,6 +136,9 @@ def top_up(
     row = session.get(RecCategory, category_id)
     if row is None or row.user_id != user_id:
         return 0
+    # Turned off since it was queued.
+    if not gather.enabled() or not tuning.for_user(session, user_id).use_youtube:
+        return 0
     now = utcnow()
     state = gather._state(session, user_id)
     asked = gather._asked(state)
@@ -153,9 +156,11 @@ def top_up(
             if stopping() or (n and pause(gather.REQUEST_PAUSE_SEC)):
                 break
             entries = _ask(runtime, req)
+            # Failed or not, it is not asked again within its cooldown: a seed
+            # whose up next list always fails must not hold up the rest.
+            asked[key] = now.isoformat()
             if entries is None:
                 continue
-            asked[key] = now.isoformat()
             gather.store_results(
                 session,
                 user_id,
@@ -200,12 +205,19 @@ def run_pending(
     runtime: DiscoveryRuntime,
     stopping: Callable[[], bool] = lambda: False,
     pause: Callable[[float], bool] = lambda _sec: False,
-) -> None:
-    """Run the top-ups that were asked for (the gatherer's worker calls this)."""
+) -> bool:
+    """Run the top-ups that were asked for (the gatherer's worker calls this).
+    True when any ran: the caller pauses before it asks YouTube again."""
+    ran = False
     while not stopping():
         key = runtime.next_topup()
         if key is None:
-            return
+            return ran
+        # The pause between YouTube calls holds between top-ups too.
+        if ran and pause(gather.REQUEST_PAUSE_SEC):
+            runtime.finish_topup(key, None)
+            return ran
+        ran = True
         added = 0
         try:
             with Session(get_engine()) as session:
@@ -216,6 +228,7 @@ def run_pending(
             runtime.finish_topup(
                 key, None if added else time.monotonic() + EXHAUSTED_FOR_SEC
             )
+    return ran
 
 
 __all__ = ["TopUp", "plan", "request", "run_pending", "top_up"]

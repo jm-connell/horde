@@ -330,3 +330,45 @@ def test_without_vectors_there_are_no_categories(measure):
     browse, ids = measure([_cand("plain", "P", None)], CATS)
     assert browse.listed == []
     assert _keys(browse, ids["Code"]) == []
+
+
+def test_a_later_find_off_the_topic_stays_out_of_a_one_topic_pool(measure):
+    """Everything known is about as near to the category (no scale to place a
+    newcomer on): a find joins only when it is as near too."""
+    pool = [_cand(f"code{n}", f"C{n}", _vec(0.001 * n)) for n in range(6)]
+    browse, ids = measure(pool, [("Code", _vec(0.0))])
+    added = browse.append(
+        None,
+        None,
+        ids["Code"],
+        [_cand("near", "F", _vec(0.002)), _cand("far", "F", _vec(0.0, 2))],
+    )
+    assert added == 1
+    assert _keys(browse, ids["Code"])[-1] == "near"
+
+
+def test_a_second_row_for_the_same_interest_is_dropped(session, admin_user):
+    for _ in range(2):  # two refreshes at once each made the row
+        session.add(
+            RecCategory(
+                user_id=admin_user.id,
+                name="Twin",
+                dim=6,
+                centroid=embeddings.pack_vector(_vec(0.0)),
+            )
+        )
+    session.commit()
+    rows = category_store.sync(session, admin_user.id, [_group(0.0, name="Twin")], NOW)
+    assert [r.name for r in rows] == ["Twin"]
+
+
+def test_searches_from_a_chat_model_are_kept_by_a_keyword_refresh(session, admin_user):
+    llm = _group(0.0, name="Homelab", named_by="llm")
+    llm.queries = ["rack mount home server build"]
+    category_store.sync(session, admin_user.id, [llm], NOW)
+    words = _group(0.0, name="Server Words")
+    words.queries = ["server words"]
+    [row] = category_store.sync(
+        session, admin_user.id, [words], NOW, keep_searches=True
+    )
+    assert category_store.queries(row) == ["rack mount home server build"]

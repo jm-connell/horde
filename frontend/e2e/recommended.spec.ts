@@ -364,6 +364,7 @@ test("Recommended can be browsed by the user's categories", async ({
   type Item = { key: string; stream?: { title?: string } | null };
   let all: Item[] = [];
   let waits = 0;
+  const endAsks: number[] = [];
   await page.route(/\/api\/discover\/feed\?/, async (route) => {
     const url = new URL(route.request().url());
     const category = url.searchParams.get("category");
@@ -372,10 +373,11 @@ test("Recommended can be browsed by the user's categories", async ({
     if (category && cursor) {
       // At the end: nothing yet the first time, then what was found.
       waits += 1;
+      endAsks.push(Date.now());
       const found = all[0];
       await route.fulfill({
         json:
-          waits < 2
+          waits < 3
             ? { items: [], next_cursor: "end", more: "loading", status }
             : {
                 items: found ? [{ ...found, key: "foundlater1" }] : [],
@@ -454,6 +456,10 @@ test("Recommended can be browsed by the user's categories", async ({
     timeout: 15_000,
   });
   await expect(page.locator("[data-rec-key]")).toHaveCount(3);
+  // While nothing had arrived it asked again after a pause, not in a burst.
+  expect(endAsks.length).toBe(3);
+  expect(endAsks[1] - endAsks[0]).toBeGreaterThan(2000);
+  expect(endAsks[2] - endAsks[1]).toBeGreaterThan(2000);
   await expect(page.locator('[data-horde="rec-category-end"]')).toBeVisible();
   // The category has its own channels to suggest.
   await expect(shelf.getByText("Sky Channel")).toBeVisible();

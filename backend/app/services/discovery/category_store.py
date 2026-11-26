@@ -146,9 +146,18 @@ def rows(session: Session, user_id: int) -> list[RecCategory]:
 
 
 def sync(
-    session: Session, user_id: int, groups: list[Interest], now: datetime
+    session: Session,
+    user_id: int,
+    groups: list[Interest],
+    now: datetime,
+    *,
+    keep_searches: bool = False,
 ) -> list[RecCategory]:
-    """Bring the user's rows in step with ``groups``; returns their rows."""
+    """Bring the user's rows in step with ``groups``; returns their rows.
+
+    ``keep_searches``: a row that has searches keeps them (the groups' were
+    made without a chat model, the row's maybe with one).
+    """
     named = [g for g in groups if g.centroid is not None]
     dims = {int(g.centroid.shape[0]) for g in named if g.centroid is not None}
     stored = rows(session, user_id)
@@ -158,6 +167,7 @@ def sync(
             session.delete(row)
     stored = [r for r in stored if not dims or r.dim in dims]
     free = {r.id: r for r in stored}
+    taken: list[np.ndarray] = []
     for g in named:
         assert g.centroid is not None  # noqa: S101 - filtered above
         match: RecCategory | None = None
@@ -186,7 +196,7 @@ def sync(
         match.dim = int(g.centroid.shape[0])
         match.weight = g.weight
         match.half_life_days = _half_life_of(session, g)
-        if g.queries:
+        if g.queries and not (keep_searches and queries(match)):
             match.queries_json = json.dumps(g.queries)
         match.seeds_json = json.dumps(
             [[w.yt_id, w.title] for w in g.watches if w.yt_id and w.engagement >= 0.7][
@@ -196,8 +206,12 @@ def sync(
         match.seen_at = now
         match.updated_at = now
         session.add(match)
+        taken.append(g.centroid)
     for row in free.values():
-        if now - as_utc(row.seen_at) > FORGET_AFTER:
+        # A second row for an interest that has one (two refreshes at once
+        # each made it), or an interest long gone.
+        twin = any(float(centre(row) @ c) >= DORMANT_SIMILARITY for c in taken)
+        if twin or now - as_utc(row.seen_at) > FORGET_AFTER:
             session.delete(row)
         else:
             # Still listed, and not looked at again until the next refresh.
@@ -254,7 +268,13 @@ def ensure(
     ).first()
     if latest is not None and now - as_utc(latest) < FRESH_FOR:
         return
+    # Someone with no categories (no embeddings, little watched) has no row to
+    # say they were looked at: remember it here, or every visit would look.
+    if latest is None and not runtime.categories_due(
+        user_id, FRESH_FOR.total_seconds()
+    ):
+        return
     recent, dormant, _history = groups_for(
         session, runtime, user_id, now, use_llm=False
     )
-    sync(session, user_id, recent + dormant, now)
+    sync(session, user_id, recent + dormant, now, keep_searches=True)

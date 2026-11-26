@@ -195,9 +195,9 @@ does in "For you".
 ### Background searching
 
 - `GET /api/discover/feed?category=<id>` on a first page stamps
-  `rec_categories.wanted_at` and calls `gather.request_refresh` (which keeps
-  its 20-minute minimum gap). It does not wait.
-- `gather.plan_requests` puts the searches of categories wanted in the last
+  `rec_categories.wanted_at`. It asks for no run (review finding: a run
+  re-ranks the feed and would rebuild the list under the visit).
+- `gather.plan_requests` puts one search of the categories wanted in the last
   day first, within the same `SEARCHES_PER_RUN`. Nothing else about the
   gatherer's budget changes.
 - The page's existing status poll shows "Show new picks" when the run ends.

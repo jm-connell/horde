@@ -64,6 +64,19 @@ class DiscoveryRuntime:
         self._topic_vectors: OrderedDict[tuple[str, str], Any] = OrderedDict()
         #: Category top-ups by (user, category); see ``topup``.
         self._topups: dict[tuple[int, int], TopUp] = {}
+        #: When each user without categories was last looked at for some.
+        self._categories_checked: dict[int, float] = {}
+
+    def categories_due(self, user_id: int, every_sec: float) -> bool:
+        """True (and noted) when this user's categories were not looked for in
+        the last ``every_sec`` (``category_store.ensure``)."""
+        now = time.monotonic()
+        with self._lock:
+            last = self._categories_checked.get(user_id)
+            if last is not None and now - last < every_sec:
+                return False
+            self._categories_checked[user_id] = now
+            return True
 
     def queue_topup(self, key: tuple[int, int], now: float) -> bool:
         """Queue a top-up; False when the last one found the category exhausted

@@ -150,17 +150,14 @@ def _status(
     )
 
 
-def _category_opened(
-    session: Session, ctx: AppContext, user_id: int, category: int
-) -> None:
+def _category_opened(session: Session, user_id: int, category: int) -> None:
     """The user opened a category: its searches go first on the gatherer's next
-    run, which is asked for now (never waited for)."""
+    run. No run is asked for: one ends by ranking the feed anew, which would
+    change the list under the visit that just opened it."""
     row = session.get(RecCategory, category)
     if row is None or row.user_id != user_id:
         return
     category_feed.wanted(session, row, utcnow())
-    if gather.enabled():
-        gather.request_refresh(session, ctx.discovery, user_id)
 
 
 def _browse(
@@ -246,7 +243,7 @@ def discover_feed(
         listing = browse.listing(category) if browse is not None else None
         picks = listing.items if listing is not None else []
         if listing is not None and not cursor and not prefetch:
-            _category_opened(session, ctx, user.id, category)
+            _category_opened(session, user.id, category)
     if user.allowed is not None:
         # Parental controls: only the allowed channels' picks.
         picks = [

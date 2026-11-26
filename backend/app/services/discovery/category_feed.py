@@ -228,11 +228,15 @@ class Browse:
 
     def listing(self, category_id: int) -> Listing | None:
         """The category's list, built the first time it is asked for."""
-        if category_id in self._lists:
+        with self.feed.lock:
+            if category_id not in self._lists:
+                m = self.measured.get(category_id)
+                if m is None:
+                    return None
+                self._lists[category_id] = self._build(category_id, m)
             return self._lists[category_id]
-        m = self.measured.get(category_id)
-        if m is None:
-            return None
+
+    def _build(self, category_id: int, m: _Measured) -> Listing:
         pool = self.feed.pool
         rng = np.random.default_rng([self.user_id, self.seed, category_id])
         jitter = rng.normal(0.0, 1.0, size=len(pool))
@@ -288,9 +292,7 @@ class Browse:
                     )
                     stat.scores.append(float(m.aged[i]))
                     stat.items.append(c)
-        made = Listing(items, channels, {item.candidate.key for item in items})
-        self._lists[category_id] = made
-        return made
+        return Listing(items, channels, {item.candidate.key for item in items})
 
     def append(
         self,
@@ -305,7 +307,22 @@ class Browse:
         m = self.measured.get(category_id)
         if made is None or m is None:
             return 0
-        fresh = [c for c in candidates if c.key not in made.keys]
+        with self.feed.lock:
+            return self._append(session, runtime, m, made, candidates)
+
+    def _append(
+        self,
+        session: Session,
+        runtime: DiscoveryRuntime,
+        m: _Measured,
+        made: Listing,
+        candidates: list[Candidate],
+    ) -> int:
+        # What the feed itself would not show (watched, too short, a source
+        # turned off, ...) is not added here either.
+        fresh = [
+            c for c in candidates if c.key not in made.keys and self.feed.admits(c)
+        ]
         if not fresh:
             return 0
         sims = candidate_sims(session, runtime, fresh, m.centre[None, :])[:, 0]
@@ -313,7 +330,11 @@ class Browse:
         for c, sim in zip(fresh, sims, strict=True):
             if not np.isfinite(sim):
                 continue
-            fit = 1.0 if m.span <= 0 else float((sim - m.unrelated) / m.span)
+            if m.span > 0:
+                fit = float((sim - m.unrelated) / m.span)
+            else:
+                # Everything known was about as near (one topic): as near, or not.
+                fit = 1.0 if sim >= m.unrelated - _MIN_SPAN else 0.0
             aged = (
                 fit * _age_factor(c, m.row.half_life_days, self.now) if fit > 0 else fit
             )
@@ -331,7 +352,10 @@ class Browse:
 
 
 def _version(rows: list[RecCategory]) -> object:
-    return tuple((r.id, str(r.updated_at), r.name, r.half_life_days) for r in rows)
+    """What a visit sees of the categories: which there are, their names and
+    how age counts. Not their centres, which move a little with every watch:
+    the lists made for a feed stay as they are for as long as it is kept."""
+    return tuple((r.id, r.name, r.half_life_days) for r in rows)
 
 
 def prepare(
@@ -347,11 +371,28 @@ def prepare(
     the categories change."""
     rows = category_store.rows(session, user_id)
     version = _version(rows)
-    kept = feed.browse
-    if isinstance(kept, Browse) and kept.version == version:
-        return kept
-    browse = Browse(version, feed, user_id, seed, tuning, now)
-    feed.browse = browse
+    # One at a time: the first page and the channel suggestions ask together.
+    with feed.lock:
+        kept = feed.browse
+        if isinstance(kept, Browse) and kept.version == version:
+            return kept
+        browse = _measure(session, runtime, feed, user_id, seed, tuning, now, rows)
+        browse.version = version
+        feed.browse = browse
+        return browse
+
+
+def _measure(
+    session: Session,
+    runtime: DiscoveryRuntime,
+    feed: Feed,
+    user_id: int,
+    seed: int,
+    tuning: Tuning,
+    now: datetime,
+    rows: list[RecCategory],
+) -> Browse:
+    browse = Browse(None, feed, user_id, seed, tuning, now)
     dims = [r.dim for r in rows if r.dim > 0]
     pool = feed.pool
     if not dims or not pool:
