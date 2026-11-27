@@ -15,6 +15,10 @@ import {
 import { useStreamRelated } from "../queries/preview";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import {
+  PLAYER_ASIDE_QUERY,
+  besidePictureOnDesktop,
+} from "../components/player/playerAside";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../context/AuthContext";
 import { useAskPageChannel, useAskPageVideo } from "../context/HelpChatContext";
@@ -147,7 +151,7 @@ export default function Watch() {
   // A past stream's live chat replay, read from YouTube as playback goes.
   const { getCurrentPosition, getStreamPosition, getStreamBehindLive } =
     usePlaybackActions();
-  const { fullscreenAside } = usePlaybackLayout();
+  const { playerAside } = usePlaybackLayout();
   const chatFor = source ? chatTarget(source) : null;
   const chatId = settings.showChatReplay && chatFor ? chatFor.youtubeId : null;
   const replayChat = useChatReplay(
@@ -162,7 +166,7 @@ export default function Watch() {
   const chat = chatFor?.live ? liveChat : replayChat;
   const landscape = useMediaQuery("(orientation: landscape)");
   const wideScreen = useMediaQuery("(min-width: 1280px)");
-  const largeScreen = useMediaQuery("(min-width: 1024px)");
+  const asideWide = useMediaQuery(PLAYER_ASIDE_QUERY);
 
   // Registered here, above the early returns: the loading and error views must
   // not unregister the dock, or the player would jump to the mini player.
@@ -212,8 +216,8 @@ export default function Watch() {
   const chatPlace = chatPlacement({
     isMobile,
     landscape,
-    // Theater has a column beside the description only from `lg` up.
-    theater: isWide && largeScreen,
+    // Theater and fit window: the player keeps room beside the picture.
+    besidePlayer: !isMobile && besidePictureOnDesktop(mode, asideWide),
     wide: wideScreen && mode === "standard",
   });
   // Shown once it has something to show; a library video not yet known to be
@@ -229,8 +233,13 @@ export default function Watch() {
   const hideChat = () => updateSettings({ showChatReplay: false });
   const showChat = () => updateSettings({ showChatReplay: true });
   const sideways = chatPlace === "sideways" && (chatShown || chatHidden);
+  // Beside the picture the shown chat lives in the player (the portal below),
+  // not on the page; hidden, the bar that brings it back leads the column.
+  const besidePlayer = chatPlace === "beside-player";
   const chatNode = sideways ? null : chatShown ? (
-    <ChatReplayPanel chat={chat} variant={chatPlace} onHide={hideChat} />
+    besidePlayer ? null : (
+      <ChatReplayPanel chat={chat} variant={chatPlace} onHide={hideChat} />
+    )
   ) : chatHidden ? (
     <ShowChatBar onShow={showChat} />
   ) : null;
@@ -294,8 +303,9 @@ export default function Watch() {
             sidebarShown={sidebarShown}
             columnBounded={sidebarShown || isWide}
             onVideoUpdated={setVideo}
-            chatInline={chatPlace === "inline" ? chatNode : undefined}
-            chatBeside={chatPlace === "beside-info" ? chatNode : undefined}
+            chatInline={
+              chatPlace === "inline" || besidePlayer ? chatNode : undefined
+            }
           />
           {video && (
             <WatchActions
@@ -327,16 +337,17 @@ export default function Watch() {
         )}
       </div>
 
-      {/* Fullscreen on a touch screen: the chat beside the picture. */}
-      {fullscreenAside &&
+      {/* Theater, fit window, and fullscreen on a touch screen: the chat
+          beside the picture, in the room the player keeps for it. */}
+      {playerAside &&
         chatShown &&
         createPortal(
           <ChatReplayPanel
             chat={chat}
-            variant="fullscreen"
+            variant="beside-player"
             onHide={hideChat}
           />,
-          fullscreenAside
+          playerAside
         )}
       {video && <RedownloadDialog video={video} actions={actions} />}
     </div>

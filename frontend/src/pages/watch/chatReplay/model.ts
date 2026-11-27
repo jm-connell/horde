@@ -139,16 +139,18 @@ export function chatTarget(
   return null;
 }
 
-export type ChatPlacement = "sidebar" | "beside-info" | "inline" | "sideways";
+export type ChatPlacement =
+  "sidebar" | "beside-player" | "inline" | "sideways";
 
 /** Where the chat panel goes for this layout. */
 export function chatPlacement(o: {
   isMobile: boolean;
   landscape: boolean;
-  theater: boolean;
+  /** Theater or fit window with room beside the picture. */
+  besidePlayer: boolean;
   wide: boolean;
 }): ChatPlacement {
   if (o.isMobile) return o.landscape ? "sideways" : "inline";
-  if (o.theater) return "beside-info";
+  if (o.besidePlayer) return "beside-player";
   return o.wide ? "sidebar" : "inline";
 }

@@ -8,6 +8,10 @@ import MiniPlayerFrame from "./player/MiniPlayerFrame";
 import { useMiniPlayer } from "./player/useMiniPlayer";
 import ControlBar from "./player/ControlBar";
 import { useFrameInset } from "./player/useFrameInset";
+import {
+  PLAYER_ASIDE_QUERY,
+  besidePictureOnDesktop,
+} from "./player/playerAside";
 import { playerLayout } from "./player/playerLayout";
 import { usePlayerViewMode } from "./player/usePlayerViewMode";
 import { useVideoEvents } from "./player/useVideoEvents";
@@ -90,7 +94,7 @@ export default function VideoPlayer({
   hotkeys = DEFAULT_HOTKEYS,
   onAutoplayRelatedChange,
   onFrameInsetChange,
-  onFullscreenAside,
+  onAside,
   mediaSuspended = false,
   blockingOverlay,
   onSourceError,
@@ -507,16 +511,22 @@ export default function VideoPlayer({
     onSourceError,
   });
 
-  // A touch screen in element fullscreen keeps room beside the picture for the
-  // page to fill (a past stream's live chat); desktop fullscreen stays video only.
+  // Room beside the picture for the page to fill (a stream's live chat): in
+  // theater and fit window on a wide window, and in element fullscreen on a
+  // touch screen. Desktop fullscreen stays video only.
   const coarsePointer = useMediaQuery("(pointer: coarse)");
+  const asideWide = useMediaQuery(PLAYER_ASIDE_QUERY);
   const asideRef = useRef<HTMLDivElement>(null);
-  const showAside = !isMini && isNativeFullscreen && coarsePointer;
+  const showAside =
+    !isMini &&
+    (isNativeFullscreen
+      ? coarsePointer
+      : besidePictureOnDesktop(mode, asideWide));
   useEffect(() => {
-    if (!onFullscreenAside) return;
-    onFullscreenAside(showAside ? asideRef.current : null);
-    return () => onFullscreenAside(null);
-  }, [showAside, onFullscreenAside]);
+    if (!onAside) return;
+    onAside(showAside ? asideRef.current : null);
+    return () => onAside(null);
+  }, [showAside, onAside]);
 
   const { wrapperClass, innerClass, miniStyle, videoClass, subtitleClass } =
     playerLayout({
@@ -573,7 +583,8 @@ export default function VideoPlayer({
   return (
     <div
       ref={playerRootRef}
-      className={wrapperClass}
+      // A row while the aside is offered (theater's wrapper is a block).
+      className={`${wrapperClass}${showAside ? " flex" : ""}`}
       style={miniStyle}
       onPointerDown={isMini && onMiniMove ? onMiniMovePointerDown : undefined}
     >
@@ -763,10 +774,13 @@ export default function VideoPlayer({
       </div>
       {showAside && (
         <div
-          ref={asideRef}
-          data-horde="player-fullscreen-aside"
-          className="flex h-full shrink-0 py-2 pr-2 empty:hidden"
-        />
+          data-horde="player-aside"
+          className="relative w-[min(24rem,33%)] shrink-0 self-stretch has-[>:empty]:hidden"
+        >
+          {/* Out of flow: what the page puts here is as tall as the picture
+              and never makes the player taller. */}
+          <div ref={asideRef} className="absolute inset-0 flex" />
+        </div>
       )}
     </div>
   );

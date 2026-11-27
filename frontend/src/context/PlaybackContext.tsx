@@ -146,11 +146,12 @@ export interface PlaybackLayout {
   /** Pillarbox inset (px) of the visible picture inside the player box. */
   videoFrameInset: number;
   /**
-   * The empty element beside the picture while the player is in element
-   * fullscreen on a touch screen (null otherwise): the watch page portals a
-   * past stream's live chat into it.
+   * The empty element beside the picture while the player keeps room there
+   * (theater and fit window on a wide window, element fullscreen on a touch
+   * screen; null otherwise): the watch page portals a stream's live chat
+   * into it.
    */
-  fullscreenAside: HTMLElement | null;
+  playerAside: HTMLElement | null;
 }
 
 export interface PlaybackActions {
@@ -251,9 +252,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     null
   );
   const [videoFrameInset, setVideoFrameInset] = useState(0);
-  const [fullscreenAside, setFullscreenAside] = useState<HTMLElement | null>(
-    null
-  );
+  const [playerAside, setPlayerAside] = useState<HTMLElement | null>(null);
   const [mediaSuspended, setMediaSuspended] = useState(false);
 
   const setMiniWidth = useCallback((w: number | null) => {
@@ -914,9 +913,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       miniPlayerRect,
       miniPlayerCornerAnchor: miniCornerAnchor,
       videoFrameInset,
-      fullscreenAside,
+      playerAside,
     }),
-    [miniPlayerRect, miniCornerAnchor, videoFrameInset, fullscreenAside]
+    [miniPlayerRect, miniCornerAnchor, videoFrameInset, playerAside]
   );
   const actions = useMemo<PlaybackActions>(
     () => ({
@@ -1141,7 +1140,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         singleKeyShortcuts={settings.playerShortcuts}
         hotkeys={hotkeys}
         onFrameInsetChange={setVideoFrameInset}
-        onFullscreenAside={setFullscreenAside}
+        onAside={setPlayerAside}
         mediaSuspended={mediaSuspended}
         clipMarkers={clipMarkers}
       />
@@ -1203,7 +1202,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         singleKeyShortcuts={settings.playerShortcuts}
         hotkeys={hotkeys}
         onFrameInsetChange={setVideoFrameInset}
-        onFullscreenAside={setFullscreenAside}
+        onAside={setPlayerAside}
         mediaSuspended={mediaSuspended}
       />
     ) : null;
