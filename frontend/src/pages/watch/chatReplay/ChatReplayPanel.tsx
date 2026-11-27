@@ -162,6 +162,24 @@ function ChatMessage({ item }: { item: ChatReplayItem }) {
   );
 }
 
+type Anchor = { id: string; top: number };
+
+/**
+ * Put the list where it belongs: at the newest message, or, while the reader
+ * has scrolled up, with the message they were at where it was.
+ */
+function settle(el: HTMLDivElement, paused: boolean, anchor: Anchor | null) {
+  if (!paused) {
+    el.scrollTop = el.scrollHeight;
+    return;
+  }
+  if (!anchor) return;
+  const node = Array.from(el.children).find(
+    (child) => (child as HTMLElement).dataset.id === anchor.id
+  ) as HTMLElement | undefined;
+  if (node) el.scrollTop = node.offsetTop - anchor.top;
+}
+
 /**
  * A past stream's chat replay, newest message at the bottom. It follows new
  * messages; scrolling up to read pauses that (the list stays put while
@@ -182,8 +200,13 @@ export default function ChatReplayPanel({
   const pausedRef = useRef(false);
   // The first message in view and its distance from the top, so the list can
   // stay put while paused even as old messages drop off the top.
-  const anchorRef = useRef<{ id: string; top: number } | null>(null);
+  const anchorRef = useRef<Anchor | null>(null);
+  // The list's height at the last look. A scroll that comes with a new height
+  // is the layout's doing (the player moved or resized the panel, which also
+  // resets the scroll offset), not the reader scrolling up.
+  const heightRef = useRef(0);
   const { items, status } = chat;
+  const listShown = status === "ok" || status === "loading";
 
   const captureAnchor = (el: HTMLDivElement) => {
     for (const child of Array.from(el.children) as HTMLElement[]) {
@@ -205,6 +228,11 @@ export default function ChatReplayPanel({
 
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
+    if (el.clientHeight !== heightRef.current) {
+      heightRef.current = el.clientHeight;
+      settle(el, pausedRef.current, anchorRef.current);
+      return;
+    }
     const atBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_SLACK_PX;
     if (atBottom !== !pausedRef.current) setPausedBoth(!atBottom);
@@ -213,18 +241,20 @@ export default function ChatReplayPanel({
 
   useLayoutEffect(() => {
     const el = listRef.current;
-    if (!el) return;
-    if (!pausedRef.current) {
-      el.scrollTop = el.scrollHeight;
-      return;
-    }
-    const anchor = anchorRef.current;
-    if (!anchor) return;
-    const node = Array.from(el.children).find(
-      (child) => (child as HTMLElement).dataset.id === anchor.id
-    ) as HTMLElement | undefined;
-    if (node) el.scrollTop = node.offsetTop - anchor.top;
+    if (el) settle(el, pausedRef.current, anchorRef.current);
   }, [items]);
+
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!listShown || !el) return;
+    heightRef.current = el.clientHeight;
+    const observer = new ResizeObserver(() => {
+      heightRef.current = el.clientHeight;
+      settle(el, pausedRef.current, anchorRef.current);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [listShown]);
 
   const jumpToLatest = () => {
     setPausedBoth(false);

@@ -317,6 +317,68 @@ test("theater: desktop fullscreen is video only, and chat returns after it", asy
   await expect(chat).toBeVisible();
 });
 
+test("theater to fit window and back keeps following the newest message", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page, { spacing: 100 });
+  await pauseAt(page, 15);
+  const chat = playerAside(page).getByRole("region", { name: "Live chat" });
+  const jump = page.getByRole("button", { name: "Jump to latest" });
+  await expect.poll(() => lastMessage(page)).toContain("message at 15.0s");
+  await expect
+    .poll(() => scrollState(page).then((s) => s.fromBottom))
+    .toBeLessThan(30);
+
+  // Fit window moves the player (and the chat in it) to cover the page.
+  await page.keyboard.press("f");
+  await expect
+    .poll(async () => (await chat.boundingBox())!.height)
+    .toBeGreaterThan(890);
+  await page.waitForTimeout(500);
+  expect((await scrollState(page)).fromBottom).toBeLessThan(30);
+  await expect(jump).toHaveCount(0);
+
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(async () => (await chat.boundingBox())!.height)
+    .toBeLessThan(800);
+  await page.waitForTimeout(500);
+  expect((await scrollState(page)).fromBottom).toBeLessThan(30);
+  await expect(jump).toHaveCount(0);
+});
+
+test("theater to fit window keeps the place of someone reading back", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page, { spacing: 100 });
+  await pauseAt(page, 15);
+  const chat = playerAside(page).getByRole("region", { name: "Live chat" });
+  const jump = page.getByRole("button", { name: "Jump to latest" });
+  await expect.poll(() => lastMessage(page)).toContain("message at 15.0s");
+  const firstInView = () =>
+    chatLog(page).evaluate((el) => {
+      const row = Array.from(el.children).find(
+        (c) => (c as HTMLElement).offsetTop >= el.scrollTop
+      ) as HTMLElement;
+      return row.dataset.id;
+    });
+  await chatLog(page).evaluate((el) => {
+    el.scrollTop = el.scrollHeight / 2;
+  });
+  await expect(jump).toBeVisible();
+  const reading = await firstInView();
+
+  await page.keyboard.press("f");
+  await expect
+    .poll(async () => (await chat.boundingBox())!.height)
+    .toBeGreaterThan(890);
+  await page.waitForTimeout(500);
+  await expect(jump).toBeVisible();
+  expect(await firstInView()).toBe(reading);
+});
+
 test("theater: Hide gives the picture the width back and the arrow reopens chat", async ({
   page,
 }) => {
