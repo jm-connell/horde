@@ -374,6 +374,13 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   pauses following; a round `ink-800` "Jump to latest" button (down arrow) floats
   at the bottom centre until it is pressed or the list is back at the bottom.
   Hidden, the panel's place holds a secondary "Show live chat" button.
+  In theater and fit window (window of 1024px or more) the chat is inside the
+  player instead, to the right of the picture: a flush column as tall as the
+  player and `min(24rem, 33%)` of it wide, with a left border and no card
+  frame, whose header starts with a quiet right-arrow button (named "Hide").
+  Hidden there, a 32px round `black/55` button with a left arrow sits at the
+  picture's top right ("Show live chat"), shown and hidden with the control
+  bar; theater also keeps the "Show live chat" button first under the title.
 - **Rows and lists.** 4–8px padding, `hover:bg-ink-800`, drag handle on the left
   when reorderable, quiet remove button on the right.
 - **Inputs and selects.** `ink-800` fill, `ink-700` ring, accent focus ring;
