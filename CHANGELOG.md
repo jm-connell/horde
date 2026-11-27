@@ -33,6 +33,12 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Live chat sits beside the video in theater and fit window.** Theater put
+  the chat under the video and fit window hid it. Both now show it to the
+  right of the picture, as tall as the player, on a window at least 1024
+  pixels wide. The arrow at the top of the chat hides it, and a small arrow at
+  the top right of the video brings it back. Switching between theater and fit
+  window keeps the chat where you were reading.
 - **A release now builds the desktop apps too.** Pushing a tag builds and starts
   the installers on Windows, macOS and Linux first, then the image, and
   publishes the release only when every file is on it, with checksums and build
