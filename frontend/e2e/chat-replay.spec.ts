@@ -1,5 +1,5 @@
 import type { Page, Route } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { expect, openNav, test } from "./fixtures";
 import { expectNoSeriousViolations } from "./axe";
 
 /**
@@ -129,6 +129,17 @@ async function theater(page: Page) {
 /** The player's own room beside the picture (theater, fit window). */
 function playerAside(page: Page) {
   return page.locator("[data-horde='player-aside']");
+}
+
+/** The arrow on the picture that opens a hidden chat beside it. */
+function opener(page: Page) {
+  return page.locator("[data-horde='player-aside-opener']");
+}
+
+/** Bring the player's controls up. */
+async function overVideo(page: Page) {
+  const box = (await page.locator("video").first().boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 }
 
 function chatRegion(page: Page) {
@@ -304,6 +315,81 @@ test("theater: desktop fullscreen is video only, and chat returns after it", asy
   await expect(playerAside(page)).toHaveCount(0);
   await page.evaluate(() => document.exitFullscreen());
   await expect(chat).toBeVisible();
+});
+
+test("theater: Hide gives the picture the width back and the arrow reopens chat", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page);
+  const chat = playerAside(page).getByRole("region", { name: "Live chat" });
+  await expect(chat).toBeVisible();
+  await expect(opener(page)).toHaveCount(0);
+  const video = page.locator("video").first();
+  const before = (await video.boundingBox())!.width;
+  await chat.getByRole("button", { name: "Hide" }).click();
+  await expect(chatRegion(page)).toHaveCount(0);
+  await expect
+    .poll(async () => (await video.boundingBox())!.width)
+    .toBeGreaterThan(before);
+  await overVideo(page);
+  await expect(opener(page)).toHaveAccessibleName("Show live chat");
+  // A small arrow in the picture's top right corner.
+  const picture = (await video.boundingBox())!;
+  const arrow = (await opener(page).boundingBox())!;
+  expect(arrow.x).toBeGreaterThan(picture.x + picture.width - 80);
+  expect(arrow.y).toBeLessThan(picture.y + 80);
+  await opener(page).click();
+  await expect(chat).toBeVisible();
+  await expect(opener(page)).toHaveCount(0);
+});
+
+test("fit window: the arrow opens a hidden chat", async ({ page }) => {
+  await openCedar(page);
+  await chatRegion(page).getByRole("button", { name: "Hide" }).click();
+  // Standard view has the bar in the chat's place, not the arrow.
+  await expect(
+    page.getByRole("button", { name: "Show live chat" })
+  ).toBeVisible();
+  await expect(opener(page)).toHaveCount(0);
+  await page.keyboard.press("f");
+  await overVideo(page);
+  await opener(page).click();
+  await expect(
+    playerAside(page).getByRole("region", { name: "Live chat" })
+  ).toBeVisible();
+});
+
+test("theater: a video with no chat has no arrow and the whole width", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page, {
+    answer: (route) =>
+      route.fulfill({ json: { status: "none", items: [], next_cursor: null } }),
+  });
+  const video = page.locator("video").first();
+  await expect(video).toBeVisible();
+  await page.waitForTimeout(1000);
+  await overVideo(page);
+  await expect(opener(page)).toHaveCount(0);
+  await expect(playerAside(page)).toBeHidden();
+  expect((await video.boundingBox())!.width).toBe(1440);
+});
+
+test("the mini player has no chat arrow", async ({ page }) => {
+  await theater(page);
+  await openCedar(page);
+  await playerAside(page).getByRole("button", { name: "Hide" }).click();
+  await overVideo(page);
+  await expect(opener(page)).toBeVisible();
+  await page
+    .locator("video")
+    .first()
+    .evaluate((v: HTMLVideoElement) => v.play());
+  await openNav(page, "Home");
+  await expect(page.locator(".player-mini")).toBeVisible();
+  await expect(opener(page)).toHaveCount(0);
 });
 
 for (const size of [
@@ -557,9 +643,7 @@ test("desktop fullscreen stays video only", async ({ page }) => {
   await expect
     .poll(() => page.evaluate(() => document.fullscreenElement !== null))
     .toBe(true);
-  await expect(
-    playerAside(page)
-  ).toHaveCount(0);
+  await expect(playerAside(page)).toHaveCount(0);
   await page.evaluate(() => document.exitFullscreen());
 });
 

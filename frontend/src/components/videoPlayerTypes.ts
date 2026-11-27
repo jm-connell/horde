@@ -5,6 +5,7 @@ import type { SponsorSegment } from "../hooks/useSponsorBlock";
 import type { SponsorBlockSkipMode } from "../sponsorBlock";
 import type { Chapter } from "../utils";
 import type { Storyboard } from "../types";
+import type { AsideOpener } from "./player/playerAside";
 
 export type ViewMode = "standard" | "theater" | "windowed";
 
@@ -115,6 +116,11 @@ export interface VideoPlayerProps {
    * chat in it.
    */
   onAside?: (el: HTMLElement | null) => void;
+  /**
+   * What the aside holds is closed: an arrow at the picture's top right
+   * opens it, wherever the player keeps that room.
+   */
+  asideOpener?: AsideOpener | null;
   /**
    * Unload live media (abort DASH fetches) while keeping the player shell.
    * Used so a newly clicked preview can load without waiting on the current one.

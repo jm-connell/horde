@@ -139,8 +139,7 @@ export function chatTarget(
   return null;
 }
 
-export type ChatPlacement =
-  "sidebar" | "beside-player" | "inline" | "sideways";
+export type ChatPlacement = "sidebar" | "beside-player" | "inline" | "sideways";
 
 /** Where the chat panel goes for this layout. */
 export function chatPlacement(o: {

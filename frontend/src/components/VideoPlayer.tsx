@@ -41,7 +41,7 @@ import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 import type { VideoPlayerProps } from "./videoPlayerTypes";
 import { resolveHotkeys } from "../hotkeys";
 import UpNextOverlay from "./player/UpNextOverlay";
-import { PauseIcon, PlayIcon } from "./icons";
+import { ArrowIcon, PauseIcon, PlayIcon } from "./icons";
 
 export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
 
@@ -95,6 +95,7 @@ export default function VideoPlayer({
   onAutoplayRelatedChange,
   onFrameInsetChange,
   onAside,
+  asideOpener = null,
   mediaSuspended = false,
   blockingOverlay,
   onSourceError,
@@ -682,6 +683,21 @@ export default function VideoPlayer({
             }`}
           >
             {playing ? <PauseIcon /> : <PlayIcon />}
+          </button>
+        )}
+
+        {showAside && asideOpener && (
+          <button
+            type="button"
+            data-horde="player-aside-opener"
+            onClick={asideOpener.open}
+            aria-label={asideOpener.label}
+            title={asideOpener.label}
+            className={`absolute right-3 top-3 z-6 flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white transition-opacity duration-300 hover:text-accent focus-visible:opacity-100 ${
+              controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
+          >
+            <ArrowIcon className="h-4 w-4" />
           </button>
         )}
 

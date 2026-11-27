@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Link,
@@ -167,10 +167,23 @@ export default function Watch() {
   const landscape = useMediaQuery("(orientation: landscape)");
   const wideScreen = useMediaQuery("(min-width: 1280px)");
   const asideWide = useMediaQuery(PLAYER_ASIDE_QUERY);
+  const chatPlace = chatPlacement({
+    isMobile,
+    landscape,
+    // Theater and fit window: the player keeps room beside the picture.
+    besidePlayer: !isMobile && besidePictureOnDesktop(mode, asideWide),
+    wide: wideScreen && mode === "standard",
+  });
+  const chatHidden =
+    chatFor != null && chatFor.known && !settings.showChatReplay;
+  const showChat = useCallback(
+    () => updateSettings({ showChatReplay: true }),
+    [updateSettings]
+  );
 
   // Registered here, above the early returns: the loading and error views must
   // not unregister the dock, or the player would jump to the mini player.
-  const { registerDock } = usePlaybackActions();
+  const { registerDock, setAsideOpener } = usePlaybackActions();
   const dockRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!source) return;
@@ -179,6 +192,14 @@ export default function Watch() {
     // Do not depend on mode — re-registering on theater toggle briefly clears
     // the dock and can collapse the player into mini layout.
   }, [registerDock, source]);
+  // Hidden where the chat would sit beside the picture: the player shows the
+  // arrow that brings it back (fit window covers the page's own bar).
+  const chatOpener = chatHidden && chatPlace === "beside-player";
+  useEffect(() => {
+    if (!chatOpener) return;
+    setAsideOpener({ label: "Show live chat", open: showChat });
+    return () => setAsideOpener(null);
+  }, [chatOpener, setAsideOpener, showChat]);
 
   if (loading) {
     return (
@@ -213,13 +234,6 @@ export default function Watch() {
     settings.showRelatedVideos &&
     relatedItems.length > 0;
   const queueVisible = queue.length > 0;
-  const chatPlace = chatPlacement({
-    isMobile,
-    landscape,
-    // Theater and fit window: the player keeps room beside the picture.
-    besidePlayer: !isMobile && besidePictureOnDesktop(mode, asideWide),
-    wide: wideScreen && mode === "standard",
-  });
   // Shown once it has something to show; a library video not yet known to be
   // a stream waits for the server's answer, so other videos never shift.
   const chatShown =
@@ -228,10 +242,7 @@ export default function Watch() {
     (chat.status === "ok" ||
       ((chat.status === "error" || chat.status === "loading") &&
         chatFor.known));
-  const chatHidden =
-    chatFor != null && chatFor.known && !settings.showChatReplay;
   const hideChat = () => updateSettings({ showChatReplay: false });
-  const showChat = () => updateSettings({ showChatReplay: true });
   const sideways = chatPlace === "sideways" && (chatShown || chatHidden);
   // Beside the picture the shown chat lives in the player (the portal below),
   // not on the page; hidden, the bar that brings it back leads the column.
