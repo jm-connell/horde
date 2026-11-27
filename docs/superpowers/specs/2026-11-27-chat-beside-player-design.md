@@ -23,7 +23,10 @@ open it from the player.
 - Standard view (the chat already tops the column beside the player).
 - Desktop fullscreen, which stays video only. *(builder's call: asked, not
   answered; one condition in the player if wanted later)*
-- Phones, touch fullscreen and windows under 1024px: as today.
+- Phones and windows under 1024px: as today. Touch fullscreen keeps the chat
+  where it was, but it is the same panel as in theater, so it takes the same
+  look there (a flush column with an arrow, not an inset card). *(builder's
+  call, after the user's "like Twitch")*
 - A second "collapsed" state: the arrow and the panel's **Hide** are the
   `showChatReplay` setting.
 

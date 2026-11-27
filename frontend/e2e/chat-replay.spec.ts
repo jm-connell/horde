@@ -262,6 +262,7 @@ test("theater: chat beside the picture, as tall as the player", async ({
   expect(box.x).toBeGreaterThanOrEqual(video.x + video.width - 1);
   expect(box.y).toBeGreaterThanOrEqual(video.y - 1);
   expect(box.y + box.height).toBeLessThanOrEqual(video.y + video.height + 1);
+  expect(Math.abs(box.height - video.height)).toBeLessThan(2);
   expect(box.x + box.width).toBeLessThanOrEqual(1440);
 });
 
