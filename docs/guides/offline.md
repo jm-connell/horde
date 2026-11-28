@@ -33,7 +33,7 @@ The installed app behaves more like a native app than a browser tab:
   refresh mark drops in under the top bar and lights up once letting go will
   reload. On **Recommended** the pull reshuffles the feed, like **Refresh**.
 - Otherwise the page doesn't bounce past its ends, pinching doesn't
-  zoom the whole interface (use **Settings → Appearance → Font size** for larger
+  zoom the whole interface (use **Settings → Appearance → Text size** for larger
   text), and long-pressing a thumbnail or the menu doesn't select text or
   open a preview.
 

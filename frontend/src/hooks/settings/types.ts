@@ -74,7 +74,7 @@ export type NavIndicator =
   "none" | "liquid" | "underline" | "fade" | "dot" | "focus";
 /** Extra per-background slider values, keyed by effect then slider. */
 export type BackgroundEffectOptions = Record<string, Record<string, number>>;
-/** App text size (rem root). Replaces the old multi-step UI scale. */
+/** A size step: the interface (`fontSize`), its text and the video cards. */
 export type FontSize = "small" | "medium" | "large" | "xl";
 
 export interface CustomThemePreset {
@@ -106,6 +106,8 @@ export interface CustomThemePreset {
   translucentPanelLegibility: boolean;
   loadingStyle: LoadingStyle;
   fontSize: FontSize;
+  /** Missing on older snapshots. */
+  textSize: FontSize;
   uiFont: string;
   /** User CSS overlay; empty on older snapshots. */
   customCss: string;
@@ -171,8 +173,15 @@ export interface Settings {
   /** Raise opacity on panels marked .ui-panel-legible / .ui-menu. */
   translucentPanelLegibility: boolean;
   loadingStyle: LoadingStyle;
-  /** Rem-based text size applied to documentElement font-size. */
+  /**
+   * Interface size: the rem root (documentElement font-size), so text,
+   * spacing and controls scale together. The key keeps its old name.
+   */
   fontSize: FontSize;
+  /** Text size alone, on top of the interface size. */
+  textSize: FontSize;
+  /** Video cards in the grids: bigger cards, fewer to a row. */
+  cardSize: FontSize;
   /** App typeface (builtin id, saved custom id, or "custom" while adding). */
   uiFont: UiFont;
   /** Permanently saved custom fonts (URL or uploaded file). */

@@ -459,6 +459,7 @@ function OnlineLibrary() {
               showUndownloaded={settings.showUndownloadedOnChannel}
               tab={feed.channelTab}
               liveEntry={channelLive.entry}
+              liveViewers={channelLive.live?.viewers}
               catalogIndexing={Boolean(catalog.catalogProgress?.indexing)}
               queueDockedBottom={queueDock.dockedBottom}
               directYoutubeSearch={
