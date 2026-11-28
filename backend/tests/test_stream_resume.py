@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -97,6 +98,9 @@ def test_a_part_watched_stream_joins_continue_watching(client, member_client):
             "position_sec": 2640.0,
         }
     ]
+    # When it was watched, so the row can order it among library videos.
+    watched = datetime.fromisoformat(body["items"][0]["last_watched_at"])
+    assert abs((datetime.now(UTC) - watched).total_seconds()) < 60
     assert _continue_ids(member_client) == []
     _watch(client, 3500)  # finished
     assert _continue_ids(client) == []

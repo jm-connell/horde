@@ -523,7 +523,10 @@ def _token_rules(user: AuthUser) -> str:
         "value from its list (true or false for a switch). Never for a setting "
         "marked link only: link that one and say they can change it there. "
         '"now:" is a setting\'s current value: if it already has the value '
-        "asked for, say so instead of offering the change.",
+        "asked for, say so instead of offering the change. You have already "
+        'read it, so answer "is it on?" from it: never say you did not look '
+        f'at their settings or ask them to ask again. "now: {help_catalog.UNCHANGED}" '
+        "means the user never changed it: give its default from the excerpts.",
         "- [[video:ID|Title]] links to a library video from the data below.",
         "- [[playlist-new:Name|ID,ID]] offers to create a playlist with those "
         "library videos; [[playlist-add:PLAYLIST_ID|ID,ID]] offers to add them "
@@ -754,7 +757,9 @@ class _HelpChat:
         catalog = help_catalog.for_user(self._user)
         query = query_terms(question, self._history, self._page)
         settings = help_catalog.best_settings(catalog, query)
-        now = help_catalog.current_values(settings)
+        now = help_catalog.current_values(
+            settings, user_settings.effective_ui(session, self._user.id)
+        )
         extra: list[str] = []
         if asks_css(question, self._history):
             reference = css_reference(index.root)

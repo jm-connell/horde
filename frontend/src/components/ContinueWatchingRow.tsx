@@ -6,7 +6,7 @@ import { ChevronIcon, CloseIcon } from "./icons";
 
 interface Props {
   videos: Video[];
-  /** Streamed (not downloaded) videos left part-way, after the library's. */
+  /** Streamed (not downloaded) videos left part-way, mixed in by watch time. */
   streams?: ContinueStream[];
   /** Videos watched on YouTube lately (from the import), last. */
   youtube?: ChannelFeedEntry[];
@@ -16,6 +16,11 @@ interface Props {
   onDismissYoutube?: (ids: string[]) => void;
   onDownloadYoutube?: (entry: ChannelFeedEntry) => void;
 }
+
+/** A library video or a stream left part-way, with when it was last watched. */
+type Started =
+  | { video: Video; stream?: undefined; at: number }
+  | { video?: undefined; stream: ContinueStream; at: number };
 
 function watchProgress(video: Video): number | undefined {
   if (!video.duration_sec || video.duration_sec <= 0) return undefined;
@@ -98,6 +103,18 @@ export default function ContinueWatchingRow({
 
   if (videos.length + streams.length + youtube.length === 0) return null;
 
+  // Downloaded and streamed videos share one order: most recently watched first.
+  const started: Started[] = [
+    ...videos.map((video) => ({
+      video,
+      at: Date.parse(video.last_watched_at ?? "") || 0,
+    })),
+    ...streams.map((stream) => ({
+      stream,
+      at: Date.parse(stream.last_watched_at) || 0,
+    })),
+  ].sort((a, b) => b.at - a.at);
+
   return (
     <section className="mb-4 sm:mb-6">
       <div className="mb-1.5 flex items-center justify-between gap-2 sm:mb-3">
@@ -144,51 +161,52 @@ export default function ContinueWatchingRow({
           className="overflow-x-auto scroll-smooth px-1 py-2 scrollbar-none sm:py-3 [&::-webkit-scrollbar]:hidden"
         >
           <div className="flex gap-4">
-            {videos.map((v) => (
-              <div key={v.id} className={slotClass}>
-                <button
-                  onClick={() => onDismiss(v.id)}
-                  className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-xs text-white opacity-100 hover:bg-black hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
-                  title="Remove from continue watching"
-                  aria-label="Remove from continue watching"
+            {started.map(({ video: v, stream: e }) =>
+              v ? (
+                <div key={v.id} className={slotClass}>
+                  <button
+                    onClick={() => onDismiss(v.id)}
+                    className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-xs text-white opacity-100 hover:bg-black hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
+                    title="Remove from continue watching"
+                    aria-label="Remove from continue watching"
+                  >
+                    <CloseIcon />
+                  </button>
+                  <VideoCard
+                    video={v}
+                    progress={showProgress ? watchProgress(v) : undefined}
+                  />
+                </div>
+              ) : (
+                <div
+                  key={e.url}
+                  className={slotClass}
+                  data-continue-stream={e.id ?? undefined}
                 >
-                  <CloseIcon />
-                </button>
-                <VideoCard
-                  video={v}
-                  progress={showProgress ? watchProgress(v) : undefined}
-                />
-              </div>
-            ))}
-            {streams.map((e) => (
-              <div
-                key={e.url}
-                className={slotClass}
-                data-continue-stream={e.id ?? undefined}
-              >
-                <button
-                  onClick={() => onDismissYoutube?.([e.id ?? e.url])}
-                  className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-xs text-white opacity-100 hover:bg-black hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
-                  title="Remove from continue watching"
-                  aria-label="Remove from continue watching"
-                >
-                  <CloseIcon />
-                </button>
-                <ChannelFeedCard
-                  entry={e}
-                  channelName={e.channel || "Unknown channel"}
-                  layout="card"
-                  inLibrary={false}
-                  onDownload={() => onDownloadYoutube?.(e)}
-                  skipRemotePreview
-                  progress={
-                    showProgress && e.duration && e.duration > 0
-                      ? Math.min(1, e.position_sec / e.duration)
-                      : undefined
-                  }
-                />
-              </div>
-            ))}
+                  <button
+                    onClick={() => onDismissYoutube?.([e.id ?? e.url])}
+                    className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-xs text-white opacity-100 hover:bg-black hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
+                    title="Remove from continue watching"
+                    aria-label="Remove from continue watching"
+                  >
+                    <CloseIcon />
+                  </button>
+                  <ChannelFeedCard
+                    entry={e}
+                    channelName={e.channel || "Unknown channel"}
+                    layout="card"
+                    inLibrary={false}
+                    onDownload={() => onDownloadYoutube?.(e)}
+                    skipRemotePreview
+                    progress={
+                      showProgress && e.duration && e.duration > 0
+                        ? Math.min(1, e.position_sec / e.duration)
+                        : undefined
+                    }
+                  />
+                </div>
+              )
+            )}
             {youtube.map((e) => (
               <div
                 key={e.url}

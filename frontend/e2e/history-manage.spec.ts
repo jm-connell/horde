@@ -129,6 +129,7 @@ test("streams left part-way and YouTube views join Continue watching on Recommen
             channel: "Stream Channel",
             duration: 3600,
             position_sec: 1800,
+            last_watched_at: new Date().toISOString(),
           },
         ],
         next_cursor: null,
@@ -147,6 +148,17 @@ test("streams left part-way and YouTube views join Continue watching on Recommen
   await expect(stream.locator("a").first()).toHaveAttribute(
     "href",
     /\/watch\?url=.*streamleft1/
+  );
+  // Watched just now, so it leads the row, ahead of the library's videos.
+  const shelf = page.locator("section", {
+    has: page.getByRole("heading", { name: "Continue watching" }),
+  });
+  await expect(
+    shelf.locator("[data-horde='video-card']").first()
+  ).toBeVisible();
+  await expect(shelf.locator(".flex.gap-4 > div").first()).toHaveAttribute(
+    "data-continue-stream",
+    "streamleft1"
   );
   const row = page.locator("[data-continue-youtube='ytrecent001']");
   await expect(row).toBeVisible();

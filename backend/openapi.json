@@ -5341,6 +5341,11 @@
             "title": "In Library",
             "type": "boolean"
           },
+          "last_watched_at": {
+            "format": "date-time",
+            "title": "Last Watched At",
+            "type": "string"
+          },
           "library_height_px": {
             "anyOf": [
               {
@@ -5477,7 +5482,8 @@
         },
         "required": [
           "url",
-          "position_sec"
+          "position_sec",
+          "last_watched_at"
         ],
         "title": "ContinueStreamRead",
         "type": "object"
