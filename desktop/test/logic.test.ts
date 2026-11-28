@@ -4,6 +4,7 @@ import {
   bindHost,
   choosePort,
   desktopExec,
+  isDarkColor,
   isIdle,
   isoSeconds,
   parseEnvFile,
@@ -236,5 +237,13 @@ describe("file formats", () => {
     expect(
       desktopExec("/home/José Núñez/Horde $1.AppImage", ["--hidden"])
     ).toBe('"/home/José Núñez/Horde \\\\$1.AppImage" "--hidden"');
+  });
+});
+
+describe("isDarkColor", () => {
+  it("tells dark page colors from light ones", () => {
+    expect(isDarkColor("#08090c")).toBe(true);
+    expect(isDarkColor("#F4F1EA")).toBe(false);
+    expect(isDarkColor("not a color")).toBe(true);
   });
 });

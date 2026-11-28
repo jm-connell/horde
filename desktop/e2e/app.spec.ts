@@ -268,6 +268,14 @@ test("the window shows the create-admin page", async () => {
   expect(page.url()).toContain(`http://127.0.0.1:${port}/`);
 });
 
+test("the window keeps its menu bar out of sight", async () => {
+  test.skip(process.platform === "darwin", "a Mac's menu is not in the window");
+  const visible = await current().evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().map((w) => w.isMenuBarVisible())
+  );
+  expect(visible).toEqual([false]);
+});
+
 test("the YouTube helper answers", async () => {
   test.skip(!HELPER, "no YouTube helper bundled");
   const pot = await helperPort();

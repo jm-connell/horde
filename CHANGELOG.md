@@ -33,6 +33,13 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Setup ends on Home.** After the wizard an empty library opens on Home,
+  where **Get started** lists what to do first, instead of on the Download
+  page.
+- **The desktop app's window is plainer.** The title bar takes the color of
+  the page and follows your theme, and on Windows and Linux the menu bar is
+  hidden until you press Alt. The desktop setup wizard leaves out the playback
+  compatibility step when the app's window can play AV1.
 - **Live chat sits beside the video in theater and fit window.** Theater put
   the chat under the video and fit window hid it. Both now show it to the
   right of the picture, as tall as the player, on a window at least 1024
