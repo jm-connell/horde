@@ -9,7 +9,7 @@ yt-dlp==2026.11.23
 # Keep at the version yt-dlp's "default" extra pins for the yt-dlp above.
 yt-dlp-ejs==0.8.0
 bgutil-ytdlp-pot-provider==2.0.2
-watchdog==7.1.0
+watchdog==7.1.1
 httpx==0.28.1
 python-multipart==0.0.34
 psutil>=7.2.2,<8
