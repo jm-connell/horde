@@ -8,6 +8,7 @@ there; this module holds the ones added when every JSON route got a
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -563,6 +564,7 @@ class ContinueStreamRead(ChannelFeedEntry):
     """A stream left part-way: ``duration`` is its length, when known."""
 
     position_sec: float
+    last_watched_at: datetime
 
 
 class ContinueStreamsRead(BaseModel):

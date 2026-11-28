@@ -70,7 +70,7 @@ If you [imported your YouTube history](youtube-history.md), **Include YouTube in
 ### Where it appears
 
 - **Library home** — a **Continue watching** row above the main grid, with library videos only
-- **Recommended** tab — the same row, followed by what is not in the library: videos you streamed without downloading and left part-way, then videos watched on YouTube lately
+- **Recommended** tab — the same row with what is not in the library: videos you streamed without downloading and left part-way, mixed in with the library's by when you last watched each (most recent first), then videos watched on YouTube lately
 - Not shown on **channel** pages
 
 ### Who qualifies

@@ -6548,6 +6548,11 @@ export interface components {
              * @default false
              */
             in_library: boolean;
+            /**
+             * Last Watched At
+             * Format: date-time
+             */
+            last_watched_at: string;
             /** Library Height Px */
             library_height_px?: number | null;
             /** Like Count */

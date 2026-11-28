@@ -11,7 +11,7 @@ from sqlmodel import Session, col, select
 from ..auth import current_user
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
-from ..models import Video, require_id
+from ..models import Video, as_utc, require_id
 from ..response_schemas import (
     ContinueStreamRead,
     ContinueStreamsRead,
@@ -210,6 +210,7 @@ def continue_streams(
                 channel=row.channel,
                 channel_url=row.channel_url,
                 position_sec=row.position_sec,
+                last_watched_at=as_utc(row.last_watched_at),
             )
             for row in rows
             if user.allowed is None or user.allowed.allows(row.channel_url, row.channel)
