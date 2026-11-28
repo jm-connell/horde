@@ -3,7 +3,7 @@ import {
   mutedTextFor,
   statusTextFor,
 } from "../../utils/contrast";
-import { FONT_SIZE_SCALE, PANEL_BLUR_MAX_PX } from "./defaults";
+import { CARD_SIZE, FONT_SIZE_SCALE, PANEL_BLUR_MAX_PX } from "./defaults";
 import type { CustomColors, Settings, Theme } from "./types";
 
 const THEME_CSS_VARS = [
@@ -173,6 +173,13 @@ export function applyMotionPrefs(settings: Settings): void {
 
   const scale = FONT_SIZE_SCALE[settings.fontSize] ?? 1;
   root.style.fontSize = `${16 * scale}px`;
+  root.style.setProperty(
+    "--ui-text-scale",
+    String(FONT_SIZE_SCALE[settings.textSize] ?? 1)
+  );
+  const card = CARD_SIZE[settings.cardSize] ?? CARD_SIZE.medium;
+  root.style.setProperty("--video-card-scale", String(card.scale));
+  root.style.setProperty("--video-grid-extra", String(card.columns));
 }
 
 export function applyTheme(theme: Theme, customColors?: CustomColors): void {

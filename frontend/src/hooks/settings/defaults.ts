@@ -38,6 +38,8 @@ export const DEFAULTS: Settings = {
   translucentPanelLegibility: true,
   loadingStyle: "dots",
   fontSize: "medium",
+  textSize: "medium",
+  cardSize: "medium",
   uiFont: "oxanium",
   customFonts: [],
   showDescription: true,
@@ -124,6 +126,8 @@ export const SERVER_UI_KEYS: (keyof Settings)[] = [
   "translucentPanelLegibility",
   "loadingStyle",
   "fontSize",
+  "textSize",
+  "cardSize",
   "uiFont",
   "customFonts",
   "showDescription",
@@ -186,4 +190,16 @@ export const FONT_SIZE_SCALE: Record<FontSize, number> = {
   medium: 1,
   large: 1.125,
   xl: 1.25,
+};
+
+/**
+ * Card size steps for `.video-grid`: `scale` multiplies a card's minimum
+ * width, `columns` is added to the most columns a row may hold (which stays
+ * at three or more; index.css).
+ */
+export const CARD_SIZE: Record<FontSize, { scale: number; columns: number }> = {
+  small: { scale: 0.8, columns: 1 },
+  medium: { scale: 1, columns: 0 },
+  large: { scale: 1.3, columns: -1 },
+  xl: { scale: 1.45, columns: -2 },
 };

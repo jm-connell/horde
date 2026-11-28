@@ -202,7 +202,7 @@ more on touch screens so iOS does not zoom.
 Single-column app shell under a fixed translucent header. Pages sit in a centred
 container with a 16px gutter on phones, wider on desktop; settings and forms cap
 at `max-w-2xl`, the library grid and watch page use the full width. The library
-is a responsive card grid with an optional channel sidebar (one column on phones, then as many columns as fit the grid's own width at 200px or more each, at most five, four beside the open sidebar: `.video-grid`, so docking the chat drops a column and never squeezes the cards); the watch page puts
+is a responsive card grid with an optional channel sidebar (one column on phones, then as many columns as fit the grid's own width at 200px or more each, at most five, four beside the open sidebar, both moved by the Card size setting: `.video-grid`, so docking the chat drops a column and never squeezes the cards); the watch page puts
 the player first with metadata and a related-videos sidebar beside it on wide
 screens and below it on narrow ones. Spacing is a 4px rhythm, mostly 8px
 (`gap-2`) inside components and 12–16px between them; panels pad 16–20px.

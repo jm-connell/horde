@@ -1,6 +1,6 @@
 # Appearance
 
-Controls under **Settings → Appearance** (`?tab=appearance`). The tab runs Theme, Font, Background, Motion, Panels, Tab bar and Custom CSS, with a row of buttons at the top that jump to each section. Most of these keys sync through the server [`ui` blob](index.md#three-layer-persistence); see [All settings](all-settings.md).
+Controls under **Settings → Appearance** (`?tab=appearance`). The tab runs Theme, Font and size, Background, Motion, Panels, Tab bar and Custom CSS, with a row of buttons at the top that jump to each section. Most of these keys sync through the server [`ui` blob](index.md#three-layer-persistence); see [All settings](all-settings.md).
 
 You can change a great deal about how Horde looks without knowing how to code: everything on this page is a control in Settings, and for anything it does not cover you can describe the change to [Ask](../guides/ai-features.md#custom-css), which writes the [custom CSS](custom-css.md) for you and previews it first.
 
@@ -38,7 +38,7 @@ When theme is `custom`, `customColors` supplies:
 
 ### Saved custom theme presets
 
-With the **Custom** palette selected, **Save theme** snapshots appearance-related fields into `customThemes` (name up to 64 characters). Applying a preset restores theme colors, **custom CSS**, background effect knobs, nav/hover/loading chrome, font size, and UI font.
+With the **Custom** palette selected, **Save theme** snapshots appearance-related fields into `customThemes` (name up to 64 characters). Applying a preset restores theme colors, **custom CSS**, background effect knobs, nav/hover/loading chrome, interface size, text size, and UI font.
 
 !!! note "Cap"
     At most **40** presets. Extra entries are dropped on normalize (`customThemes.slice(0, 40)`).
@@ -64,16 +64,22 @@ With the **Custom** palette selected, **Save theme** snapshots appearance-relate
 
 Oxanium, the default, ships with Horde (`@fontsource/oxanium`, SIL Open Font License) and loads from your server. The other Google Fonts families load from Google via a CSS link only when selected. Permanently saved customs live in `customFonts` (URL or uploaded file) and are selected by their saved id. Uploading a font file (and deleting one from the server) is for administrators; members add Google Fonts by URL or name, and removing a font only takes it off their own list.
 
-### Font size (`fontSize`)
+### Sizes
 
-| Value | Root scale |
-|-------|------------|
-| `small` | 0.9× (14.4 px base) |
-| `medium` | 1× (16 px) — **default** |
-| `large` | 1.125× |
-| `xl` | 1.25× |
+Three settings on the same four steps, each changed on its own:
 
-Applied as `documentElement` font-size. Legacy `uiScale` percentages migrate into these four steps.
+- **Interface size** (`fontSize`): everything together (text, spacing, controls).
+- **Text size** (`textSize`): text alone, on top of the interface size. Larger text with the interface left as it is, or the other way round.
+- **Card size** (`cardSize`): the video cards in the grids (library, search results, channel pages, Recommended), without changing anything else.
+
+| Value | Interface and text scale | Card: narrowest width | Card: most to a row |
+|-------|--------------------------|-----------------------|---------------------|
+| `small` | 0.9× | 160 px | one more |
+| `medium` | 1× (**default**) | 200 px | five (four beside the channel sidebar) |
+| `large` | 1.125× | 260 px | one fewer |
+| `xl` | 1.25× | 290 px | two fewer, but never under three |
+
+Interface size is applied as the `documentElement` font-size (16 px at `medium`), which every `rem` follows; the key is still called `fontSize`. Legacy `uiScale` percentages migrate into its four steps. Text size multiplies the type scale (`--ui-text-scale`): text set in fixed pixels (a few 10 px labels) and lines of a fixed height (the text under a video card) keep their size. Card widths are at the default interface size and grow with it; a grid too narrow for three cards of that width shows fewer. The Continue watching row's cards scale by the same steps. Phones show one card to a row at every card size.
 
 ## Background effects
 
