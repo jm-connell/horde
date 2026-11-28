@@ -27,7 +27,7 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 | **[Ask](ask.md), from Horde** | Answers how-to questions from the docs and source, links to and changes settings, answers about your own library, queues downloads, builds playlists and writes custom CSS | Chat LLM (or the Assistant model) |
 | **[Ask](ask.md), from channels** | Answers questions about what indexed YouTube channels said, citing each point to the moment, when you name a channel (or ask from its page) | Chat LLM (or the Assistant model); embeddings help |
 | **Enrich tags** | Suggest / apply topical tags | Chat LLM |
-| **Recommended tab** | Better ranking (by content) and category chips | Embed + categories ready |
+| **Recommended tab** | Better ranking (by content) and your own category chips | Embed ready |
 | **Duplicate confirmation** | Score heuristic duplicate groups on Import | Chat (+ optional embed similarity) |
 
 ## Summaries
@@ -107,7 +107,9 @@ Summaries still require downloaded captions; tag enrichment does not.
 
 The home page's **Recommended** tab works with AI off: it then ranks by what your history says (channels you watch, tags, follows, freshness). With embeddings it matches videos by their content to what you watched recently and watched through, which also finds videos from channels you have never opened. How it mixes and how to tune it: [Library → Library and Recommended](library.md#library-and-recommended).
 
-**Categories** are invented by the background model from a sample of the library, with the sample videos that belong to each, and refreshed under **Settings → AI → Jobs**. They show as chips above Recommended; a video is shown only under the categories it fits best, so a category does not fill up with videos that belong to another one. Match strictness is tunable (`category_min_score`). How the scores work: [AI pipeline](../architecture/ai-pipeline.md#recommendations). Without an AI provider there are no category chips.
+**Categories on Recommended** are your own: your recent watches grouped by subject (by embedding), each account its own. They show as chips above Recommended; see [Library](library.md). The background model names them when looking on YouTube is on; otherwise they are named from the watched titles and tags. Without embeddings there are none.
+
+**AI categories** (Settings → AI → Jobs → Refresh categories) are separate and site-wide: the background model invents them from a sample of the library. They now only tag the suggested channels on Recommended ("what is this channel about") and are listed in Settings → AI. Match strictness is tunable (`category_min_score`). How the scores work: [AI pipeline](../architecture/ai-pipeline.md#recommendations).
 
 ## Duplicate confirmation
 

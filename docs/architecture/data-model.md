@@ -34,7 +34,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | `video_comment_state` | Per video: whether its comments were saved (`saved` / `disabled` / `unavailable` / `failed`), when, YouTube's total count, and when to fetch again |
 | `video_ai_chat_messages` | User/assistant turns of one person's chat about a video, from before chat moved into Ask: revision `0029` copied them into `ask_threads` / `ask_messages`; only the trash writes here now, restoring the rows it saved (`user_id`; + optional OpenRouter cost/model) |
 | `openrouter_usage` | Append-only cost ledger |
-| `ai_categories` | Recommendation category chips (name, blurb, embedding) |
+| `ai_categories` | Site-wide AI categories (name, blurb, embedding): tags on suggested channels; the chips on Recommended are `rec_categories` |
 | `discovery_videos` | YouTube videos the Recommended gatherer found outside the library and catalogs (metadata + its own vector); deleted when no hit or stream watch points at them |
 | `discovery_hits` | Why a found video is a candidate for one user: `source` (`search`/`related`), `seed` (query or seed YouTube id), `seed_title`, `era` (`recent`/`throwback`), `rank`; forgotten after 21 days |
 | `discovery_state` | Per user: when they last opened Recommended, when the gatherer last ran and was asked to, and what it asked (`asked_json`, for cooldowns) |
@@ -49,6 +49,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 |-------|---------|
 | `users` | Accounts: `username_norm` (unique), scrypt `password_hash`, `is_admin`, `disabled`, `permissions` (JSON list of granted names; admins implicitly have all) |
 | `user_stream_state` | Videos a user streamed without downloading (by YouTube id): furthest point, where it was left (to resume), duration, finished; recommendations read it as history |
+| `rec_categories` | A user's interests as the category chips of Recommended: name (`named_by` `llm` or `keywords`), centre vector, weight, `half_life_days` (how much age counts; NULL: not at all), YouTube searches and seed videos, `wanted_at` (last opened) |
 | `rec_feedback` | What a user told recommendations to leave out: `video`, `channel` or dismissed channel `suggestion` |
 | `rec_impressions` | How many separate visits a recommendation was shown on without being watched |
 | `user_sessions` | One row per signed-in browser: SHA-256 of the cookie token, `expires_at` (30 days from last use), user agent, address |

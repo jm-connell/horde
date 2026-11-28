@@ -36,6 +36,7 @@ from sqlmodel import Session, col, select
 from ...context import current, get_engine
 from ...models import DiscoveryState, utcnow
 from ..workers import BackgroundWorker
+from . import category_feed, category_store
 from .categories import feed_categories
 from .feed import FeedState, feed_state, kept_feed, rank, today_seed
 from .gather import ACTIVE_FOR
@@ -140,8 +141,19 @@ class Warmer:
             if self._current(state):
                 return
             feed = rank(session, self.runtime, user_id, state)
-            # A first page lists the feed's AI categories: measured here too.
+            # The channel suggestions' tags, and the first page's category
+            # chips: measured here too.
             feed_categories(session, self.runtime, feed)
+            category_store.ensure(session, self.runtime, user_id)
+            category_feed.prepare(
+                session,
+                self.runtime,
+                feed,
+                user_id,
+                state.seed,
+                state.tuning,
+                utcnow(),
+            )
         logger.debug(
             "Ranked Recommended ahead for user %s in %.1f s",
             user_id,

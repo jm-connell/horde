@@ -174,6 +174,13 @@ class Tuning(BaseModel):
         return min(0.45, max(0.1, 0.1 + 0.5 * leaving))
 
     @property
+    def category_new_share(self) -> float:
+        """The most of a category's list (0..1) given to channels new to the
+        user, where the category has plenty from channels they know: the feed's
+        share of new channels, kept within 0.1..0.45 (Balanced 0.24)."""
+        return min(0.45, max(0.1, self.shares.normalized()["new"]))
+
+    @property
     def library_bonus(self) -> float:
         """Added to a downloaded pick's score: enough at 100 to put it ahead of
         closer matches in its bucket."""

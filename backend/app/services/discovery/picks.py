@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import threading
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import Any
 
 from .candidates import Candidate
 
@@ -32,6 +35,8 @@ class FeedItem:
     found_by: str | None = None
     #: Close enough to the user's taste for its bucket (else it waits at the end).
     eligible: bool = True
+    #: In a category's list: past the close matches ("Further afield").
+    loose: bool = False
 
 
 @dataclass
@@ -67,6 +72,22 @@ class Feed:
     #: Each AI category's picks (keys), measured once per version of the
     #: categories (``categories.py``): (version, picks by category).
     categories: tuple[object, dict[str, set[str]]] | None = None
+    #: Every candidate that passed the feed's filters, placed or not: what a
+    #: category's list is drawn from (``category_feed.py``).
+    pool: list[Candidate] = field(default_factory=list)
+    #: Channels (``name_key``) the user has watched or follows, and the URLs of
+    #: those they follow: a video of theirs is familiar, not new.
+    known_channels: set[str] = field(default_factory=set)
+    followed_urls: set[str] = field(default_factory=set)
+    #: The user's categories measured against ``pool`` (a
+    #: ``category_feed.Browse``), made once per version of the categories.
+    browse: Any = None
+    #: Whether the feed's own filters let a candidate in (watched, blocked,
+    #: the algorithm's sources, lengths and ages): for videos that arrive
+    #: after the ranking (a category's top-up).
+    admits: Callable[[Candidate], bool] = lambda _c: True
+    #: Held while ``browse`` is made or one of its lists is built or added to.
+    lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
 
 @lru_cache(maxsize=16384)

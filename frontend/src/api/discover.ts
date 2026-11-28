@@ -29,14 +29,14 @@ export const discoverApi = {
       seed?: number;
       /** Loaded ahead of time: its videos do not count as shown. */
       prefetch?: boolean;
-      /** Only the picks in this AI category. */
-      category?: string;
+      /** One of the user's categories (an id from a first page). */
+      category?: number;
     },
     opts?: ReadOptions
   ): Promise<DiscoverFeed> {
     const q = new URLSearchParams();
     if (params.prefetch) q.set("prefetch", "true");
-    if (params.category) q.set("category", params.category);
+    if (params.category != null) q.set("category", String(params.category));
     if (params.cursor) q.set("cursor", params.cursor);
     if (params.limit) q.set("limit", String(params.limit));
     if (params.seed != null) q.set("seed", String(params.seed));
@@ -49,10 +49,18 @@ export const discoverApi = {
 
   getSuggestedChannels(
     seed?: number,
-    opts?: ReadOptions
+    opts?: ReadOptions,
+    /** Only channels for this one of the user's categories. */
+    category?: number
   ): Promise<SuggestedChannels> {
-    const q = seed != null ? `?seed=${seed}` : "";
-    return request<SuggestedChannels>(`/api/discover/channels${q}`, opts);
+    const q = new URLSearchParams();
+    if (seed != null) q.set("seed", String(seed));
+    if (category != null) q.set("category", String(category));
+    const qs = q.toString();
+    return request<SuggestedChannels>(
+      `/api/discover/channels${qs ? `?${qs}` : ""}`,
+      opts
+    );
   },
 
   refreshDiscover(): Promise<DiscoverRefresh> {

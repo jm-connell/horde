@@ -26,6 +26,16 @@ class _CachedFeed:
     paged_at: float | None = None
 
 
+@dataclass
+class TopUp:
+    """More of one category, asked for at the end of its list (``topup``)."""
+
+    #: queued | running | idle
+    state: str = "queued"
+    #: Nothing more for now until this (monotonic seconds).
+    exhausted_until: float = 0.0
+
+
 class DiscoveryRuntime:
     """The gatherer's worker and back-off, the vector matrix, and ranked feeds.
 
@@ -52,6 +62,51 @@ class DiscoveryRuntime:
         self.gathering_for: int | None = None
         #: Vectors of hand-added topics by (embed model, text); see ``topics``.
         self._topic_vectors: OrderedDict[tuple[str, str], Any] = OrderedDict()
+        #: Category top-ups by (user, category); see ``topup``.
+        self._topups: dict[tuple[int, int], TopUp] = {}
+        #: When each user without categories was last looked at for some.
+        self._categories_checked: dict[int, float] = {}
+
+    def categories_due(self, user_id: int, every_sec: float) -> bool:
+        """True (and noted) when this user's categories were not looked for in
+        the last ``every_sec`` (``category_store.ensure``)."""
+        now = time.monotonic()
+        with self._lock:
+            last = self._categories_checked.get(user_id)
+            if last is not None and now - last < every_sec:
+                return False
+            self._categories_checked[user_id] = now
+            return True
+
+    def queue_topup(self, key: tuple[int, int], now: float) -> bool:
+        """Queue a top-up; False when the last one found the category exhausted
+        and that still holds. True also when it is queued or running already."""
+        with self._lock:
+            entry = self._topups.get(key)
+            if entry is not None and entry.state != "idle":
+                return True
+            if entry is not None and now < entry.exhausted_until:
+                return False
+            self._topups[key] = TopUp()
+            return True
+
+    def next_topup(self) -> tuple[int, int] | None:
+        """The next queued top-up, now marked running."""
+        with self._lock:
+            for key, entry in self._topups.items():
+                if entry.state == "queued":
+                    entry.state = "running"
+                    return key
+        return None
+
+    def finish_topup(self, key: tuple[int, int], exhausted_until: float | None) -> None:
+        with self._lock:
+            self._topups[key] = TopUp("idle", exhausted_until or 0.0)
+
+    def feeds_of(self, user_id: int) -> list[Any]:
+        """Every ranked feed kept for a user, as stored."""
+        with self._lock:
+            return [hit.value for k, hit in self._feeds.items() if k[0] == user_id]
 
     def topic_vector(self, key: tuple[str, str]) -> Any | None:
         with self._lock:

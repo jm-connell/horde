@@ -318,11 +318,16 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   legend as on the cards; that is the mark's own contrast, kept on purpose.
 - **Home tabs and Recommended header.** Library / Recommended is a real
   tablist (`role="tab"`, `aria-selected`, arrow keys, as on Settings), 40px
-  tall on coarse pointers. Everything the tab owns sits on the tabs' row in
-  the header's right-hand slot, so switching tabs swaps the slot instead of
-  moving the page: Sort and Select on Library; Algorithm and Refresh on
-  Recommended, as text buttons from `md` and 40px icon squares on phones
-  (sliders and refresh icons, the name kept for screen readers). Below the
+  tall on coarse pointers. Library's Sort and Select sit on the tabs' row in
+  the header's right-hand slot. Recommended's row below it is the category
+  row: "For you" and the user's categories as chips that scroll sideways
+  (with arrow buttons when they overflow), then a 1px `ink-700` rule and
+  Algorithm and Refresh at the right end, as text buttons from `md` and 40px
+  icon squares on phones (sliders and refresh icons, the name kept for
+  screen readers). The row shows with "For you" alone when there are no
+  categories. In a category, the looser matches follow a muted "Further
+  afield" heading with a hairline to the right edge, and the end of the list
+  is a centred muted line ("That's everything for now."). Below the category
   row, "Looking on YouTube is off" is one muted line with a **Turn it on**
   link for the admin (`?find=discovery`) and a close ✕ remembered on the
   device; live states (looking, backing off) are an unclosable muted line.

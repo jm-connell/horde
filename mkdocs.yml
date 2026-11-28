@@ -157,6 +157,7 @@ nav:
       - 0041 Related lists keep other interests: adr/0041-related-lists-keep-other-interests.md
       - 0042 Desktop apps: adr/0042-desktop-apps.md
       - 0043 Related lists adapt to the topic: adr/0043-related-lists-adapt-to-the-topic.md
+      - 0044 Personal categories: adr/0044-personal-categories.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

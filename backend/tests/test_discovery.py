@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import time
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -1413,20 +1414,51 @@ def test_a_prefetched_page_does_not_count_as_shown(client, session, admin_user):
     assert row is not None and row.shown_count == 1
 
 
-def test_recommended_plus_can_be_browsed_by_category(
-    client, session, add_video, admin_user
-):
-    """The AI categories of Recommended apply to every pick with an embedding:
-    found on YouTube and downloaded alike, in the feed's order."""
-    from app.models import AiCategory
-
-    for name, vec in (("Night sky", _vec(0.0)), ("Rock pools", _vec(0.0, axis=2))):
-        session.add(
-            AiCategory(
-                name=name, embedding=embeddings.pack_vector(vec), dim=4, model="m"
-            )
+def _two_interests(session, add_video, set_watch, user):
+    """Watches on two subjects, so the user has two categories."""
+    for n in range(6):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            user,
+            _vec(0.01 * n),
+            channel="Sky Lab",
+            title=f"Telescope stars part {n}",
+            days_ago=n + 1,
         )
-    session.commit()
+    for n in range(6):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            user,
+            _vec(0.01 * n, axis=2),
+            channel="Shore",
+            title=f"Rock pools crabs part {n}",
+            days_ago=n + 1,
+        )
+
+
+@pytest.fixture
+def small_categories(monkeypatch):
+    """A handful of matches is a category (the tests' libraries are tiny)."""
+    from app.services.discovery import category_feed
+
+    monkeypatch.setattr(category_feed, "MIN_CATEGORY_PICKS", 1)
+
+
+def _category(body, word):
+    [found] = [c for c in body["categories"] if word in c["name"].lower()]
+    return found["id"]
+
+
+def test_recommended_can_be_browsed_by_the_users_own_categories(
+    client, session, add_video, set_watch, admin_user, ai_on, small_categories
+):
+    """The chips are the user's interests, and a category lists every video
+    Horde knows that fits it: found on YouTube, listed and downloaded alike."""
+    _two_interests(session, add_video, set_watch, admin_user)
     _discovered(session, admin_user, "skyfound001", "Stars", "Sky A", _vec(0.02))
     _discovered(session, admin_user, "skyfound002", "Aurora", "Sky B", _vec(0.05))
     _discovered(
@@ -1437,26 +1469,145 @@ def test_recommended_plus_can_be_browsed_by_category(
     _embed(session, downloaded, _vec(0.04))
 
     body = _feed(client)
-    assert body["categories"] == ["Night sky", "Rock pools"]
-    everything = [i["key"] for i in body["items"]]
+    assert len(body["categories"]) == 2
+    sky, pools = _category(body, "telescope"), _category(body, "pools")
 
-    sky = _feed(client, category="Night sky")
-    keys = [i["key"] for i in sky["items"]]
-    assert set(keys) == {"skyfound001", "skyfound002", "milkyway001"}
-    assert keys == [k for k in everything if k in set(keys)]
-    pools = [i["key"] for i in _feed(client, category="Rock pools")["items"]]
-    assert pools == ["poolfound01"]
-    assert _feed(client, category="Nothing like it")["items"] == []
+    listed = _feed(client, category=sky)
+    assert {i["key"] for i in listed["items"] if i["key"] != "poolfound01"} == {
+        "skyfound001",
+        "skyfound002",
+        "milkyway001",
+    }
+    # No gatherer here: the end of the list is the end, and says so.
+    assert (listed["more"], listed["next_cursor"]) == ("exhausted", None)
+    assert [i["reason"]["kind"] for i in listed["items"]][0] == "category"
+    assert "poolfound01" in [i["key"] for i in _feed(client, category=pools)["items"]]
+    assert "novector001" not in [i["key"] for i in listed["items"]]
+    # A category that is gone (or someone else's) is an empty page, not an error.
+    gone = client.get("/api/discover/feed", params={"category": 999999})
+    assert gone.status_code == 200
+    assert gone.json()["items"] == []
 
-    # A category refresh (here a rename) is seen without re-ranking the feed.
-    row = session.exec(select(AiCategory).where(AiCategory.name == "Rock pools")).one()
-    row.name = "Tide pools"
-    row.updated_at = datetime.now(UTC)
-    session.add(row)
-    session.commit()
-    assert _feed(client)["categories"] == ["Night sky", "Tide pools"]
-    tide = [i["key"] for i in _feed(client, category="Tide pools")["items"]]
-    assert tide == ["poolfound01"]
+    # The ids stay when the same interests are grouped again.
+    from app.services.discovery import category_store
+
+    category_store.sync(
+        session,
+        admin_user.id,
+        sum(
+            category_store.groups_for(
+                session,
+                client.app.state.ctx.discovery,
+                admin_user.id,
+                datetime.now(UTC),
+                use_llm=False,
+            )[:2],
+            [],
+        ),
+        datetime.now(UTC),
+    )
+    assert {c["id"] for c in _feed(client)["categories"]} == {sky, pools}
+
+
+def test_a_category_goes_past_the_feed_and_pages_in_one_order(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    monkeypatch,
+):
+    from app.services.discovery import feed as feed_module
+
+    _two_interests(session, add_video, set_watch, admin_user)
+    _catalog(
+        session,
+        "Observatory",
+        [(f"obs{n:08d}", f"Night sky {n}", n, _vec(0.002 * n)) for n in range(40)],
+    )
+    # The feed itself keeps only a few picks; the category is not cut to them.
+    monkeypatch.setattr(feed_module, "FEED_MAX", 5)
+    body = _feed(client)
+    assert len(body["items"]) <= 5
+    sky = _category(body, "telescope")
+    keys: list[str] = []
+    cursor = None
+    loose_at = []
+    for _ in range(10):
+        params = {"category": sky, "limit": 12}
+        if cursor:
+            params["cursor"] = cursor
+        page = _feed(client, **params)
+        if page["loose_from"] is not None:
+            loose_at.append(len(keys) + page["loose_from"])
+        keys += [i["key"] for i in page["items"]]
+        cursor = page["next_cursor"]
+        if not cursor or not page["items"]:
+            break
+    assert len(keys) == len(set(keys)) >= 40
+    # The shore watches' videos are no match for the sky: nothing is loose here,
+    # so no divider.
+    assert loose_at == []
+
+
+def test_opening_a_category_never_asks_youtube(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+    youtube,
+):
+    """With the gatherer alive and YouTube allowed, a category page (even its
+    last) only queues the looking: the request itself asks nothing."""
+    calls, _answers = youtube
+    _two_interests(session, add_video, set_watch, admin_user)
+    _discovered(session, admin_user, "skyfound001", "Stars", "Sky A", _vec(0.02))
+    body = _feed(client)
+    page = _feed(client, category=_category(body, "telescope"))
+    assert page["items"] and page["more"] == "loading"
+    assert calls == []
+    # Nor is a gatherer run asked for: it would rank the feed anew under the visit.
+    from app.models import DiscoveryState
+
+    state = session.get(DiscoveryState, admin_user.id)
+    session.refresh(state)
+    first_visit = state.requested_at
+    _feed(client, category=_category(body, "telescope"))
+    session.refresh(state)
+    assert state.requested_at == first_visit
+
+
+def test_a_category_suggests_its_own_new_channels(
+    client, session, add_video, set_watch, admin_user, ai_on, small_categories
+):
+    _two_interests(session, add_video, set_watch, admin_user)
+    for n in range(3):
+        _discovered(
+            session, admin_user, f"skyfound{n:03d}", f"Stars {n}", "Sky A", _vec(0.02)
+        )
+        _discovered(
+            session,
+            admin_user,
+            f"poolfnd{n:04d}",
+            f"Crabs {n}",
+            "Pools",
+            _vec(0.03, axis=2),
+        )
+    body = _feed(client)
+    sky = _category(body, "telescope")
+    names = [
+        c["name"]
+        for c in client.get("/api/discover/channels", params={"category": sky}).json()[
+            "items"
+        ]
+    ]
+    assert names == ["Sky A"]
 
 
 def test_the_cached_catalog_follows_the_catalog(client, session, admin_user):
@@ -1741,3 +1892,322 @@ def test_a_kept_ranking_is_renewed_before_it_lapses(
     assert ranked == [admin_user.id]
     _feed(client)
     assert ranked == [admin_user.id]
+
+
+# --- the end of a category ------------------------------------------------------
+
+
+class _Worker:
+    """Stands in for the gatherer's thread: alive, and counts its wake-ups."""
+
+    is_alive = True
+
+    def __init__(self):
+        self.woken = 0
+
+    def wake(self):
+        self.woken += 1
+
+
+class _Embedder:
+    """Titles about the sky sit by the sky watches, anything else by the shore."""
+
+    def embed_many(self, texts, _model, **_kw):
+        return [
+            _vec(0.02)
+            if any(word in t.lower() for word in ("sky", "stars", "telescope"))
+            else _vec(0.02, axis=2)
+            for t in texts
+        ]
+
+
+@pytest.fixture
+def topping_up(monkeypatch, tmp_dirs, youtube):
+    from app.services.discovery import gather
+
+    runtime = tmp_dirs["ctx"].discovery
+    runtime.worker = _Worker()
+    monkeypatch.setattr(gather, "get_embed_provider", lambda: _Embedder())
+    monkeypatch.setattr(gather, "resolve_embed_model", lambda _p: "m")
+    return runtime
+
+
+def _sky_category(client, session, add_video, set_watch, user):
+    _two_interests(session, add_video, set_watch, user)
+    _discovered(session, user, "skyfound001", "Stars", "Sky A", _vec(0.02))
+    return _category(_feed(client), "telescope")
+
+
+def test_the_end_of_a_category_looks_for_more_and_adds_it(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+):
+    from app.services.discovery import topup
+
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    first = _feed(client, category=sky)
+    before = [i["key"] for i in first["items"]]
+    # The whole list fits on one page: it is at its end, and more is on its way.
+    assert first["more"] == "loading"
+    assert first["next_cursor"]
+    assert topping_up.worker.woken >= 1
+    # Asking again before the worker ran: still loading, nothing new, no error.
+    again = _feed(client, category=sky, cursor=first["next_cursor"])
+    assert (again["items"], again["more"]) == ([], "loading")
+
+    topup.run_pending(topping_up)
+    more = _feed(client, category=sky, cursor=first["next_cursor"])
+    added = [i["key"] for i in more["items"]]
+    assert added and not set(added) & set(before)
+    # Only the end grew: the same place gives the same videos again.
+    same = _feed(client, category=sky, cursor=first["next_cursor"])
+    assert [i["key"] for i in same["items"]] == added
+
+
+def test_a_top_up_asks_each_thing_once_then_says_there_is_no_more(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+    youtube,
+):
+    from app.services.discovery import gather, topup
+
+    calls, _answers = youtube
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    assert _feed(client, category=sky)["more"] == "loading"
+    topup.run_pending(topping_up)
+    assert 1 <= len(calls) <= topup.TOPUP_REQUESTS
+    asked = list(calls)
+    # Until nothing is left to ask: no request is ever repeated.
+    for _ in range(12):
+        topping_up.finish_topup((admin_user.id, sky), None)
+        topping_up.queue_topup((admin_user.id, sky), time.monotonic())
+        topup.run_pending(topping_up)
+    assert len(calls) > len(asked)
+    # (A search runs twice at most: at any age, and for this year.)
+    counts = Counter(calls)
+    assert all(n <= (2 if kind == "search" else 1) for (kind, _), n in counts.items())
+    # Nothing left: the end of the category says so, and queues nothing.
+    end = _feed(client, category=sky, limit=60)
+    assert (end["more"], end["next_cursor"]) == ("exhausted", None)
+    assert topping_up.next_topup() is None
+    assert gather.RESULTS_PER_SEARCH  # (the searches used the gatherer's limit)
+
+
+def test_no_top_up_when_youtube_may_not_be_asked(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+    youtube,
+):
+    from app.services import app_settings
+    from app.services.discovery import topup
+
+    calls, _answers = youtube
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    data = app_settings.load()
+    data["discovery_enabled"] = False
+    app_settings.save(data)
+    end = _feed(client, category=sky)
+    assert (end["more"], end["next_cursor"]) == ("exhausted", None)
+    topup.run_pending(topping_up)
+    assert calls == []
+
+
+def test_a_top_up_keeps_to_the_hourly_cap_and_the_kept_feeds(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+    youtube,
+):
+    from app.services.discovery import gather, topup
+
+    calls, _answers = youtube
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    first = _feed(client, category=sky)
+    kept = len(topping_up.feeds_of(admin_user.id))
+    topping_up.recent_requests = [time.monotonic()] * gather.HOURLY_REQUEST_CAP
+    topup.run_pending(topping_up)
+    assert calls == []
+    # A top-up never drops the rankings a visit is paging through.
+    assert len(topping_up.feeds_of(admin_user.id)) == kept >= 1
+    assert (
+        _feed(client, category=sky, cursor=first["next_cursor"])["more"] == "exhausted"
+    )
+
+
+def test_searches_of_an_opened_category_go_first():
+    from app.services.discovery import gather
+    from app.services.discovery.interests import Interest
+
+    now = datetime.now(UTC)
+    groups = [Interest("recent", [], [], queries=["usual search", "another one"])]
+    plan = gather.plan_requests(
+        groups, [], [], {}, now, ["typed interest"], ["wanted search", "wanted two"]
+    )
+    # One search of the opened categories a run, so the usual ones still get in.
+    assert [r.key for r in plan if r.kind == "search"] == [
+        "wanted search",
+        "typed interest",
+        "usual search",
+        "another one",
+    ]
+    assert len([r for r in plan if r.kind == "search"]) <= gather.SEARCHES_PER_RUN
+
+
+def test_opening_a_category_marks_it_wanted(
+    client, session, add_video, set_watch, admin_user, ai_on, small_categories
+):
+    from app.models import RecCategory
+
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    assert session.get(RecCategory, sky).wanted_at is None
+    _feed(client, category=sky)
+    session.expire_all()
+    assert session.get(RecCategory, sky).wanted_at is not None
+
+
+def test_a_list_survives_the_categories_being_brought_up_to_date(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+):
+    """What a top-up added stays when the same interests are grouped again
+    (the gatherer does that on every run): the visit's list is not rebuilt."""
+    from app.services.discovery import category_store, topup
+
+    sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    first = _feed(client, category=sky)
+    topup.run_pending(topping_up)
+    added = [
+        i["key"]
+        for i in _feed(client, category=sky, cursor=first["next_cursor"])["items"]
+    ]
+    assert added
+    now = datetime.now(UTC)
+    recent, dormant, _h = category_store.groups_for(
+        session, topping_up, admin_user.id, now, use_llm=False
+    )
+    category_store.sync(session, admin_user.id, recent + dormant, now)
+    again = _feed(client, category=sky, cursor=first["next_cursor"])
+    assert [i["key"] for i in again["items"]] == added
+
+
+def test_a_top_up_adds_only_what_the_feed_would_show(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+    youtube,
+):
+    """The found videos are ten minutes long; with a 15 minute minimum in the
+    user's algorithm none of them joins the category."""
+    from app.services.discovery import topup
+    from app.services.discovery.tuning import Selection, save
+
+    custom = DEFAULTS.model_copy(update={"min_minutes": 15})
+    save(session, admin_user.id, Selection(active="custom", custom=custom))
+    _two_interests(session, add_video, set_watch, admin_user)
+    _discovered(
+        session,
+        admin_user,
+        "skyfound001",
+        "Stars",
+        "Sky A",
+        _vec(0.02),
+        duration=3600.0,
+    )
+    sky = _category(_feed(client), "telescope")
+    first = _feed(client, category=sky)
+    assert first["more"] == "loading"
+    calls, _answers = youtube
+    topup.run_pending(topping_up)
+    assert calls  # YouTube was asked, and what it gave was too short
+    more = _feed(client, category=sky, cursor=first["next_cursor"])
+    assert more["items"] == []
+
+
+def test_top_ups_keep_the_pause_between_youtube_calls(
+    client,
+    session,
+    add_video,
+    set_watch,
+    admin_user,
+    ai_on,
+    small_categories,
+    topping_up,
+    youtube,
+):
+    from app.services.discovery import gather, topup
+
+    calls, _answers = youtube
+    body_sky = _sky_category(client, session, add_video, set_watch, admin_user)
+    shore = _category(_feed(client), "pools")
+    topping_up.queue_topup((admin_user.id, body_sky), time.monotonic())
+    topping_up.queue_topup((admin_user.id, shore), time.monotonic())
+    events: list[object] = []
+    seen = 0
+
+    def pause(seconds):
+        nonlocal seen
+        events.extend(["ask"] * (len(calls) - seen))
+        seen = len(calls)
+        events.append(seconds)
+        return False
+
+    assert topup.run_pending(topping_up, pause=pause) is True
+    events.extend(["ask"] * (len(calls) - seen))
+    # Never two requests without the pause between them.
+    assert len(calls) >= 3
+    assert all(
+        pair != ("ask", "ask") for pair in zip(events, events[1:], strict=False)
+    ), events
+    assert set(events) - {"ask"} == {gather.REQUEST_PAUSE_SEC}
+
+
+def test_someone_without_categories_is_not_grouped_on_every_visit(
+    client, session, admin_user, monkeypatch
+):
+    from app.services.discovery import category_store
+
+    runs = []
+    real = category_store.groups_for
+
+    def counted(*args, **kwargs):
+        runs.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(category_store, "groups_for", counted)
+    for _ in range(3):
+        assert _feed(client)["categories"] == []
+    assert len(runs) == 1

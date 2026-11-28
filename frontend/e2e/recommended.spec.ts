@@ -354,45 +354,119 @@ test("coming back to Recommended later shows the last page while it loads", asyn
   release();
 });
 
-test("Recommended can be browsed by AI category", async ({ page }) => {
-  // The browser suite has no AI: the server's answer gets a category, and a
-  // category request keeps only the night sky video.
+test("Recommended can be browsed by the user's categories", async ({
+  page,
+}) => {
+  // The browser suite has no AI, so no interests to group: the server's
+  // answers are given a category here. Its list is one close match, one
+  // looser one, and one more that is found while the page waits at the end.
   const asked: (string | null)[] = [];
+  type Item = { key: string; stream?: { title?: string } | null };
+  let all: Item[] = [];
+  let waits = 0;
+  const endAsks: number[] = [];
   await page.route(/\/api\/discover\/feed\?/, async (route) => {
     const url = new URL(route.request().url());
     const category = url.searchParams.get("category");
+    const cursor = url.searchParams.get("cursor");
     asked.push(category);
+    if (category && cursor) {
+      // At the end: nothing yet the first time, then what was found.
+      waits += 1;
+      endAsks.push(Date.now());
+      const found = all[0];
+      await route.fulfill({
+        json:
+          waits < 3
+            ? { items: [], next_cursor: "end", more: "loading", status }
+            : {
+                items: found ? [{ ...found, key: "foundlater1" }] : [],
+                next_cursor: null,
+                more: "exhausted",
+                status,
+              },
+      });
+      return;
+    }
     url.searchParams.delete("category");
     let response;
-    let body: { items: { key: string }[]; categories?: string[] };
+    let body: { items: Item[]; status: unknown };
     try {
       response = await route.fetch({ url: url.toString() });
       body = await response.json();
     } catch {
       return; // the page moved on while this answer was in flight
     }
+    all = body.items;
+    status = body.status;
+    const close = body.items.filter((i) => i.key === "discover001");
+    const loose = body.items.filter((i) => i.key !== "discover001").slice(0, 1);
     await route.fulfill({
       response,
       json: {
         ...body,
-        categories: ["Night sky"],
-        items: category
-          ? body.items.filter((i) => i.key === "discover001")
-          : body.items,
+        categories: [{ id: 7, name: "Night sky" }],
+        ...(category
+          ? {
+              items: [...close, ...loose],
+              loose_from: 1,
+              more: "loading",
+              next_cursor: "end",
+            }
+          : {}),
       },
     });
   });
+  let status: unknown = null;
+  await page.route(/\/api\/discover\/channels\?.*category=7/, (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            name: "Sky Channel",
+            url: "https://www.youtube.com/@skychannel",
+            reason: null,
+            videos: [],
+            indexed: false,
+            tags: [],
+          },
+        ],
+      },
+    })
+  );
   await openRecommended(page);
+  // Algorithm and Refresh sit at the end of the chip row.
+  const row = page.locator('[data-horde="rec-category-row"]');
+  await expect(row.getByRole("button", { name: "Algorithm" })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Refresh" })).toBeVisible();
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf).toBeVisible();
-  await page.getByRole("button", { name: "Night sky", exact: true }).click();
-  await expect(page.locator("[data-rec-key]")).toHaveCount(1);
+
+  await row.getByRole("button", { name: "Night sky", exact: true }).click();
   await expect(page.getByText(FOUND)).toBeVisible();
-  expect(asked).toContain("Night sky");
-  // The channel shelf belongs to the whole feed.
-  await expect(shelf).toHaveCount(0);
-  await page.getByRole("button", { name: "For you", exact: true }).click();
-  await expect(shelf).toBeVisible();
+  expect(asked).toContain("7");
+  // The looser match comes after the divider.
+  const divider = page.locator('[data-horde="rec-further-afield"]');
+  await expect(divider).toHaveText(/Further afield/);
+  // Scrolled to the end: more was looked for, arrived, and then there was
+  // no more.
+  await page.locator("[data-rec-key]").last().scrollIntoViewIfNeeded();
+  await page.mouse.wheel(0, 2000);
+  await expect(page.locator('[data-rec-key="foundlater1"]')).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.locator("[data-rec-key]")).toHaveCount(3);
+  // While nothing had arrived it asked again after a pause, not in a burst.
+  expect(endAsks.length).toBe(3);
+  expect(endAsks[1] - endAsks[0]).toBeGreaterThan(2000);
+  expect(endAsks[2] - endAsks[1]).toBeGreaterThan(2000);
+  await expect(page.locator('[data-horde="rec-category-end"]')).toBeVisible();
+  // The category has its own channels to suggest.
+  await expect(shelf.getByText("Sky Channel")).toBeVisible();
+
+  await row.getByRole("button", { name: "For you", exact: true }).click();
+  await expect(divider).toHaveCount(0);
+  await expect(shelf.getByText("Sky Channel")).toHaveCount(0);
 });
 
 test("Refresh shows that new picks are loading until they arrive", async ({
@@ -442,4 +516,62 @@ test("a thumbnail that fails to load leaves the card's plain placeholder", async
   // Same on the channel suggestions' small thumbnails.
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf.locator("img.ui-fade-img")).toHaveCount(0);
+});
+
+test("a thumbnail that fails falls back to YouTube's standard one", async ({
+  page,
+}) => {
+  // What the card asks for first is missing: for one video the request
+  // fails, for the other YouTube answers with its grey 120x90 "no thumbnail"
+  // picture (which loads, so no error is raised). The standard size works.
+  const svg = (w: number, h: number) =>
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#888"/></svg>`;
+  const asked: string[] = [];
+  await page.route(/i\.ytimg\.com\/vi\/[^/]+\//, (route) => {
+    const url = route.request().url();
+    asked.push(url);
+    if (url.includes("/mqdefault.jpg"))
+      return route.fulfill({
+        contentType: "image/svg+xml",
+        body: svg(320, 180),
+      });
+    if (url.includes("discover001")) return route.abort();
+    return route.fulfill({ contentType: "image/svg+xml", body: svg(120, 90) });
+  });
+  await page.route(/\/api\/discover\/feed\?/, async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    const found = body.items.find(
+      (i: { key: string }) => i.key === "discover001"
+    );
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        items: [
+          found,
+          {
+            ...found,
+            key: "greyplace01",
+            stream: {
+              ...found.stream,
+              id: "greyplace01",
+              title: "Another night sky",
+              thumbnail_url: "https://i.ytimg.com/vi/greyplace01/hq720.jpg",
+            },
+          },
+        ],
+      },
+    });
+  });
+  await openRecommended(page);
+  for (const key of ["discover001", "greyplace01"]) {
+    const img = page.locator(`[data-rec-key="${key}"] img.ui-fade-img`);
+    await expect(img).toHaveAttribute(
+      "src",
+      `https://i.ytimg.com/vi/${key}/mqdefault.jpg`
+    );
+    await expect(img).toHaveAttribute("data-loaded", "true");
+  }
+  expect(asked.some((u) => u.includes("greyplace01/hq720.jpg"))).toBe(true);
 });

@@ -53,6 +53,25 @@ All notable changes to Horde are documented here. The format follows
   `backend/requirements.lock` now resolves for Windows and macOS as well as
   Linux, and the backend tests run on all three.
 
+- **Categories on Recommended are your own, and go deep.** The chips above
+  Recommended were the same site-wide AI categories for everyone, and a
+  category only filtered the picks of **For you**: it filled with the videos
+  of whichever listed channel sat nearest (a hardware channel under
+  programming) and ended after a few rows. Now the chips are your interests,
+  made from what you watched lately, downloaded or streamed. A category lists
+  everything Horde knows that fits it, closest first: your library, listed
+  channels and channels you watch lead, channels new to you are mixed in by
+  your algorithm (more the further you scroll), no channel takes more than one
+  card in four, and a video shows under the category it fits best. Where you
+  watch recent uploads, old videos move down; where you watch old ones they
+  stay. Past the close matches the list carries on under **Further afield**,
+  and near the end Horde looks on YouTube for more in the background: opening
+  a category never waits on YouTube. Each category also suggests channels.
+  `GET /api/discover/feed` now returns `categories` as `{id, name}` and takes
+  the category's id.
+- **Algorithm and Refresh sit in the category row** on Recommended, at the
+  right end after a thin rule, instead of beside the Library / Recommended
+  tabs.
 - **Recommended opens without the wait.** The feed was ranked when you opened
   it, which took a second or more on a large library every time the server
   had restarted, a new day had begun, a quarter of an hour had passed or you
@@ -72,6 +91,12 @@ All notable changes to Horde are documented here. The format follows
   first three places stay on topic, so autoplay normally does too.
 
 ### Fixed
+
+- **Missing thumbnails on Recommended.** A card for a video that is not
+  downloaded showed an empty placeholder, or YouTube's grey "no thumbnail"
+  picture, when the stored thumbnail address was a size that video does not
+  have or had gone stale. The card now falls back to YouTube's standard
+  thumbnail, which every video has.
 
 - **Streams no longer get stuck at 480p.** When the browser keeps dropping
   frames (a game still rendering on the other monitor, say), Horde lowers

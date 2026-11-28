@@ -1,11 +1,13 @@
-"""Recommended by category: the AI categories (Settings -> AI) over the feed.
+"""The site-wide AI categories (Settings -> AI) each of the feed's picks is in.
 
-A pick belongs to a category by the same rule as a library video on Recommended
+Only the tags on suggested channels read this (``suggest``); the category chips
+of Recommended are the user's own interests (``category_feed``).
+
+A pick belongs to a category by the same rule as a library video
 (``recommend.category_members``), measured on its own embedding: library
-videos, indexed uploads and videos found on YouTube alike. Picks without an
-embedding belong to none. The result is kept on the cached ``Feed`` with the
-version of the categories it was measured against, so paging through a category
-does not measure the feed again, but a refresh or a new strictness does.
+videos, listed channels' uploads and videos found on YouTube alike. Picks
+without an embedding belong to none. The result is kept on the cached ``Feed``
+with the version of the categories it was measured against.
 """
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ from sqlmodel import Session, select
 
 from ...models import AiCategory
 from ..ai import recommend
-from .picks import Feed, FeedItem
+from .picks import Feed
 from .relevance import candidate_sims
 from .runtime import DiscoveryRuntime
 
@@ -49,11 +51,3 @@ def feed_categories(
                     out[name] = {cands[rows[i]].key for i in picked}
     feed.categories = (version, out)
     return out
-
-
-def in_category(
-    session: Session, runtime: DiscoveryRuntime, feed: Feed, category: str
-) -> list[FeedItem]:
-    """The feed's picks in ``category``, in the feed's order."""
-    keys = feed_categories(session, runtime, feed).get(category, set())
-    return [item for item in feed.items if item.candidate.key in keys]

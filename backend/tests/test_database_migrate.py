@@ -14,7 +14,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0036_video_live_status"
+HEAD = "0037_rec_categories"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -987,6 +987,7 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
     try:
         con.executescript(
             """
+            DROP TABLE rec_categories;
             ALTER TABLE videos DROP COLUMN live_status;
             DROP TABLE user_invites;
             DROP TABLE rec_algorithms;

@@ -549,12 +549,28 @@ def build_feed(
     placed = len(mixed)
     mixed.extend(leftovers[: max(0, FEED_MAX - len(mixed))])
     mixed.extend(worn[: max(0, FEED_MAX - len(mixed))])
+    left_out = {key for keys in blocked.values() for key in keys}
+
+    def admits(c: Candidate) -> bool:
+        return (
+            c.key not in own_keys
+            and not excluded.blocks(c.key, c.channel_url, c.channel)
+            and _allowed(c, t, now)
+            and topics.word_block(topic_store.haystack(c.title, c.channel, c.tags))
+            is None
+        )
+
     return Feed(
         mixed[:FEED_MAX],
         new_channels,
         cold,
         mix_stats(mixed[:placed], shares),
         {tid: len(keys) for tid, keys in blocked.items()},
+        # A rewatch is a video already seen; a category is for what is not.
+        pool=[c for c in cands if c.key not in favorite_of and c.key not in left_out],
+        known_channels=set(all_ch) | followed_names,
+        followed_urls=followed_urls,
+        admits=admits,
     )
 
 

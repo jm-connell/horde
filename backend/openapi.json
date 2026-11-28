@@ -5567,6 +5567,25 @@
         "title": "DiscoverBlockedRead",
         "type": "object"
       },
+      "DiscoverCategoryRead": {
+        "description": "One of the user's interests, offered as a chip above Recommended.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DiscoverCategoryRead",
+        "type": "object"
+      },
       "DiscoverFeedRead": {
         "properties": {
           "blocked": {
@@ -5578,7 +5597,7 @@
           },
           "categories": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/DiscoverCategoryRead"
             },
             "title": "Categories",
             "type": "array"
@@ -5590,12 +5609,33 @@
             "title": "Items",
             "type": "array"
           },
+          "loose_from": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loose From"
+          },
           "mix": {
             "items": {
               "$ref": "#/components/schemas/DiscoverMixRead"
             },
             "title": "Mix",
             "type": "array"
+          },
+          "more": {
+            "default": "none",
+            "enum": [
+              "none",
+              "loading",
+              "exhausted"
+            ],
+            "title": "More",
+            "type": "string"
           },
           "next_cursor": {
             "anyOf": [
@@ -20396,7 +20436,7 @@
     },
     "/api/discover/channels": {
       "get": {
-        "description": "Channels new to the user that their Recommended feed leans on most.",
+        "description": "Channels new to the user that their Recommended feed (or one of its\ncategories) leans on most.",
         "operationId": "discover_channels_api_discover_channels_get",
         "parameters": [
           {
@@ -20415,6 +20455,25 @@
                 }
               ],
               "title": "Seed"
+            }
+          },
+          {
+            "description": "Only channels for this one of the user's categories.",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only channels for this one of the user's categories.",
+              "title": "Category"
             }
           }
         ],
@@ -20510,21 +20569,21 @@
             }
           },
           {
-            "description": "Only the picks in this AI category (as on Recommended), in the feed's order; send it with every page.",
+            "description": "One of the user's categories (``categories`` of a first page): its own list, closest first; send it with every page.",
             "in": "query",
             "name": "category",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 200,
-                  "type": "string"
+                  "minimum": 1,
+                  "type": "integer"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Only the picks in this AI category (as on Recommended), in the feed's order; send it with every page.",
+              "description": "One of the user's categories (``categories`` of a first page): its own list, closest first; send it with every page.",
               "title": "Category"
             }
           },

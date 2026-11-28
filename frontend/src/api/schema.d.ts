@@ -1479,7 +1479,8 @@ export interface paths {
         };
         /**
          * Discover Channels
-         * @description Channels new to the user that their Recommended feed leans on most.
+         * @description Channels new to the user that their Recommended feed (or one of its
+         *     categories) leans on most.
          */
         get: operations["discover_channels_api_discover_channels_get"];
         put?: never;
@@ -6614,16 +6615,34 @@ export interface components {
             /** Topic Id */
             topic_id: number;
         };
+        /**
+         * DiscoverCategoryRead
+         * @description One of the user's interests, offered as a chip above Recommended.
+         */
+        DiscoverCategoryRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
         /** DiscoverFeedRead */
         DiscoverFeedRead: {
             /** Blocked */
             blocked?: components["schemas"]["DiscoverBlockedRead"][];
             /** Categories */
-            categories?: string[];
+            categories?: components["schemas"]["DiscoverCategoryRead"][];
             /** Items */
             items: components["schemas"]["DiscoverItemRead"][];
+            /** Loose From */
+            loose_from?: number | null;
             /** Mix */
             mix?: components["schemas"]["DiscoverMixRead"][];
+            /**
+             * More
+             * @default none
+             * @enum {string}
+             */
+            more: "none" | "loading" | "exhausted";
             /** Next Cursor */
             next_cursor?: string | null;
             status: components["schemas"]["DiscoverStatusRead"];
@@ -13739,6 +13758,8 @@ export interface operations {
         parameters: {
             query?: {
                 seed?: number | null;
+                /** @description Only channels for this one of the user's categories. */
+                category?: number | null;
             };
             header?: never;
             path?: never;
@@ -13782,8 +13803,8 @@ export interface operations {
                 cursor?: string | null;
                 /** @description Ordering seed; a new one reshuffles the less certain picks. */
                 seed?: number | null;
-                /** @description Only the picks in this AI category (as on Recommended), in the feed's order; send it with every page. */
-                category?: string | null;
+                /** @description One of the user's categories (``categories`` of a first page): its own list, closest first; send it with every page. */
+                category?: number | null;
                 /** @description Loaded ahead of time, not shown yet: its videos do not count as shown. */
                 prefetch?: boolean;
             };

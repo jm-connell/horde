@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
@@ -17,6 +18,7 @@ from ..models import (
     DiscoveryHit,
     DiscoveryState,
     RecAlgorithm,
+    RecCategory,
     RecFeedback,
     RecTopic,
     Video,
@@ -26,6 +28,7 @@ from ..models import (
 )
 from ..response_schemas import (
     DiscoverBlockedRead,
+    DiscoverCategoryRead,
     DiscoverFeedRead,
     DiscoverItemRead,
     DiscoverMixRead,
@@ -59,17 +62,20 @@ from ..services import watch_stats
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import (
     algorithms,
+    category_feed,
+    category_store,
     feedback,
     gather,
     history,
     suggest,
     topics,
+    topup,
     tuning,
 )
 from ..services.discovery import categories as discover_categories
 from ..services.discovery.candidates import stream_entry
 from ..services.discovery.feed import ranked_feed, today_seed
-from ..services.discovery.picks import FeedItem
+from ..services.discovery.picks import Feed, FeedItem
 from ..services.live import picks as live_picks
 from ..services.pagination import (
     SEED_RANGE,
@@ -84,6 +90,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/discover", tags=["discover"])
 
 _SORT = "discover"
+#: A category asks for more this many pages before its end.
+_TOPUP_AHEAD_PAGES = 2
 
 
 def _why(item: FeedItem) -> DiscoverWhyRead:
@@ -142,6 +150,45 @@ def _status(
     )
 
 
+def _category_opened(session: Session, user_id: int, category: int) -> None:
+    """The user opened a category: its searches go first on the gatherer's next
+    run. No run is asked for: one ends by ranking the feed anew, which would
+    change the list under the visit that just opened it."""
+    row = session.get(RecCategory, category)
+    if row is None or row.user_id != user_id:
+        return
+    category_feed.wanted(session, row, utcnow())
+
+
+def _browse(
+    session: Session,
+    ctx: AppContext,
+    user_id: int,
+    feed: Feed,
+    seed: int,
+    *,
+    refresh: bool,
+) -> category_feed.Browse | None:
+    """The user's categories measured against ``feed``; None when that fails
+    (the feed itself must still open)."""
+    try:
+        if refresh:
+            category_store.ensure(session, ctx.discovery, user_id)
+        return category_feed.prepare(
+            session,
+            ctx.discovery,
+            feed,
+            user_id,
+            seed,
+            tuning.for_user(session, user_id),
+            utcnow(),
+        )
+    except Exception:
+        session.rollback()
+        logger.warning("could not prepare Recommended's categories", exc_info=True)
+        return None
+
+
 @router.get("/feed", response_model=DiscoverFeedRead)
 def discover_feed(
     limit: int = Query(24, ge=1, le=60),
@@ -152,11 +199,11 @@ def discover_feed(
         lt=SEED_RANGE,
         description="Ordering seed; a new one reshuffles the less certain picks.",
     ),
-    category: str | None = Query(
+    category: int | None = Query(
         None,
-        max_length=200,
-        description="Only the picks in this AI category (as on Recommended), "
-        "in the feed's order; send it with every page.",
+        ge=1,
+        description="One of the user's categories (``categories`` of a first "
+        "page): its own list, closest first; send it with every page.",
     ),
     prefetch: bool = Query(
         False,
@@ -188,11 +235,15 @@ def discover_feed(
     if not cursor and not prefetch:
         gather.note_viewed(session, ctx.discovery, user.id)
     feed = ranked_feed(session, ctx.discovery, user.id, use_seed, fresh=not cursor)
-    picks = (
-        discover_categories.in_category(session, ctx.discovery, feed, category)
-        if category
-        else feed.items
-    )
+    browse = _browse(session, ctx, user.id, feed, use_seed, refresh=not cursor)
+    picks = feed.items
+    listing: category_feed.Listing | None = None
+    if category is not None:
+        # A category that has gone since (re-grouped, or another account's): empty.
+        listing = browse.listing(category) if browse is not None else None
+        picks = listing.items if listing is not None else []
+        if listing is not None and not cursor and not prefetch:
+            _category_opened(session, user.id, category)
     if user.allowed is not None:
         # Parental controls: only the allowed channels' picks.
         picks = [
@@ -203,6 +254,15 @@ def discover_feed(
     window = picks[page.offset : page.offset + page.fetch]
     more = len(window) > limit
     window = window[:limit]
+    loose_from = next(
+        (
+            n
+            for n, item in enumerate(window)
+            if item.loose
+            and not (picks[page.offset + n - 1].loose if page.offset + n else False)
+        ),
+        None,
+    )
 
     videos = {
         v.id: v
@@ -263,12 +323,29 @@ def discover_feed(
         )
     if not prefetch:
         feedback.record_shown(session, user.id, (i.key for i in items))
+    # Near the end of a category: look for more now, so it is there (or nearly)
+    # when the user arrives. A restricted member sees no new channels anyway.
+    end: Literal["none", "loading", "exhausted"] = "none"
+    if (
+        category is not None
+        and listing is not None
+        and page.offset + (_TOPUP_AHEAD_PAGES + 1) * limit >= len(picks)
+    ):
+        asked = (
+            "exhausted"
+            if user.allowed is not None
+            else topup.request(session, ctx.discovery, user.id, category)
+        )
+        end = "none" if more else asked
+    next_offset = page.offset + limit if more else page.offset + len(window)
     return DiscoverFeedRead(
         items=items,
+        more=end,
+        # At the end while more is looked for: the same place, to ask again.
         next_cursor=offset_cursor(
-            sort=_SORT, order="desc", offset=page.offset + limit, seed=use_seed
+            sort=_SORT, order="desc", offset=next_offset, seed=use_seed
         )
-        if more
+        if more or end == "loading"
         else None,
         status=_status(session, ctx, user.id, cold=feed.cold),
         mix=[
@@ -283,11 +360,12 @@ def discover_feed(
         ]
         if not cursor
         else [],
-        categories=sorted(
-            discover_categories.feed_categories(session, ctx.discovery, feed)
-        )
-        if not cursor
+        categories=[
+            DiscoverCategoryRead(id=chip.id, name=chip.name) for chip in browse.listed
+        ]
+        if not cursor and browse is not None
         else [],
+        loose_from=loose_from if category is not None else None,
     )
 
 
@@ -508,24 +586,33 @@ def discover_status(
 @router.get("/channels", response_model=SuggestedChannelsRead)
 def discover_channels(
     seed: int | None = Query(None, ge=0, lt=SEED_RANGE),
+    category: int | None = Query(
+        None, ge=1, description="Only channels for this one of the user's categories."
+    ),
     session: Session = Depends(get_session),
     ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
-    """Channels new to the user that their Recommended feed leans on most."""
+    """Channels new to the user that their Recommended feed (or one of its
+    categories) leans on most."""
     # Loaded beside the feed's first page: share its ranking when it exists.
-    feed = ranked_feed(
-        session,
-        ctx.discovery,
-        user.id,
-        today_seed() if seed is None else seed,
-        fresh=False,
-    )
-    picks = suggest.suggestions(
-        feed,
-        feedback.exclusions(session, user.id),
-        discover_categories.feed_categories(session, ctx.discovery, feed),
-    )
+    use_seed = today_seed() if seed is None else seed
+    feed = ranked_feed(session, ctx.discovery, user.id, use_seed, fresh=False)
+    excluded = feedback.exclusions(session, user.id)
+    if category is None:
+        picks = suggest.suggestions(
+            feed,
+            excluded,
+            discover_categories.feed_categories(session, ctx.discovery, feed),
+        )
+    else:
+        browse = _browse(session, ctx, user.id, feed, use_seed, refresh=False)
+        listing = browse.listing(category) if browse is not None else None
+        picks = (
+            suggest.suggestions(feed, excluded, channels=listing.channels)
+            if listing is not None
+            else []
+        )
     if user.allowed is not None:
         picks = []  # Parental controls: no new channels to suggest.
     return SuggestedChannelsRead(

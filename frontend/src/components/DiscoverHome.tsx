@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
@@ -19,6 +18,7 @@ import {
 import { queryKeys } from "../queries/keys";
 import type {
   ChannelFeedEntry,
+  DiscoverCategory,
   DiscoverFeed,
   DiscoverItem,
   DiscoverStatus,
@@ -60,6 +60,9 @@ const ACTION_BTN =
   "max-md:flex max-md:h-10 max-md:w-10 max-md:items-center max-md:justify-center max-md:p-0";
 /** Stop asking after this long (the gatherer may be waiting on YouTube). */
 const STATUS_POLL_MAX = 40;
+/** At the end of a category while more is looked for: ask again this often. */
+const MORE_POLL_MS = 3000;
+const MORE_POLL_MAX = 40;
 
 type ChannelHit = { name: string; url: string | null };
 
@@ -100,12 +103,9 @@ function newSeed(): number {
  * channels, and throwbacks), with channels to follow.
  */
 export default function DiscoverHome({
-  actionsSlot,
   sidebarCollapsed,
   onChannelClick,
 }: {
-  /** The page header's slot for Algorithm and Refresh (on the tabs' row). */
-  actionsSlot: HTMLElement | null;
   sidebarCollapsed: boolean;
   onChannelClick: (hit: ChannelHit) => void;
 }) {
@@ -138,8 +138,8 @@ export default function DiscoverHome({
   // Undefined: the server's seed of the day, so a plain reload keeps the order.
   const [seed, setSeed] = useState<number | undefined>(undefined);
   const [reloadKey, setReloadKey] = useState(0);
-  /** The AI category open (null: the whole feed, "For you"). */
-  const [category, setCategory] = useState<string | null>(null);
+  /** The open category's id (null: the whole feed, "For you"). */
+  const [category, setCategory] = useState<number | null>(null);
   // Loaded ahead by the home page, or shown last time: shown at once, then
   // asked for again (quietly) so the visit counts and the order is current.
   const [preview] = useState(() => lastFirstPage(queryClient));
@@ -155,14 +155,33 @@ export default function DiscoverHome({
   const [status, setStatus] = useState<DiscoverStatus | null>(
     () => preview?.status ?? null
   );
-  const [channels, setChannels] = useState<SuggestedChannel[]>(
-    () =>
+  /** Channel suggestions, and the category they are for (null: "For you"). */
+  const [suggested, setSuggested] = useState<{
+    category: number | null;
+    items: SuggestedChannel[];
+  }>(() => ({
+    category: null,
+    items:
       queryClient.getQueryData<SuggestedChannelsPage>(
         queryKeys.discover.channels
-      )?.items ?? []
-  );
+      )?.items ?? [],
+  }));
+  const channels = suggested.category === category ? suggested.items : [];
+  const setChannels = (
+    update: (prev: SuggestedChannel[]) => SuggestedChannel[]
+  ) => setSuggested((s) => ({ ...s, items: update(s.items) }));
+  /** In a category: the looser matches (they follow "Further afield"). */
+  const [looseKeys, setLooseKeys] = useState<Set<string>>(() => new Set());
+  /** In a category, at the end of what Horde knows: is more on its way? */
+  const [more, setMore] = useState<DiscoverFeed["more"]>("none");
+  /**
+   * At the end of a category with more on its way and none arrived yet: the
+   * next request waits `MORE_POLL_MS` instead of following the scroll.
+   */
+  const [waitingMore, setWaitingMore] = useState(false);
+  const morePolls = useRef(0);
   const [loading, setLoading] = useState(!preview);
-  const [categories, setCategories] = useState<string[]>(
+  const [categories, setCategories] = useState<DiscoverCategory[]>(
     () => preview?.categories ?? []
   );
   /** Re-ranking with cards on screen: keep them, dimmed, instead of a spinner. */
@@ -193,6 +212,8 @@ export default function DiscoverHome({
     else setLoading(true);
     setError(null);
     setFreshReady(false);
+    // A request waiting on the old list's end must not land on the new one.
+    setWaitingMore(false);
     api
       .getDiscoverFeed({
         limit: DISCOVER_PAGE_SIZE,
@@ -204,6 +225,22 @@ export default function DiscoverHome({
         // A card taken off while this was loading stays off.
         setItems(page.items.filter((i) => !removedKeys.current.has(i.key)));
         setCategories(page.categories ?? []);
+        // The open category is gone (the interests were grouped anew).
+        if (
+          category !== null &&
+          !(page.categories ?? []).some((c) => c.id === category)
+        )
+          setCategory(null);
+        setLooseKeys(
+          new Set(
+            page.loose_from != null
+              ? page.items.slice(page.loose_from).map((i) => i.key)
+              : []
+          )
+        );
+        setMore(page.more ?? "none");
+        setWaitingMore(false);
+        morePolls.current = 0;
         setCursor(page.next_cursor ?? null);
         setStatus(page.status);
         queryClient.setQueryData(queryKeys.discover.mix, page.mix ?? []);
@@ -225,17 +262,15 @@ export default function DiscoverHome({
           setUpdating(false);
         }
       });
-    // The channel shelf is part of the whole feed only.
-    if (category === null)
-      api
-        .getSuggestedChannels(seed)
-        .then((data) => {
-          if (!active) return;
-          setChannels(data.items);
-          if (seed === undefined)
-            queryClient.setQueryData(queryKeys.discover.channels, data);
-        })
-        .catch(() => undefined);
+    api
+      .getSuggestedChannels(seed, undefined, category ?? undefined)
+      .then((data) => {
+        if (!active) return;
+        setSuggested({ category, items: data.items });
+        if (seed === undefined && category === null)
+          queryClient.setQueryData(queryKeys.discover.channels, data);
+      })
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -284,6 +319,27 @@ export default function DiscoverHome({
         const seen = new Set(prev.map((i) => i.key));
         return [...prev, ...page.items.filter((i) => !seen.has(i.key))];
       });
+      // Loose from here on this page, or already on an earlier one.
+      setLooseKeys((prev) => {
+        const from = prev.size > 0 ? 0 : page.loose_from;
+        if (from == null) return prev;
+        const next = new Set(prev);
+        for (const item of page.items.slice(from)) next.add(item.key);
+        return next;
+      });
+      // More is being looked for and none has come yet: ask again shortly,
+      // for a while, then call it the end.
+      const waiting = page.more === "loading" && page.items.length === 0;
+      if (waiting) morePolls.current += 1;
+      else morePolls.current = 0;
+      if (waiting && morePolls.current > MORE_POLL_MAX) {
+        setWaitingMore(false);
+        setMore("exhausted");
+        setCursor(null);
+        return;
+      }
+      setWaitingMore(waiting);
+      setMore(page.more ?? "none");
       setCursor(page.next_cursor ?? null);
     } catch {
       if (gen === generation.current) setCursor(null);
@@ -293,7 +349,9 @@ export default function DiscoverHome({
   }, [cursor, loadingMore, category]);
 
   useEffect(() => {
-    if (!cursor) return;
+    // Waiting for more at the end: the timer below asks, not the scroll (a
+    // new observer reports at once, which would ask again without a pause).
+    if (!cursor || waitingMore) return;
     const el = sentinelRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
@@ -304,7 +362,13 @@ export default function DiscoverHome({
     );
     io.observe(el);
     return () => io.disconnect();
-  }, [cursor, loadMore]);
+  }, [cursor, loadMore, waitingMore]);
+
+  useEffect(() => {
+    if (!waitingMore || loadingMore) return;
+    const timer = window.setTimeout(() => void loadMore(), MORE_POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [waitingMore, loadingMore, loadMore]);
 
   const refresh = () => {
     setSeed(newSeed());
@@ -518,71 +582,82 @@ export default function DiscoverHome({
     </>
   );
 
+  /** The first card past the close matches still on screen: the divider's. */
+  const firstLooseKey = items.find((i) => looseKeys.has(i.key))?.key ?? null;
   const card = (item: DiscoverItem) => {
     const channel = channelOf(item);
     const video = item.video;
     return (
-      <div
-        key={item.key}
-        className="group/rec relative"
-        data-rec-key={item.key}
-        // Why it is here, on hover; the outline already says where it is from.
-        title={item.reason.detail ?? item.reason.text}
-      >
-        <span className="sr-only">{SOURCE[item.source].label}.</span>
-        {item.video ? (
-          <VideoCard video={item.video} layout="feed" />
-        ) : item.stream ? (
-          <ChannelFeedCard
-            entry={item.stream}
-            channelName={item.stream.channel || "Unknown channel"}
-            layout="grid"
-            inLibrary={false}
-            onDownload={() => item.stream && downloadStream(item.stream)}
-            downloading={downloading.has(item.stream.url)}
-            skipRemotePreview
-            onChannelClick={onChannelClick}
-          />
-        ) : null}
-        {/* A live card has its own red ring; a second outline would sit inside it. */}
-        {showSources &&
-          SOURCE[item.source].outline &&
-          item.reason.kind !== "live" && (
-            <span
-              aria-hidden="true"
-              data-horde="source-outline"
-              className={`pointer-events-none absolute inset-0 sm:rounded-xl ${SOURCE[item.source].outline}`}
+      <Fragment key={item.key}>
+        {item.key === firstLooseKey && (
+          <h2
+            data-horde="rec-further-afield"
+            className="col-span-full flex items-center gap-3 pt-2 text-sm font-medium text-muted max-sm:px-3"
+          >
+            Further afield
+            <span aria-hidden="true" className="h-px flex-1 bg-ink-700" />
+          </h2>
+        )}
+        <div
+          className="group/rec relative"
+          data-rec-key={item.key}
+          // Why it is here, on hover; the outline already says where it is from.
+          title={item.reason.detail ?? item.reason.text}
+        >
+          <span className="sr-only">{SOURCE[item.source].label}.</span>
+          {item.video ? (
+            <VideoCard video={item.video} layout="feed" />
+          ) : item.stream ? (
+            <ChannelFeedCard
+              entry={item.stream}
+              channelName={item.stream.channel || "Unknown channel"}
+              layout="grid"
+              inLibrary={false}
+              onDownload={() => item.stream && downloadStream(item.stream)}
+              downloading={downloading.has(item.stream.url)}
+              skipRemotePreview
+              onChannelClick={onChannelClick}
             />
-          )}
-        <RecMenu
-          channel={channel.name || null}
-          onWhy={() => setWhyItem(item)}
-          onQueue={
-            video
-              ? () => {
-                  addToQueue(video);
-                  showToast("Added to the queue");
-                }
-              : undefined
-          }
-          onNotInterested={() => notInterested(item)}
-          onBlockChannel={() => blockChannel(item)}
-          onHideLive={
-            item.reason.kind === "live" && item.stream?.channel_url
-              ? () =>
-                  item.stream?.channel_url &&
-                  hideLive(item.stream.channel_url, channel.name || null)
-              : undefined
-          }
-          className="absolute left-2 top-2 z-10 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/rec:opacity-100 [@media(hover:none)]:opacity-100"
-        />
-      </div>
+          ) : null}
+          {/* A live card has its own red ring; a second outline would sit inside it. */}
+          {showSources &&
+            SOURCE[item.source].outline &&
+            item.reason.kind !== "live" && (
+              <span
+                aria-hidden="true"
+                data-horde="source-outline"
+                className={`pointer-events-none absolute inset-0 sm:rounded-xl ${SOURCE[item.source].outline}`}
+              />
+            )}
+          <RecMenu
+            channel={channel.name || null}
+            onWhy={() => setWhyItem(item)}
+            onQueue={
+              video
+                ? () => {
+                    addToQueue(video);
+                    showToast("Added to the queue");
+                  }
+                : undefined
+            }
+            onNotInterested={() => notInterested(item)}
+            onBlockChannel={() => blockChannel(item)}
+            onHideLive={
+              item.reason.kind === "live" && item.stream?.channel_url
+                ? () =>
+                    item.stream?.channel_url &&
+                    hideLive(item.stream.channel_url, channel.name || null)
+                : undefined
+            }
+            className="absolute left-2 top-2 z-10 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/rec:opacity-100 [@media(hover:none)]:opacity-100"
+          />
+        </div>
+      </Fragment>
     );
   };
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      {actionsSlot && createPortal(actions, actionsSlot)}
       {statusLine && (
         <p className="text-sm text-muted" aria-live="polite">
           {statusLine}
@@ -618,13 +693,12 @@ export default function DiscoverHome({
           </button>
         </div>
       )}
-      {categories.length > 0 && (
-        <CategoryChips
-          categories={categories}
-          active={category}
-          onSelect={setCategory}
-        />
-      )}
+      <CategoryChips
+        categories={categories}
+        active={category}
+        onSelect={setCategory}
+        actions={actions}
+      />
       {freshReady && (
         <div className="flex justify-center">
           <button
@@ -683,7 +757,7 @@ export default function DiscoverHome({
           >
             {items.slice(0, splitAt).map(card)}
             <SuggestedChannels
-              channels={category === null ? channels : []}
+              channels={channels}
               onSubscribe={
                 can("manage_subscriptions") ? subscribeChannel : undefined
               }
@@ -693,7 +767,17 @@ export default function DiscoverHome({
             {items.slice(splitAt).map(card)}
           </div>
           <div ref={sentinelRef} className="h-4" />
-          {loadingMore && <LoadingIndicator />}
+          {(loadingMore || (more === "loading" && cursor)) && (
+            <LoadingIndicator />
+          )}
+          {category !== null && more === "exhausted" && !cursor && (
+            <p
+              data-horde="rec-category-end"
+              className="py-6 text-center text-sm text-muted"
+            >
+              That's everything for now.
+            </p>
+          )}
         </>
       )}
       {whyItem && (

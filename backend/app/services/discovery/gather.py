@@ -55,7 +55,7 @@ from ..ytdlp_common import (
     classify_ytdlp_error,
 )
 from ..ytdlp_extract import search_youtube_for_discovery, youtube_up_next
-from . import topics, tuning
+from . import category_store, topics, tuning
 from .feedback import exclusions, forget_old_impressions
 from .history import Watch, counts_as_taste, watches
 from .interests import Interest, interests, keyword_queries, llm_queries
@@ -82,6 +82,10 @@ SEED_COOLDOWN = timedelta(days=7)
 #: and again after a day (they may be for something coming up soon).
 TOPIC_SEARCHES_PER_RUN = 2
 TOPIC_COOLDOWN = timedelta(days=1)
+#: Searches of the categories the user opened in the last ``WANTED_FOR`` go
+#: first, at most this many a run.
+WANTED_SEARCHES_PER_RUN = 1
+WANTED_FOR = timedelta(days=1)
 BACKOFF_START_SEC = 30 * 60.0
 BACKOFF_MAX_SEC = 12 * 3600.0
 #: Found videos stop being candidates after this; a later run finds new ones.
@@ -202,11 +206,14 @@ def plan_requests(
     asked: dict[str, str],
     now: datetime,
     typed: list[str] | None = None,
+    wanted: list[str] | None = None,
 ) -> list[_Request]:
     """This run's searches and up next lists, best first, skipping recent repeats.
 
-    ``typed``: the user's own interests (strongest first), searched before the
-    rest. They share the run's searches, so YouTube is asked no more often.
+    ``wanted``: searches of the categories the user opened lately, and
+    ``typed``: the user's own interests (strongest first); both are searched
+    before the rest. They share the run's searches, so YouTube is asked no
+    more often.
     """
 
     def fresh(key: str, cooldown: timedelta) -> bool:
@@ -220,10 +227,16 @@ def plan_requests(
 
     searches: list[_Request] = [
         _Request("search", q, "recent")
+        for q in dict.fromkeys(wanted or [])
+        if fresh(f"q:{q.lower()}", ASK_COOLDOWN)
+    ][:WANTED_SEARCHES_PER_RUN]
+    wanted_keys = {r.key.lower() for r in searches}
+    searches += [
+        _Request("search", q, "recent")
         for q in (typed or [])
-        if fresh(f"q:{q.lower()}", TOPIC_COOLDOWN)
+        if fresh(f"q:{q.lower()}", TOPIC_COOLDOWN) and q.lower() not in wanted_keys
     ][:TOPIC_SEARCHES_PER_RUN]
-    typed_keys = {q.lower() for q in (typed or [])}
+    typed_keys = {q.lower() for q in (typed or [])} | wanted_keys
     # One slot in four for a dormant interest, the rest by weight, round robin.
     throwback = [
         _Request("search", q, "throwback")
@@ -517,13 +530,29 @@ def gather_for(
             raise _Halt("the user turned off videos found on YouTube")
         recent, dormant = interests(session, runtime, history, now, tuned.window)
         groups = recent + dormant
-        if not (_may_use_ai(session, user_id) and llm_queries(groups)):
-            keyword_queries(session, groups, history)
+        if _may_use_ai(session, user_id):
+            llm_queries(groups)
+        # Whatever the chat model left out (or all of it, without one).
+        keyword_queries(session, groups, history)
+        # The groups are the user's category chips: keep their rows in step.
+        categories = category_store.sync(session, user_id, groups, now)
+        wanted = [
+            query
+            for row in categories
+            if row.wanted_at is not None and now - as_utc(row.wanted_at) <= WANTED_FOR
+            for query in category_store.queries(row)
+        ]
         excluded = exclusions(session, user_id)
         typed = topics.active(session, user_id, now)
         for n, request in enumerate(
             plan_requests(
-                recent, dormant, history, asked, now, [t.text for t in typed.interests]
+                recent,
+                dormant,
+                history,
+                asked,
+                now,
+                [t.text for t in typed.interests],
+                wanted,
             )
         ):
             if stopping() or (n and pause(REQUEST_PAUSE_SEC)):
@@ -625,8 +654,14 @@ def _loop(worker: BackgroundWorker) -> None:
     runtime = current().discovery
     if worker.sleep(STARTUP_DELAY_SEC):
         return
+    from . import topup  # Here, not at the top: topup builds on this module.
+
     while not worker.stopping:
         try:
+            # Someone is waiting at the end of a category: before the rounds.
+            ran = topup.run_pending(runtime, lambda: worker.stopping, worker.sleep)
+            if ran and worker.sleep(REQUEST_PAUSE_SEC):
+                return
             run_due(runtime, worker)
             with Session(get_engine()) as session:
                 prune(session)

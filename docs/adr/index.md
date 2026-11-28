@@ -49,6 +49,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0041](0041-related-lists-keep-other-interests.md) | A related list keeps one place in four for the viewer's other interests | Superseded by [0043](0043-related-lists-adapt-to-the-topic.md) |
 | [0042](0042-desktop-apps.md) | Desktop apps: an Electron shell around the same server, with a real bundled Python | Accepted |
 | [0043](0043-related-lists-adapt-to-the-topic.md) | A related list mixes in other interests by how crowded the topic is, as far as the viewer's algorithm says | Accepted |
+| [0044](0044-personal-categories.md) | Recommended's categories are each user's own interests, listed from everything Horde knows and topped up in the background | Accepted |
 
 ## Writing a new record
 
