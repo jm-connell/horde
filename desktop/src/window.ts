@@ -2,7 +2,17 @@
 // Chromium page stays in memory while Horde runs in the background. Horde's
 // pages render data from the internet, so they get no Node access, no preload,
 // and cannot navigate away from Horde's own address.
-import { BrowserWindow, type Session, session, shell } from "electron";
+import {
+  BrowserWindow,
+  type Session,
+  nativeTheme,
+  session,
+  shell,
+} from "electron";
+import { isDarkColor } from "./logic";
+
+/** index.html's theme-color: the default theme's page background. */
+const PAGE_COLOR = "#08090c";
 
 const ALLOWED_PERMISSIONS = new Set([
   "fullscreen",
@@ -53,8 +63,10 @@ export function createWindow(
     minWidth: 480,
     minHeight: 360,
     title: "Horde",
-    backgroundColor: "#0b0b0f",
+    backgroundColor: PAGE_COLOR,
     show: false,
+    // The menu stays out of the way (Alt shows it) and its shortcuts work.
+    autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
       sandbox: true,
@@ -65,6 +77,16 @@ export function createWindow(
     },
   });
   const wc = win.webContents;
+  // The title bar takes the page's own background, so the window reads as one
+  // surface. The page keeps its theme-color in step with the chosen theme.
+  const paintFrame = (color: string) => {
+    nativeTheme.themeSource = isDarkColor(color) ? "dark" : "light";
+    if (process.platform === "win32") win.setAccentColor(color);
+  };
+  paintFrame(PAGE_COLOR);
+  wc.on("did-change-theme-color", (_event, color) => {
+    if (color) paintFrame(color);
+  });
   const leave = (url: string) => {
     if (isWebUrl(url)) hooks.openExternal(url);
   };

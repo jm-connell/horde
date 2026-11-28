@@ -399,6 +399,7 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
       ),
       loadingStyle: normalizeLoadingStyle(r.loadingStyle),
       fontSize: normalizeFontSize(r.fontSize),
+      textSize: normalizeFontSize(r.textSize),
       uiFont:
         typeof r.uiFont === "string" &&
         r.uiFont &&
@@ -504,6 +505,8 @@ export function normalizeSettings(
       parsed.fontSize,
       (parsed as { uiScale?: unknown }).uiScale
     ),
+    textSize: normalizeFontSize(parsed.textSize),
+    cardSize: normalizeFontSize(parsed.cardSize),
     holdPlaybackRate: normalizeHoldPlaybackRate(parsed.holdPlaybackRate),
     sponsorBlockSkipMode: normalizeSponsorBlockSkipMode(
       parsed.sponsorBlockSkipMode

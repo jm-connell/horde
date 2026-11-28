@@ -118,7 +118,9 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `translucentPanelTintStrength` | `0.35` | number | 0–1 | UI blob |
 | `translucentPanelLegibility` | `true` | bool | | UI blob |
 | `loadingStyle` | `"dots"` | string | `spinner` \| `orbit` \| `helix` \| `infinity` \| `sweep` \| `spokes` \| `dots` \| `pulse` \| `wave` \| `cube` \| `spiral` \| `swarm` \| `leapfrog` | UI blob |
-| `fontSize` | `"medium"` | string | `small` \| `medium` \| `large` \| `xl` | UI blob |
+| `fontSize` | `"medium"` | string | Interface size: `small` \| `medium` \| `large` \| `xl` | UI blob |
+| `textSize` | `"medium"` | string | Text size alone: `small` \| `medium` \| `large` \| `xl` | UI blob |
+| `cardSize` | `"medium"` | string | Video card size: `small` \| `medium` \| `large` \| `xl` | UI blob |
 | `uiFont` | `"oxanium"` | string | Builtin id or saved custom id | UI blob |
 | `customFonts` | `[]` | array | Saved URL/file fonts | UI blob |
 | `tabBarItems` | `["home","search","download","chat"]` | array | Up to 5 of `home` \| `search` \| `download` \| `chat` \| `playlists` \| `history` \| `offline` \| `settings`, in order | UI blob |

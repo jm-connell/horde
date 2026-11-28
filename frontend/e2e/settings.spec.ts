@@ -112,6 +112,53 @@ test("motion options apply and stick", async ({ page }) => {
   );
 });
 
+test("text size and card size change without the interface size", async ({
+  page,
+}) => {
+  const fontPx = (selector: string) =>
+    page
+      .locator(selector)
+      .first()
+      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  const columns = () =>
+    page
+      .locator(".video-grid")
+      .first()
+      .evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" "));
+  const pick = async (group: string, step: string, field: string) => {
+    const saved = waitForSettingsPatch(page, field, step.toLowerCase());
+    await page
+      .getByRole("group", { name: group })
+      .getByRole("button", { name: step, exact: true })
+      .click();
+    await saved;
+  };
+
+  await page.goto("/");
+  await expect(page.locator(".video-grid").first()).toBeVisible();
+  const before = await columns();
+
+  await page.goto("/settings?tab=appearance");
+  const label = '[data-setting="text-size"] p';
+  const textBefore = await fontPx(label);
+  await pick("Text size", "XL", "text_size");
+  expect(await fontPx("html")).toBe(16);
+  expect(await fontPx(label)).toBeCloseTo(textBefore * 1.25, 1);
+
+  await pick("Card size", "XL", "card_size");
+  expect(await fontPx("html")).toBe(16);
+  await page.goto("/");
+  await expect(page.locator(".video-grid").first()).toBeVisible();
+  const after = await columns();
+  expect(after.length).toBeLessThan(before.length);
+  expect(parseFloat(after[0])).toBeGreaterThan(parseFloat(before[0]));
+
+  // Sizes are saved with the account: put them back for the other tests.
+  await page.goto("/settings?tab=appearance");
+  await pick("Text size", "Medium", "text_size");
+  await pick("Card size", "Medium", "card_size");
+});
+
 test("the section row jumps to a section", async ({ page }) => {
   await page.goto("/settings?tab=appearance");
   await page

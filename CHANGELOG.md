@@ -33,6 +33,19 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Setup ends on Home.** After the wizard an empty library opens on Home,
+  where **Get started** lists what to do first, instead of on the Download
+  page.
+- **The desktop app's window is plainer.** The title bar takes the color of
+  the page and follows your theme, and on Windows and Linux the menu bar is
+  hidden until you press Alt. The desktop setup wizard leaves out the playback
+  compatibility step when the app's window can play AV1.
+- **Live chat sits beside the video in theater and fit window.** Theater put
+  the chat under the video and fit window hid it. Both now show it to the
+  right of the picture, as tall as the player, on a window at least 1024
+  pixels wide. The arrow at the top of the chat hides it, and a small arrow at
+  the top right of the video brings it back. Switching between theater and fit
+  window keeps the chat where you were reading.
 - **A release now builds the desktop apps too.** Pushing a tag builds and starts
   the installers on Windows, macOS and Linux first, then the image, and
   publishes the release only when every file is on it, with checksums and build
@@ -51,10 +64,12 @@ All notable changes to Horde are documented here. The format follows
   order when you ask for it.
 - **Related videos are no longer all one topic.** Under a video on something
   you have a lot of (a Counter-Strike stream, a GTA RP series), every related
-  video used to be the same topic. Now every fourth one is a pick from your
-  Recommended feed about something else, never from the same channel, so the
-  list is mostly the video's topic with a few of your other interests. The
-  first three stay on topic, so autoplay normally does too.
+  video used to be the same topic. Now some of them are picks from your
+  Recommended feed about something else, never from the same channel. How many
+  depends on how crowded the topic is (none when it has only a few videos) and
+  on your recommendation algorithm (Explorer more, Familiar less). Interests
+  close to the video come first and each of your interests takes a turn. The
+  first three places stay on topic, so autoplay normally does too.
 
 ### Fixed
 

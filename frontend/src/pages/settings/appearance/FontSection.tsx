@@ -11,6 +11,48 @@ import { Chip, Section } from "../ui";
 import { useSettingsPage } from "../context";
 import type { AppearanceState } from "../useAppearanceState";
 
+/** One of the three size settings; they share the same four steps. */
+function SizeSetting({
+  anchor,
+  field,
+  label,
+  hint,
+  terms,
+}: {
+  anchor: string;
+  field: "fontSize" | "textSize" | "cardSize";
+  label: string;
+  hint: string;
+  terms: string[];
+}) {
+  const { q, match, settings, update } = useSettingsPage();
+  return (
+    <div
+      data-setting={anchor}
+      className={
+        q && !match(...terms, "small", "medium", "large", "xl")
+          ? "hidden"
+          : undefined
+      }
+    >
+      <p className="text-sm font-medium text-gray-200">{label}</p>
+      <p className="mb-2 text-xs text-muted">{hint}</p>
+      <div role="group" aria-label={label} className="flex flex-wrap gap-2">
+        {FONT_SIZE_OPTIONS.map((opt) => (
+          <Chip
+            key={opt.value}
+            active={settings[field] === opt.value}
+            onPointerDown={() => update({ [field]: opt.value })}
+            className="py-1.5!"
+          >
+            {opt.label}
+          </Chip>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function FontSection({
   appearance,
 }: {
@@ -27,7 +69,7 @@ export default function FontSection({
   return (
     <Section
       anchor="font-section"
-      title="Font"
+      title="Font and size"
       hidden={
         !!q &&
         !match(
@@ -41,7 +83,12 @@ export default function FontSection({
           "oxanium",
           "source sans",
           "font size",
-          "text size"
+          "text size",
+          "interface size",
+          "ui size",
+          "card size",
+          "zoom",
+          "scale"
         )
       }
     >
@@ -76,29 +123,30 @@ export default function FontSection({
             className="w-full min-w-48 max-w-[18rem]"
           />
         </div>
-        <div
-          data-setting="font-size"
-          className={
-            match("font size", "text size", "small", "medium", "large", "xl")
-              ? undefined
-              : q
-                ? "hidden"
-                : undefined
-          }
-        >
-          <p className="mb-2 text-sm font-medium text-gray-200">Font size</p>
-          <div data-font-size-control className="flex flex-wrap gap-2">
-            {FONT_SIZE_OPTIONS.map((opt) => (
-              <Chip
-                key={opt.value}
-                active={settings.fontSize === opt.value}
-                onPointerDown={() => update({ fontSize: opt.value })}
-                className="py-1.5!"
-              >
-                {opt.label}
-              </Chip>
-            ))}
-          </div>
+        {/* One block for the sizes: useSettings keeps it in place on screen
+            while a new size reflows the page around it. */}
+        <div data-font-size-control className="space-y-4">
+          <SizeSetting
+            anchor="font-size"
+            field="fontSize"
+            label="Interface size"
+            hint="Everything: text, spacing and controls."
+            terms={["interface size", "ui size", "zoom", "scale", "font size"]}
+          />
+          <SizeSetting
+            anchor="text-size"
+            field="textSize"
+            label="Text size"
+            hint="Text alone, on top of the interface size."
+            terms={["text size", "font size"]}
+          />
+          <SizeSetting
+            anchor="card-size"
+            field="cardSize"
+            label="Card size"
+            hint="Video cards in the grids: bigger cards, fewer to a row."
+            terms={["card size", "video cards", "thumbnail size", "columns"]}
+          />
         </div>
       </div>
 

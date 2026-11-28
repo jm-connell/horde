@@ -214,6 +214,7 @@ export default function TopNav() {
     };
   }, [
     settings.fontSize,
+    settings.textSize,
     importCount,
     showDownloadBadge,
     activeCount,
@@ -236,7 +237,13 @@ export default function TopNav() {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [useHamburger, searchOpen, menuOpen, settings.fontSize]);
+  }, [
+    useHamburger,
+    searchOpen,
+    menuOpen,
+    settings.fontSize,
+    settings.textSize,
+  ]);
 
   useEffect(() => {
     if (!useHamburger) {

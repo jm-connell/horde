@@ -13,7 +13,7 @@ import { useAppearanceState } from "./useAppearanceState";
 /** The tab's sections, in page order, by their `data-setting` anchor. */
 const SECTIONS = [
   { anchor: "theme", label: "Theme" },
-  { anchor: "font-section", label: "Font" },
+  { anchor: "font-section", label: "Font and size" },
   { anchor: "background", label: "Background" },
   { anchor: "motion", label: "Motion" },
   { anchor: "panels", label: "Panels" },

@@ -34,6 +34,18 @@ describe("normalizeSettings", () => {
     );
   });
 
+  it("keeps the text and card sizes apart from the interface size", () => {
+    const next = normalizeSettings({ fontSize: "small", cardSize: "xl" });
+    expect([next.fontSize, next.textSize, next.cardSize]).toEqual([
+      "small",
+      "medium",
+      "xl",
+    ]);
+    expect(normalizeSettings({ textSize: "huge" as never }).textSize).toBe(
+      "medium"
+    );
+  });
+
   it("drops the legacy keys it migrates from", () => {
     const next = normalizeSettings({
       liquidNav: true,
