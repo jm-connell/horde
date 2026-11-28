@@ -23,6 +23,10 @@ function watchProgress(video: Video): number | undefined {
   return Math.min(1, video.last_position_sec / video.duration_sec);
 }
 
+/** A card's slot in the row; from tablets up it follows the Card size setting. */
+const slotClass =
+  "group relative w-56 shrink-0 sm:w-[calc(16rem*var(--video-card-scale,1))]";
+
 const arrowClass =
   "ui-panel ui-interactive absolute top-1/2 z-10 -translate-y-1/2 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:pointer-events-none";
 
@@ -141,7 +145,7 @@ export default function ContinueWatchingRow({
         >
           <div className="flex gap-4">
             {videos.map((v) => (
-              <div key={v.id} className="group relative w-56 shrink-0 sm:w-64">
+              <div key={v.id} className={slotClass}>
                 <button
                   onClick={() => onDismiss(v.id)}
                   className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-xs text-white opacity-100 hover:bg-black hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
@@ -159,7 +163,7 @@ export default function ContinueWatchingRow({
             {streams.map((e) => (
               <div
                 key={e.url}
-                className="group relative w-56 shrink-0 sm:w-64"
+                className={slotClass}
                 data-continue-stream={e.id ?? undefined}
               >
                 <button
@@ -188,7 +192,7 @@ export default function ContinueWatchingRow({
             {youtube.map((e) => (
               <div
                 key={e.url}
-                className="group relative w-56 shrink-0 sm:w-64"
+                className={slotClass}
                 data-continue-youtube={e.id ?? undefined}
               >
                 <button

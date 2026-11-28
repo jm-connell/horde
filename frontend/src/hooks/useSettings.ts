@@ -88,15 +88,16 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
     });
   }, [settings.uiFont, settings.customFonts]);
 
-  const prevFontSize = useRef(settings.fontSize);
+  const sizeKey = `${settings.fontSize}/${settings.textSize}`;
+  const prevFontSize = useRef(sizeKey);
 
   useEffect(() => {
-    const sizeChanged = prevFontSize.current !== settings.fontSize;
+    const sizeChanged = prevFontSize.current !== sizeKey;
     const pinEl = sizeChanged
       ? document.querySelector<HTMLElement>("[data-font-size-control]")
       : null;
     const oldTop = pinEl?.getBoundingClientRect().top ?? null;
-    prevFontSize.current = settings.fontSize;
+    prevFontSize.current = sizeKey;
 
     applyMotionPrefs(settings);
 
@@ -122,7 +123,8 @@ export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
     settings.translucentPanelTint,
     settings.translucentPanelTintStrength,
     settings.translucentPanelLegibility,
-    settings.fontSize,
+    sizeKey,
+    settings.cardSize,
   ]);
 
   useEffect(() => {

@@ -13,7 +13,7 @@ A past livestream's chat is part of the stream: it is how it felt at the time, a
 - **Horde carries the request loop.** It is the loop yt-dlp's `YoutubeLiveChatFD` runs, with yt-dlp's page helpers (cookies, consent, client headers), started from any position instead of the beginning. Messages are parsed into a small, bounded shape (text, Super Chats, Super Stickers, memberships, gifts); images only from YouTube's image hosts; anything unknown is dropped.
 - **Only finished streams.** Chat shows for `live_status == was_live`. While YouTube is still processing a recording (`post_live`) it serves only the last hours on a timeline of their own, which would put chat out of step. `videos.live_status` (revision `0036_video_live_status`) records it for library videos: from the download, the metadata refresh, the channel video lists, and the first chat check of a video whose value is unknown.
 - **A rate limit pauses every read** for 30 minutes without asking YouTube again.
-- **Its own place on the page.** Chat sits beside the player (the top of the right column, related videos under it; beside the description in theater; above the AI panel on phones; side by side with the video on a phone turned sideways), not with the comments. Each user can hide it (`showChatReplay`).
+- **Its own place on the page.** Chat sits beside the player (the top of the right column, related videos under it; beside the picture in theater and fit window (beside the description until 2026-11-27); above the AI panel on phones; side by side with the video on a phone turned sideways), not with the comments. Each user can hide it (`showChatReplay`).
 
 ## Consequences
 

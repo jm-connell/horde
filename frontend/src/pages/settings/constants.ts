@@ -76,6 +76,7 @@ export const STATUS_TIPS = {
   disk: "Free space on the downloads volume versus total size. Downloads and imports will fail if this runs out.",
 } as const;
 
+/** The steps of the interface, text and card size settings. */
 export const FONT_SIZE_OPTIONS: { value: FontSize; label: string }[] = [
   { value: "small", label: "Small" },
   { value: "medium", label: "Medium" },

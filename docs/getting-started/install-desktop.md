@@ -70,7 +70,7 @@ Horde lives in the tray: the notification area next to the clock on Windows and 
 | **About Horde** | The version, the licence and where your files are. |
 | **Quit Horde** | Stops Horde completely. If it is downloading, it asks first. |
 
-If your Linux desktop shows no tray icon (GNOME has none by default), start Horde again from the app grid: it opens the window of the copy that is already running. The window's own menu has **Quit Horde**.
+If your Linux desktop shows no tray icon (GNOME has none by default), start Horde again from the app grid: it opens the window of the copy that is already running. The window's own menu has **Quit Horde**: on Windows and Linux the menu is hidden until you press ++alt++, and ++ctrl+q++ quits without it.
 
 Starting Horde a second time never runs a second copy.
 

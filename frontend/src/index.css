@@ -58,16 +58,28 @@
   --color-amber-400: #fbbf24;
   --color-sky-500: #0ea5e9;
 
+  /* The Text size setting (--ui-text-scale, set on <html>) scales the type
+     scale alone; the Interface size setting scales the rem itself. A line
+     height pinned by a class (leading-5) or a fixed box stays put. */
+  --text-xs: calc(0.75rem * var(--ui-text-scale, 1));
+  --text-sm: calc(0.875rem * var(--ui-text-scale, 1));
+  --text-base: calc(1rem * var(--ui-text-scale, 1));
+  --text-lg: calc(1.125rem * var(--ui-text-scale, 1));
+  --text-xl: calc(1.25rem * var(--ui-text-scale, 1));
+  --text-2xl: calc(1.5rem * var(--ui-text-scale, 1));
+  --text-3xl: calc(1.875rem * var(--ui-text-scale, 1));
+  --text-4xl: calc(2.25rem * var(--ui-text-scale, 1));
+
   /* Tailwind 3 line heights. Tailwind 4's are unitless ratios, which children
      inherit and rescale (text-[10px] inside text-xs would shrink). */
-  --text-xs--line-height: 1rem;
-  --text-sm--line-height: 1.25rem;
-  --text-base--line-height: 1.5rem;
-  --text-lg--line-height: 1.75rem;
-  --text-xl--line-height: 1.75rem;
-  --text-2xl--line-height: 2rem;
-  --text-3xl--line-height: 2.25rem;
-  --text-4xl--line-height: 2.5rem;
+  --text-xs--line-height: calc(1rem * var(--ui-text-scale, 1));
+  --text-sm--line-height: calc(1.25rem * var(--ui-text-scale, 1));
+  --text-base--line-height: calc(1.5rem * var(--ui-text-scale, 1));
+  --text-lg--line-height: calc(1.75rem * var(--ui-text-scale, 1));
+  --text-xl--line-height: calc(1.75rem * var(--ui-text-scale, 1));
+  --text-2xl--line-height: calc(2rem * var(--ui-text-scale, 1));
+  --text-3xl--line-height: calc(2.25rem * var(--ui-text-scale, 1));
+  --text-4xl--line-height: calc(2.5rem * var(--ui-text-scale, 1));
 }
 
 /* Tailwind 3 preflight defaults that Tailwind 4 changed and the UI relies on. */
@@ -406,6 +418,8 @@ body {
   background-color: rgb(var(--ink-950));
   color: #e5e7eb;
   font-family: var(--font-sans);
+  /* Text with no size class follows the Text size setting too. */
+  font-size: calc(1rem * var(--ui-text-scale, 1));
   letter-spacing: -0.01em;
 }
 
@@ -2204,17 +2218,23 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
    fit the grid's own width at 12.5rem or more each, capped at
    --video-grid-max. Sized by the grid, not the window, so docking the chat or
    opening the channel sidebar drops a column instead of squeezing every card.
-   The cap term is one column's width when exactly the maximum fit. */
+   The cap term is one column's width when exactly the maximum fit. The Card
+   size setting scales the minimum (--video-card-scale) and moves the cap
+   (--video-grid-extra, both set on <html>), never under three to a row: on
+   a wide grid the largest cards still leave a row worth scanning. */
 @media (min-width: 640px) {
   .video-grid {
+    --video-grid-cap: max(
+      3,
+      var(--video-grid-max, 5) + var(--video-grid-extra, 0)
+    );
     grid-template-columns: repeat(
       auto-fill,
       minmax(
         max(
-          12.5rem,
+          min(100%, calc(12.5rem * var(--video-card-scale, 1))),
           calc(
-            (100% - (var(--video-grid-max, 5) - 1) * 1rem) /
-              var(--video-grid-max, 5)
+            (100% - (var(--video-grid-cap) - 1) * 1rem) / var(--video-grid-cap)
           )
         ),
         1fr

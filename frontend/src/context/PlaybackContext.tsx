@@ -27,6 +27,7 @@ import {
 } from "../api";
 import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
 import type { ClipMarkers } from "../components/videoPlayerTypes";
+import type { AsideOpener } from "../components/player/playerAside";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSponsorBlock } from "../hooks/useSponsorBlock";
@@ -146,11 +147,12 @@ export interface PlaybackLayout {
   /** Pillarbox inset (px) of the visible picture inside the player box. */
   videoFrameInset: number;
   /**
-   * The empty element beside the picture while the player is in element
-   * fullscreen on a touch screen (null otherwise): the watch page portals a
-   * past stream's live chat into it.
+   * The empty element beside the picture while the player keeps room there
+   * (theater and fit window on a wide window, element fullscreen on a touch
+   * screen; null otherwise): the watch page portals a stream's live chat
+   * into it.
    */
-  fullscreenAside: HTMLElement | null;
+  playerAside: HTMLElement | null;
 }
 
 export interface PlaybackActions {
@@ -169,6 +171,11 @@ export interface PlaybackActions {
   getStreamBehindLive: () => number | null;
   /** Show the clip being picked on the stream's seek bar (null hides it). */
   setClipMarkers: (markers: ClipMarkers | null) => void;
+  /**
+   * What goes beside the picture (`playerAside`) is closed: the player shows
+   * an arrow that opens it (null: nothing to open).
+   */
+  setAsideOpener: (opener: AsideOpener | null) => void;
   /** Latest library playback position (seconds). */
   getCurrentPosition: () => number;
   addToQueue: (entry: QueueEntry) => void;
@@ -241,6 +248,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const streamPosRef = useRef(0);
   const streamBehindLiveRef = useRef<number | null>(null);
   const [clipMarkers, setClipMarkers] = useState<ClipMarkers | null>(null);
+  const [asideOpener, setAsideOpener] = useState<AsideOpener | null>(null);
   const libraryPosRef = useRef(0);
   const recentWatchedRef = useRef<number[]>([]);
   const currentRef = useRef<Video | null>(null);
@@ -251,9 +259,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     null
   );
   const [videoFrameInset, setVideoFrameInset] = useState(0);
-  const [fullscreenAside, setFullscreenAside] = useState<HTMLElement | null>(
-    null
-  );
+  const [playerAside, setPlayerAside] = useState<HTMLElement | null>(null);
   const [mediaSuspended, setMediaSuspended] = useState(false);
 
   const setMiniWidth = useCallback((w: number | null) => {
@@ -914,9 +920,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       miniPlayerRect,
       miniPlayerCornerAnchor: miniCornerAnchor,
       videoFrameInset,
-      fullscreenAside,
+      playerAside,
     }),
-    [miniPlayerRect, miniCornerAnchor, videoFrameInset, fullscreenAside]
+    [miniPlayerRect, miniCornerAnchor, videoFrameInset, playerAside]
   );
   const actions = useMemo<PlaybackActions>(
     () => ({
@@ -927,6 +933,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       getStreamPosition,
       getStreamBehindLive,
       setClipMarkers,
+      setAsideOpener,
       getCurrentPosition,
       addToQueue,
       playNext,
@@ -947,6 +954,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       getStreamPosition,
       getStreamBehindLive,
       setClipMarkers,
+      setAsideOpener,
       getCurrentPosition,
       addToQueue,
       playNext,
@@ -1141,7 +1149,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         singleKeyShortcuts={settings.playerShortcuts}
         hotkeys={hotkeys}
         onFrameInsetChange={setVideoFrameInset}
-        onFullscreenAside={setFullscreenAside}
+        onAside={setPlayerAside}
+        asideOpener={asideOpener}
         mediaSuspended={mediaSuspended}
         clipMarkers={clipMarkers}
       />
@@ -1203,7 +1212,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         singleKeyShortcuts={settings.playerShortcuts}
         hotkeys={hotkeys}
         onFrameInsetChange={setVideoFrameInset}
-        onFullscreenAside={setFullscreenAside}
+        onAside={setPlayerAside}
+        asideOpener={asideOpener}
         mediaSuspended={mediaSuspended}
       />
     ) : null;

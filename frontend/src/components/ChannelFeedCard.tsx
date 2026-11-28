@@ -18,6 +18,7 @@ import {
   youtubeListThumbnailUrl,
   youtubeThumbnailUrl,
 } from "../utils";
+import { formatViewers } from "../utils/followUrl";
 import { enqueueYtPreview } from "../utils/ytPreviewQueue";
 import { previewResumeFor } from "../utils/cardPreview";
 import { setWatchResume } from "../utils/watchHandoff";
@@ -78,11 +79,17 @@ function likeRatioTitle(
 }
 
 /**
- * The facts under a grid card's title: when, views, likes, and (optional, to
- * fill a taller row) that it is in the library.
+ * The facts under a grid card's title: who is watching (a live broadcast),
+ * when, views, likes, and (optional, to fill a taller row) that it is in the
+ * library.
  */
-function feedFacts(entry: ChannelFeedEntry, inLibrary: boolean): CardFact[] {
+function feedFacts(
+  entry: ChannelFeedEntry,
+  inLibrary: boolean,
+  watching: string | null
+): CardFact[] {
   const facts: CardFact[] = [];
+  if (watching) facts.push({ text: watching });
   const dateLabel = formatPublishedAt(
     entry.published_at,
     entry.published_label
@@ -303,9 +310,12 @@ export default function ChannelFeedCard({
   searchQuery = "",
   onChannelClick,
   progress,
+  viewers,
 }: {
   /** How much of it was watched (0 to 1), shown on the thumbnail. */
   progress?: number;
+  /** People watching a live broadcast right now, when known. */
+  viewers?: number | null;
   entry: ChannelFeedEntry;
   channelName: string;
   /** `grid` drops the card chrome on small screens (the feed); `card` keeps it. */
@@ -383,7 +393,9 @@ export default function ChannelFeedCard({
           url: entry.channel_url ?? null,
         })
     : undefined;
+  const watching = isLive ? formatViewers(viewers) : null;
   const listStats = joinDotList([
+    watching,
     duration,
     dateLabel,
     viewCount != null ? formatViewCount(viewCount) : "",
@@ -557,8 +569,8 @@ export default function ChannelFeedCard({
               className={className}
             />
           )}
-          facts={feedFacts(entry, inLibrary)}
-          required={feedFacts(entry, false).length}
+          facts={feedFacts(entry, inLibrary, watching)}
+          required={feedFacts(entry, false, watching).length}
           resolution={maxRes}
           action={
             <FeedAction

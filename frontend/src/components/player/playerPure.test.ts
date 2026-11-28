@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SPEED_STEPS, snapRateToStep } from "./constants";
+import { besidePictureOnDesktop } from "./playerAside";
 import { playerLayout } from "./playerLayout";
 import {
   activeChapterAt,
@@ -121,5 +122,14 @@ describe("liveResumeTime", () => {
 
   it("stops at the oldest part the stream still keeps", () => {
     expect(liveResumeTime(range, 9000)).toBe(100);
+  });
+});
+
+describe("besidePictureOnDesktop", () => {
+  it("is theater or fit window on a wide window", () => {
+    expect(besidePictureOnDesktop("theater", true)).toBe(true);
+    expect(besidePictureOnDesktop("windowed", true)).toBe(true);
+    expect(besidePictureOnDesktop("standard", true)).toBe(false);
+    expect(besidePictureOnDesktop("theater", false)).toBe(false);
   });
 });

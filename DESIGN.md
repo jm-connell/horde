@@ -202,7 +202,7 @@ more on touch screens so iOS does not zoom.
 Single-column app shell under a fixed translucent header. Pages sit in a centred
 container with a 16px gutter on phones, wider on desktop; settings and forms cap
 at `max-w-2xl`, the library grid and watch page use the full width. The library
-is a responsive card grid with an optional channel sidebar (one column on phones, then as many columns as fit the grid's own width at 200px or more each, at most five, four beside the open sidebar: `.video-grid`, so docking the chat drops a column and never squeezes the cards); the watch page puts
+is a responsive card grid with an optional channel sidebar (one column on phones, then as many columns as fit the grid's own width at 200px or more each, at most five, four beside the open sidebar, both moved by the Card size setting: `.video-grid`, so docking the chat drops a column and never squeezes the cards); the watch page puts
 the player first with metadata and a related-videos sidebar beside it on wide
 screens and below it on narrow ones. Spacing is a 4px rhythm, mostly 8px
 (`gap-2`) inside components and 12–16px between them; panels pad 16–20px.
@@ -379,6 +379,13 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   pauses following; a round `ink-800` "Jump to latest" button (down arrow) floats
   at the bottom centre until it is pressed or the list is back at the bottom.
   Hidden, the panel's place holds a secondary "Show live chat" button.
+  In theater and fit window (window of 1024px or more), and in fullscreen on a
+  touch screen, the chat is inside the player instead, to the right of the picture: a flush column as tall as the
+  player and `min(24rem, 33%)` of it wide, with a left border and no card
+  frame, whose header starts with a quiet right-arrow button (named "Hide").
+  Hidden in theater or fit window, a 32px round `black/55` button with a left arrow sits at the
+  picture's top right ("Show live chat"), shown and hidden with the control
+  bar; theater also keeps the "Show live chat" button first under the title.
 - **Rows and lists.** 4–8px padding, `hover:bg-ink-800`, drag handle on the left
   when reorderable, quiet remove button on the right.
 - **Inputs and selects.** `ink-800` fill, `ink-700` ring, accent focus ring;

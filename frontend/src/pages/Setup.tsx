@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useUpdateAppSettings } from "../queries/app";
@@ -31,17 +31,9 @@ import {
   readEndpointInput,
 } from "./settings/aiProviders";
 import { button } from "../components/buttons";
+import { probeDecodeSupport } from "../utils/decodeCapability";
+import { STEPS, wizardSteps, type Step } from "./setupSteps";
 
-const STEPS = [
-  "welcome",
-  "downloads",
-  "playback",
-  "look",
-  "ai",
-  "youtube",
-  "done",
-] as const;
-type Step = (typeof STEPS)[number];
 type AiChoice = "skip" | "connect" | "bundled";
 
 /** The compose service `docker compose --profile ai up -d` starts. */
@@ -92,6 +84,11 @@ export default function Setup() {
   const [devices, setDevices] = useState<Set<Device>>(new Set());
   const [health, setHealth] = useState<HealthStats | null>(null);
   const systemStats = dataOrNull(useSystemStats());
+  const [av1Here, setAv1Here] = useState(false);
+  const steps = useMemo(
+    () => wizardSteps(health?.runtime, av1Here),
+    [health?.runtime, av1Here]
+  );
   const [finishing, setFinishing] = useState(false);
   const [aiChoice, setAiChoice] = useState<AiChoice>("skip");
   const [connectInput, setConnectInput] = useState("");
@@ -114,8 +111,23 @@ export default function Setup() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    void probeDecodeSupport().then(
+      (s) => !cancelled && setAv1Here(s.av1Supported)
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     setItem(STEP_KEY, step, "session");
   }, [step]);
+
+  // A reload can restore a step this install leaves out.
+  useEffect(() => {
+    if (!steps.includes(step)) setStep("look");
+  }, [steps, step]);
 
   useEffect(() => {
     if (step === prevStepRef.current) return;
@@ -159,23 +171,21 @@ export default function Setup() {
       await saveAppSettings({ setup_completed: true });
       removeItem(STEP_KEY, "session");
       markSetupCompleted();
-      navigate((health?.library_video_count ?? 0) > 0 ? "/" : "/download", {
-        replace: true,
-      });
+      navigate("/", { replace: true });
     } catch {
       setFinishing(false);
     }
   };
 
-  const stepIndex = STEPS.indexOf(step);
+  const stepIndex = steps.indexOf(step);
   const animating = leaving != null;
   const goNext = () => {
     if (animating) return;
-    setStep(STEPS[Math.min(stepIndex + 1, STEPS.length - 1)]);
+    setStep(steps[Math.min(stepIndex + 1, steps.length - 1)]);
   };
   const goBack = () => {
     if (animating) return;
-    setStep(STEPS[Math.max(stepIndex - 1, 0)]);
+    setStep(steps[Math.max(stepIndex - 1, 0)]);
   };
 
   /**
@@ -269,6 +279,7 @@ export default function Setup() {
   const saveBundled = () => connectAi(BUNDLED_OLLAMA_URL, "");
 
   const panelProps: Omit<WizardPanelProps, "step"> = {
+    steps,
     devices,
     setDevices,
     settings,
@@ -298,7 +309,7 @@ export default function Setup() {
         Horde setup
       </p>
       <div className="mt-3 flex gap-1">
-        {STEPS.map((id, i) => (
+        {steps.map((id, i) => (
           <span
             key={id}
             className={`h-1 flex-1 rounded-full transition-colors duration-300 ease-fluid ${
@@ -342,6 +353,7 @@ export default function Setup() {
 
 type WizardPanelProps = {
   step: Step;
+  steps: readonly Step[];
   devices: Set<Device>;
   setDevices: (next: Set<Device>) => void;
   settings: Settings;
@@ -367,6 +379,7 @@ type WizardPanelProps = {
 
 function WizardPanel({
   step,
+  steps,
   devices,
   setDevices,
   settings,
@@ -389,14 +402,14 @@ function WizardPanel({
   saveConnect,
   saveBundled,
 }: WizardPanelProps) {
-  const stepIndex = STEPS.indexOf(step);
+  const stepIndex = steps.indexOf(step);
   return (
     <div>
       <h1 className="text-2xl font-semibold text-gray-100">
         {STEP_TITLE[step]}
       </h1>
       <p className="mt-1 text-xs text-muted">
-        Step {stepIndex + 2} of {STEPS.length + 1}
+        Step {stepIndex + 2} of {steps.length + 1}
       </p>
 
       <div className="mt-8 space-y-4">
@@ -731,7 +744,7 @@ function WizardPanel({
           <p className="text-sm text-gray-300">
             {(health?.library_video_count ?? 0) > 0
               ? "Your library is ready. Open Home to keep watching, or Downloads when you want to add more. Everything else is in Settings."
-              : "Paste a YouTube (or other yt-dlp) URL on the next screen to archive your first video. Everything else is in Settings."}
+              : "Home shows what to do first: download a video, subscribe to a channel or bring in videos you already have. Everything else is in Settings."}
           </p>
         )}
       </div>
@@ -779,7 +792,7 @@ function WizardPanel({
                 ? "Saving…"
                 : (health?.library_video_count ?? 0) > 0
                   ? "Open library"
-                  : "Go to Downloads"}
+                  : "Get started"}
             </button>
           )}
         </div>

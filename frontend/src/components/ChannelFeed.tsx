@@ -147,6 +147,7 @@ export default function ChannelFeed({
   showUndownloaded,
   tab = "videos",
   liveEntry = null,
+  liveViewers = null,
   catalogIndexing = false,
   queueDockedBottom = false,
   directYoutubeSearch = false,
@@ -163,6 +164,8 @@ export default function ChannelFeed({
   tab?: ChannelTab;
   /** The channel's current broadcast, shown first on the uploads tab. */
   liveEntry?: ChannelFeedEntry | null;
+  /** How many are watching that broadcast right now, when known. */
+  liveViewers?: number | null;
   catalogIndexing?: boolean;
   queueDockedBottom?: boolean;
   directYoutubeSearch?: boolean;
@@ -743,6 +746,9 @@ export default function ChannelFeed({
                     fromCatalog || entry.live_status === "is_live"
                   }
                   searchQuery={feedSearch}
+                  viewers={
+                    liveEntry && entry.id === liveEntry.id ? liveViewers : null
+                  }
                 />
               );
             })}

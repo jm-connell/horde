@@ -10,7 +10,7 @@ async function stepSettled(page: Page) {
   await expect(page.locator("main h1")).toHaveCount(1);
 }
 
-test("setup wizard walks each step and lands on Download", async ({ page }) => {
+test("setup wizard walks each step and lands on Home", async ({ page }) => {
   await page.goto("/");
   // Nobody can sign in yet: the first step creates the administrator.
   await expect(
@@ -181,7 +181,13 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
       { message: "the chosen download quality reaches the server" }
     )
     .toContain('"default_download_preset":"1080p"');
-  await page.getByRole("button", { name: "Go to Downloads" }).click();
+  await page.getByRole("button", { name: "Get started" }).click();
+  // An empty library opens on Home, which says what to do first.
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole("heading", { name: "Get started" })
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Open Download" }).click();
   await expect(page).toHaveURL(/\/download$/);
   await expect(
     page.getByRole("heading", { name: "Download", level: 1 })
