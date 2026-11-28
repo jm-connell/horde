@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from .services.chat_replay.live_runtime import LiveChatRuntime
     from .services.chat_replay.runtime import ChatReplayRuntime
     from .services.comments.runtime import CommentsRuntime
+    from .services.desktop_status import DesktopRuntime
     from .services.discovery.runtime import DiscoveryRuntime
     from .services.downloads.ffmpeg_queue import FfmpegQueue
     from .services.downloads.queue import DownloadQueue
@@ -147,6 +148,8 @@ class AppContext:
     chat_replay: ChatReplayRuntime = field(default_factory=lambda: _new_chat_replay())
     #: Live chat: one poller and buffer per broadcast that is live now.
     live_chat: LiveChatRuntime = field(default_factory=lambda: _new_live_chat())
+    #: The desktop status file's inputs (services/desktop_status).
+    desktop: DesktopRuntime = field(default_factory=lambda: _new_desktop())
     #: The app's ``AuthRuntime`` (``install_context`` copies it from ``app.state``).
     auth: AuthRuntime | None = None
     #: Request-path caches (search results, duplicate groups); filled by whoever
@@ -192,6 +195,12 @@ def _new_discovery() -> DiscoveryRuntime:
     from .services.discovery.runtime import DiscoveryRuntime
 
     return DiscoveryRuntime()
+
+
+def _new_desktop() -> DesktopRuntime:
+    from .services.desktop_status import DesktopRuntime
+
+    return DesktopRuntime()
 
 
 def _new_timedtext() -> TimedtextPacer:

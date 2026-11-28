@@ -30,6 +30,8 @@ async function stubChannel(
   answerMeta?: (route: Route, url: string, seen: number) => Promise<void>
 ) {
   const meta: Counts = {};
+  /** Details requests sent as low-priority (background) lookups. */
+  const metaBackground: Counts = {};
   const manifest: Counts = {};
   await page.route(/\/api\/channels(\?.*)?$/, async (route) => {
     const response = await route.fetch();
@@ -78,12 +80,16 @@ async function stubChannel(
     });
   });
   await page.route(/\/api\/preview\/meta\?/, async (route) => {
-    const url = new URL(route.request().url()).searchParams.get("url") ?? "";
+    const params = new URL(route.request().url()).searchParams;
+    const url = params.get("url") ?? "";
     meta[url] = (meta[url] ?? 0) + 1;
+    if (params.get("background") === "true") {
+      metaBackground[url] = (metaBackground[url] ?? 0) + 1;
+    }
     if (answerMeta) return answerMeta(route, url, meta[url]);
     return route.fulfill({ json: metaFor(url) });
   });
-  return { meta, manifest };
+  return { meta, metaBackground, manifest };
 }
 
 function metaFor(url: string) {
@@ -124,6 +130,8 @@ test("hovering a stream card loads its details and manifest before the click", a
   await feedCard(page, A.title).hover();
   await expect.poll(() => counts.meta[A.url] ?? 0).toBe(1);
   await expect.poll(() => counts.manifest[A.url] ?? 0).toBe(1);
+  // Nobody is waiting on it yet: it queues behind videos being opened.
+  expect(counts.metaBackground[A.url]).toBe(1);
 
   await feedCard(page, A.title).click();
   await expectWatchPageOf(page, A.title);
@@ -140,6 +148,29 @@ test("a click right after mouse-down shares the request", async ({ page }) => {
   await feedCard(page, B.title).click();
   await expectWatchPageOf(page, B.title);
   expect(counts.meta[B.url]).toBe(1);
+});
+
+test("a click during a hover's lookup asks again at full priority", async ({
+  page,
+}) => {
+  // The hover's lookup waits behind videos being opened; the click must not
+  // inherit that wait.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  const counts = await stubChannel(page, async (route, url) => {
+    const params = new URL(route.request().url()).searchParams;
+    if (params.get("background") === "true") await held;
+    await route.fulfill({ json: metaFor(url) });
+  });
+  await page.goto("/?channel=Kiln");
+
+  await feedCard(page, A.title).hover();
+  await expect.poll(() => counts.metaBackground[A.url] ?? 0).toBe(1);
+  await feedCard(page, A.title).click();
+  await expectWatchPageOf(page, A.title);
+  release();
+  expect(counts.meta[A.url]).toBe(2);
+  expect(counts.metaBackground[A.url]).toBe(1);
 });
 
 test("a live card warms its details but not a manifest", async ({ page }) => {
@@ -204,7 +235,8 @@ test("touch does not warm", async ({ page }) => {
     pointerType: "touch",
     bubbles: true,
   });
-  await page.waitForTimeout(400);
+  // Longer than the dwell, so a warm-up would have started by now.
+  await page.waitForTimeout(800);
   expect(counts.meta[A.url] ?? 0).toBe(0);
 });
 

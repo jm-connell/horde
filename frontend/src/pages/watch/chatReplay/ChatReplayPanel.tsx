@@ -6,7 +6,7 @@ import type { ChatReplayItem } from "../../../types";
 import type { ChatReplayState } from "./useChatReplay";
 
 export type ChatPanelVariant =
-  "sidebar" | "inline" | "beside-info" | "sideways" | "fullscreen";
+  "sidebar" | "inline" | "sideways" | "beside-player";
 
 /** Within this many pixels of the bottom counts as "at the newest message". */
 const BOTTOM_SLACK_PX = 24;
@@ -15,10 +15,19 @@ const HEIGHT: Record<ChatPanelVariant, string> = {
   // About the player's height beside it.
   sidebar: "h-[min(40rem,calc(100vh-8rem))]",
   inline: "h-96",
-  "beside-info": "h-96",
   // A third of a phone turned sideways, at most the sidebar's width.
   sideways: "h-full w-[min(24rem,33vw)]",
-  fullscreen: "h-full w-[min(24rem,33vw)]",
+  // Fills the room the player keeps beside the picture.
+  "beside-player": "h-full w-full",
+};
+
+/** A card on the page; a flush column inside the player. */
+const CARD = "rounded-xl border border-ink-700 ring-1 ring-ink-700";
+const FRAME: Record<ChatPanelVariant, string> = {
+  sidebar: CARD,
+  inline: CARD,
+  sideways: CARD,
+  "beside-player": "border-l border-ink-700",
 };
 
 function errorNote(code: string | null): string {
@@ -153,6 +162,24 @@ function ChatMessage({ item }: { item: ChatReplayItem }) {
   );
 }
 
+type Anchor = { id: string; top: number };
+
+/**
+ * Put the list where it belongs: at the newest message, or, while the reader
+ * has scrolled up, with the message they were at where it was.
+ */
+function settle(el: HTMLDivElement, paused: boolean, anchor: Anchor | null) {
+  if (!paused) {
+    el.scrollTop = el.scrollHeight;
+    return;
+  }
+  if (!anchor) return;
+  const node = Array.from(el.children).find(
+    (child) => (child as HTMLElement).dataset.id === anchor.id
+  ) as HTMLElement | undefined;
+  if (node) el.scrollTop = node.offsetTop - anchor.top;
+}
+
 /**
  * A past stream's chat replay, newest message at the bottom. It follows new
  * messages; scrolling up to read pauses that (the list stays put while
@@ -173,8 +200,13 @@ export default function ChatReplayPanel({
   const pausedRef = useRef(false);
   // The first message in view and its distance from the top, so the list can
   // stay put while paused even as old messages drop off the top.
-  const anchorRef = useRef<{ id: string; top: number } | null>(null);
+  const anchorRef = useRef<Anchor | null>(null);
+  // The list's height at the last look. A scroll that comes with a new height
+  // is the layout's doing (the player moved or resized the panel, which also
+  // resets the scroll offset), not the reader scrolling up.
+  const heightRef = useRef(0);
   const { items, status } = chat;
+  const listShown = status === "ok" || status === "loading";
 
   const captureAnchor = (el: HTMLDivElement) => {
     for (const child of Array.from(el.children) as HTMLElement[]) {
@@ -196,6 +228,11 @@ export default function ChatReplayPanel({
 
   const onScroll = (e: UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
+    if (el.clientHeight !== heightRef.current) {
+      heightRef.current = el.clientHeight;
+      settle(el, pausedRef.current, anchorRef.current);
+      return;
+    }
     const atBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight <= BOTTOM_SLACK_PX;
     if (atBottom !== !pausedRef.current) setPausedBoth(!atBottom);
@@ -204,18 +241,20 @@ export default function ChatReplayPanel({
 
   useLayoutEffect(() => {
     const el = listRef.current;
-    if (!el) return;
-    if (!pausedRef.current) {
-      el.scrollTop = el.scrollHeight;
-      return;
-    }
-    const anchor = anchorRef.current;
-    if (!anchor) return;
-    const node = Array.from(el.children).find(
-      (child) => (child as HTMLElement).dataset.id === anchor.id
-    ) as HTMLElement | undefined;
-    if (node) el.scrollTop = node.offsetTop - anchor.top;
+    if (el) settle(el, pausedRef.current, anchorRef.current);
   }, [items]);
+
+  useLayoutEffect(() => {
+    const el = listRef.current;
+    if (!listShown || !el) return;
+    heightRef.current = el.clientHeight;
+    const observer = new ResizeObserver(() => {
+      heightRef.current = el.clientHeight;
+      settle(el, pausedRef.current, anchorRef.current);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [listShown]);
 
   const jumpToLatest = () => {
     setPausedBoth(false);
@@ -232,20 +271,38 @@ export default function ChatReplayPanel({
       aria-labelledby={headingId}
       data-horde="chat-replay"
       data-variant={variant}
-      className={`ui-panel flex min-h-0 flex-col rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700 ${HEIGHT[variant]}`}
+      className={`ui-panel flex min-h-0 flex-col bg-ink-900 ${FRAME[variant]} ${HEIGHT[variant]}`}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-ink-700 px-4 py-2">
-        <h2 id={headingId} className="text-sm font-semibold text-gray-100">
-          Live chat
-        </h2>
-        <button
-          type="button"
-          className={button("quiet", "xs")}
-          onClick={onHide}
-        >
-          Hide
-        </button>
-      </div>
+      {variant === "beside-player" ? (
+        // Collapses toward the edge it sits on: an arrow at the picture's side.
+        <div className="flex items-center gap-2 border-b border-ink-700 px-2 py-2">
+          <button
+            type="button"
+            aria-label="Hide"
+            title="Hide live chat"
+            className={button("quiet", "xs")}
+            onClick={onHide}
+          >
+            <ArrowIcon className="h-4 w-4 rotate-180" />
+          </button>
+          <h2 id={headingId} className="text-sm font-semibold text-gray-100">
+            Live chat
+          </h2>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-3 border-b border-ink-700 px-4 py-2">
+          <h2 id={headingId} className="text-sm font-semibold text-gray-100">
+            Live chat
+          </h2>
+          <button
+            type="button"
+            className={button("quiet", "xs")}
+            onClick={onHide}
+          >
+            Hide
+          </button>
+        </div>
+      )}
       {chat.note && (
         <p className="border-b border-ink-700 px-4 py-1.5 text-xs text-muted">
           {chat.note}

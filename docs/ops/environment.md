@@ -23,7 +23,7 @@ Horde is configured primarily through environment variables. Most values have se
 | `HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC` | `540` (3x the above) | The same wait for background work (catalog indexing, metadata fills), which always queues behind interactive requests. |
 | `HORDE_LIVE_POLL_SEC` | `300` | How often each subscribed channel is checked for a live broadcast (seconds). `0` turns the checks off. See [Live streams](../design/live-streams.md). |
 | `HORDE_LIVE_POLL_SPACING_SEC` | `2` | Pause between two live checks, so a long subscription list never bursts requests at YouTube. |
-| `HORDE_LIVE_DVR_HOURS` | `4` | How far back the player can scrub in a live stream, when YouTube still serves those segments. |
+| `HORDE_LIVE_DVR_HOURS` | `24` | How far back the player can scrub in a live stream: the whole broadcast, up to this many hours (YouTube serves the segments that long and longer). |
 | `HORDE_BACKUP_ENABLED` | `1` | `0` turns the [nightly database backup](backup-restore.md#nightly) off. |
 | `HORDE_BACKUP_HOUR` | `4` | Local hour (0-23) after which the nightly backup is taken. |
 | `HORDE_BACKUP_KEEP` | `7` | How many nightly backups to keep (minimum 1). |
@@ -42,6 +42,7 @@ In Compose, Horde maps host **8686** → container **8080**. See [Ports & networ
 | `YTDLP_POT_BASE_URL` | *(empty)*; Compose: `http://bgutil-pot:4416` | Base URL for the [bgutil POT](youtube-access.md) HTTP provider. |
 | `YTDLP_COOKIE_FILE` | *(empty)* | Path to a Netscape cookie file. Attached only after a per-video age-restricted or members-only block. |
 | `YTDLP_COOKIES_FROM_BROWSER` | *(empty)* | Browser cookies via yt-dlp (`browser` or `browser:profile`). Used only if `YTDLP_COOKIE_FILE` is unset or missing. Same per-video fallback as the cookie file. |
+| `YTDLP_JS_RUNTIME` | *(empty)*; image: `deno:/opt/deno/deno` | JavaScript runtime for yt-dlp, in its `--js-runtimes` syntax (`deno` or `deno:/path/to/deno`). Used only to find a live stream's 1440p and 2160p formats ([Live streams](../design/live-streams.md#1440p-and-2160p)) and to retry [made-for-kids videos](youtube-access.md#made-for-kids-videos); unset, live streams go up to 1080p and those videos cannot be opened. |
 
 Cookie file wins over browser cookies when the file exists. Details: [YouTube access](youtube-access.md).
 
@@ -72,8 +73,10 @@ Cookie file wins over browser cookies when the file exists. Details: [YouTube ac
 | `HORDE_GITHUB_REPO` | `jm-connell/horde` | GitHub `owner/repo` for update checks. |
 | `HORDE_GIT_SHA` | `unknown` (baked at image build) | Deployed commit SHA; falls back to local `git rev-parse HEAD` in development. |
 | `HORDE_VERSION` | `dev` (baked at image build) | Release version (for example `1.2.3`) for images built from a release tag. Used by the update check. |
+| `HORDE_RUNTIME` | `server` | Set to `desktop` by the desktop app, not by you. Shown in `/api/health` for bug reports, and makes the server write `DATA_DIR/desktop/status.json` every few seconds for the app to read. |
+| `BUILD_INFO_FILE` | `/app/BUILD_INFO` | Where the build information file is. Only the desktop app, which keeps it beside the server, changes it. |
 
-The image also contains `/app/BUILD_INFO` (version, commit, ffmpeg flavor and `ffmpeg -version`), printed in the container log at start: `docker logs horde | grep build:`.
+The image also contains `/app/BUILD_INFO` (version, commit, ffmpeg flavor and `ffmpeg -version`), printed in the container log at start: `docker logs horde | grep build:`. `BUILD_INFO_FILE` points the server and the entrypoint at another copy.
 
 ## Container runtime
 

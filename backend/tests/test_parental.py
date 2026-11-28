@@ -135,7 +135,7 @@ def test_a_stream_plays_only_from_an_allowed_channel(
         "streamnight": ("Night Frights", "https://www.youtube.com/@nightfrights"),
     }
 
-    def meta(url):
+    def meta(url, **_kw):
         yt = url.rsplit("=", 1)[-1]
         name, channel_url = channels[yt]
         return {
@@ -213,7 +213,7 @@ def test_a_look_alike_channel_name_is_not_enough(
     monkeypatch.setattr(
         stream_preview,
         "extract_stream_preview_meta",
-        lambda url: {
+        lambda url, **_kw: {
             "id": "lookalike01",
             "title": "Not really",
             "channel": "kids craft",
@@ -248,7 +248,7 @@ def test_changing_the_list_forgets_checked_streams(
     monkeypatch.setattr(
         stream_preview,
         "extract_stream_preview_meta",
-        lambda url: {
+        lambda url, **_kw: {
             "id": "streamkids1",
             "title": "A stream",
             "channel": "Kids Craft",
@@ -407,7 +407,7 @@ def test_a_stream_of_a_channel_named_like_an_allowed_one_is_refused(
     monkeypatch.setattr(
         stream_preview,
         "extract_stream_preview_meta",
-        lambda url: {
+        lambda url, **_kw: {
             "id": "impostor001",
             "title": "Not home videos",
             "channel": "Home Videos",
@@ -477,7 +477,7 @@ def test_a_streamed_playlist_entry_must_be_of_an_allowed_channel(
     monkeypatch.setattr(
         stream_preview,
         "extract_stream_preview_meta",
-        lambda url: {
+        lambda url, **_kw: {
             "id": "streamnight",
             "channel": "Night Frights",
             "channel_url": NIGHT_URL,

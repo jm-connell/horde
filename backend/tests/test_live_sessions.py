@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import re
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 import pytest
@@ -22,6 +23,7 @@ from app.services.live.sessions import (
     LiveSegmentMissing,
     LiveSession,
     LiveSessionManager,
+    LiveUpstreamError,
 )
 
 VID = "abcdefghijk"
@@ -703,5 +705,265 @@ def test_manager_remembers_a_failed_open_briefly():
         clock.now += 20
         yt.live = True
         assert await manager.open(VID, fetcher=yt.fetch, resolver=yt.resolve)
+
+    run(go())
+
+
+# --- 1440p and 2160p: YouTube's live adaptive VP9 formats -------------------------
+
+
+def _tall_formats(url_for) -> list[dict[str, Any]]:
+    """Live adaptive formats a JS client (tv_samsung) lists beside the HLS ladder."""
+
+    def fmt(itag: int, ext: str, vcodec: str, width: int, height: int, tbr: float):
+        return {
+            "format_id": str(itag),
+            "protocol": "https",
+            "ext": ext,
+            "url": url_for(itag),
+            "vcodec": vcodec,
+            "acodec": "none",
+            "width": width,
+            "height": height,
+            "fps": 60,
+            "tbr": tbr,
+        }
+
+    return [
+        fmt(302, "webm", "vp9", 1280, 720, 1276),  # no taller than the HLS ladder
+        fmt(299, "mp4", "avc1.64002A", 1920, 1080, 5144),  # not WebM
+        fmt(308, "webm", "vp9", 2560, 1440, 9016),
+        fmt(315, "webm", "vp9", 3840, 2160, 18016),
+        # HDR (VP9 profile 2): a higher bitrate, but SDR is what is declared.
+        {
+            **fmt(337, "webm", "vp09.02.51.10.01.09.16.09.00", 3840, 2160, 25000),
+            "dynamic_range": "HDR10",
+        },
+    ]
+
+
+TALL_HOST = "rr2.googlevideo.com"
+
+
+class TallYouTube(SplitYouTube):
+    """A split ladder plus the VP9 adaptive formats. Such a format has no
+    playlist: segment ``n`` is its signed URL plus ``&sq=n``, and a segment
+    past the head answers 204."""
+
+    #: False once the JS lookup fails: refreshes then list no VP9 formats.
+    tall = True
+
+    def tall_url(self, itag: int, gen: int | None = None) -> str:
+        g = self.generation if gen is None else gen
+        return (
+            f"https://{TALL_HOST}/videoplayback/g{g}/itag/{itag}"
+            "?expire=1900000000&sparams=expire%2Citag&sig=AB%3D%3D"
+        )
+
+    def info(self) -> dict[str, Any]:
+        info = super().info()
+        if self.tall:
+            info["formats"] += _tall_formats(self.tall_url)
+        return info
+
+    async def fetch(
+        self, url: str, headers: dict[str, str], stream: bool
+    ) -> httpx.Response:
+        if urlparse(url).hostname != TALL_HOST:
+            return await super().fetch(url, headers, stream)
+        self.fetches.append(url)
+        req = httpx.Request("GET", url)
+        gen = int(re.search(r"/g(\d+)/", url).group(1))  # type: ignore[union-attr]  # tall_url always carries the generation
+        if gen not in self.valid_generations:
+            return httpx.Response(403, request=req)
+        sq = int(url.rsplit("&sq=", 1)[1])
+        if sq > self.head:
+            return httpx.Response(204, request=req)
+        return httpx.Response(200, content=f"webm-{sq}".encode(), request=req)
+
+
+def _stream_infs(master: str) -> dict[str, str]:
+    lines = master.splitlines()
+    return {
+        uri: line
+        for line, uri in zip(lines, lines[1:], strict=False)
+        if line.startswith("#EXT-X-STREAM-INF:")
+    }
+
+
+def test_vp9_formats_taller_than_the_hls_ladder_join_it():
+    infs = _stream_infs(_session(TallYouTube(), Clock()).master())
+    assert list(infs) == ["v/232.m3u8", "v/308.m3u8", "v/315.m3u8"]
+    assert "RESOLUTION=2560x1440" in infs["v/308.m3u8"]
+    assert 'CODECS="vp09.00.50.08,mp4a.40.2"' in infs["v/308.m3u8"]
+    assert "RESOLUTION=3840x2160" in infs["v/315.m3u8"]
+    assert 'CODECS="vp09.00.51.08,mp4a.40.2"' in infs["v/315.m3u8"]
+    assert 'AUDIO="audio"' in infs["v/315.m3u8"]
+
+
+def test_a_muxed_ladder_gets_no_vp9_variants():
+    # The VP9 formats are video only; a muxed ladder has no audio rendition
+    # for them to play beside.
+    yt = FakeYouTube()
+    info = yt.info()
+    info["formats"] += _tall_formats(lambda itag: f"https://rr2.example/{itag}")
+    session = LiveSession.from_info(
+        VID, info, fetcher=yt.fetch, resolver=yt.resolve, dvr_window_sec=0
+    )
+    assert list(_stream_infs(session.master())) == ["v/95.m3u8"]
+
+
+def test_vp9_playlist_follows_the_hls_timeline():
+    async def go():
+        yt, clock = TallYouTube(head=1000, window=4, dvr_floor=600), Clock()
+        yt.discontinuities = {999}
+        s = _session(yt, clock, dvr_sec=3600)
+        video, tall = await asyncio.gather(s.media("232"), s.media("315"))
+        assert "../seg/315/1000.webm" in tall
+        assert tall == video.replace("../seg/232/", "../seg/315/").replace(
+            ".ts\n", ".webm\n"
+        )
+        # The VP9 format has no playlist of its own to read.
+        assert not any(urlparse(u).hostname == TALL_HOST for u in yt.fetches)
+
+    run(go())
+
+
+def test_vp9_segment_is_the_signed_url_plus_its_sq():
+    async def go():
+        yt, clock = TallYouTube(head=1000, window=4), Clock()
+        s = _session(yt, clock, dvr_sec=0)
+        await s.media("315")
+        resp = await s.segment("315", 999)
+        assert resp.content == b"webm-999"
+        assert yt.fetches[-1] == yt.tall_url(315) + "&sq=999"
+        with pytest.raises(LiveSegmentMissing):  # past the head: 204, no body
+            await s.segment("315", 1004)
+
+    run(go())
+
+
+def test_vp9_segment_403_refreshes_the_urls_and_retries():
+    async def go():
+        yt, clock = TallYouTube(head=1000, window=4), Clock()
+        s = _session(yt, clock, dvr_sec=0)
+        await s.media("315")
+        yt.valid_generations = set()  # the extracted URLs expired
+        clock.now += 60  # past the re-extraction debounce
+        resp = await s.segment("315", 1000)
+        assert resp.content == b"webm-1000"
+        assert yt.resolves == [True]
+        assert yt.fetches[-1] == yt.tall_url(315, gen=2) + "&sq=1000"
+
+    run(go())
+
+
+def test_clips_are_cut_from_the_hls_ladder_not_the_vp9_variants():
+    source = live.clip_source(TallYouTube().info())
+    assert "/itag/232/" in source.video_url
+    assert source.audio_url is not None and "/itag/234/" in source.audio_url
+
+
+def test_vp9_variant_a_refresh_left_out_stops_asking_for_refreshes():
+    async def go():
+        yt, clock = TallYouTube(head=1000, window=4), Clock()
+        s = _session(yt, clock, dvr_sec=0)
+        await s.media("315")
+        yt.tall = False  # the JS lookup fails from now on
+        yt.valid_generations = set()  # and the VP9 URLs expired
+        clock.now += 60
+        with pytest.raises(LiveUpstreamError):
+            await s.segment("315", 1000)
+        clock.now += 60
+        with pytest.raises(LiveUpstreamError):
+            await s.segment("315", 1000)
+        assert yt.resolves == [True]  # not one more per failed 4K segment
+        # The HLS ladder took the refresh and plays on.
+        await s.media("232")
+        resp = await s.segment("232", 1000)
+        assert resp.content == b"seg-1000"
+
+    run(go())
+
+
+class RotatingYouTube(FakeYouTube):
+    """Segment URLs carry ``govp/lmt=N``, which YouTube changes during a
+    broadcast: segments before ``rotated_at`` were made under ``lmt=1``. Asked
+    for with the wrong value a segment is a 404; without one it is served."""
+
+    rotated_at = 900
+
+    def seg_url(self, sq: int, gen: int | None = None) -> str:
+        url = super().seg_url(sq, gen)
+        lmt = 1 if sq < self.rotated_at else 2
+        return url.replace("/file/", f"/govp/lmt%3D{lmt}/file/")
+
+    async def fetch(
+        self, url: str, headers: dict[str, str], stream: bool
+    ) -> httpx.Response:
+        match = re.search(r"/sq/(\d+)/govp/lmt%3D(\d+)/", url)
+        if match:
+            sq, lmt = int(match.group(1)), int(match.group(2))
+            if lmt != (1 if sq < self.rotated_at else 2):
+                self.fetches.append(url)
+                return httpx.Response(404, request=httpx.Request("GET", url))
+        return await super().fetch(url, headers, stream)
+
+
+def test_dvr_reaches_past_the_value_youtube_rotates():
+    async def go():
+        # One hour window = 720 segments back from 1000; YouTube keeps them all.
+        yt, clock = RotatingYouTube(head=1000, window=4), Clock()
+        s = _session(yt, clock, dvr_sec=3600)
+        await s.media("95")
+        assert s.dvr_floor == 1000 - 720
+        resp = await s.segment("95", 300)  # made under the old value
+        assert resp.content == b"seg-300"
+
+    run(go())
+
+
+def test_a_day_of_dvr_lists_every_segment():
+    async def go():
+        # A long event: 20 hours of 5 s segments, all still served.
+        yt, clock = FakeYouTube(head=14_400, window=4), Clock()
+        s = _session(yt, clock, dvr_sec=24 * 3600)
+        await s.media("95")
+        await _drain(s)
+        clock.now += 10
+        sqs = _sqs(await s.media("95"))
+        assert sqs[0] == 0 and sqs[-1] == 14_400
+
+    run(go())
+
+
+def test_vp9_playlist_is_rendered_again_only_when_the_timeline_was():
+    async def go():
+        yt, clock = TallYouTube(head=1000, window=4), Clock()
+        s = _session(yt, clock, dvr_sec=0)
+        first = await s.media("315")
+        assert await s.media("315") is first  # nothing new upstream
+        yt.head = 1001
+        clock.now += 10
+        assert "../seg/315/1001.webm" in await s.media("315")
+
+    run(go())
+
+
+def test_a_long_window_keeps_only_the_current_playlists_urls():
+    async def go():
+        yt, clock = FakeYouTube(head=10_000, window=4), Clock()
+        s = _session(yt, clock, dvr_sec=24 * 3600)
+        await s.media("95")
+        await _drain(s)
+        for _ in range(3):  # the broadcast moves on; each playlist adds URLs
+            yt.head += 4
+            clock.now += 10
+            await s.media("95")
+        sqs = _sqs(await s.media("95"))
+        assert sqs[0] == 0 and sqs[-1] == 10_012
+        assert sorted(s.variants["95"].known) == [10_009, 10_010, 10_011, 10_012]
+        resp = await s.segment("95", 5)  # through the template
+        assert resp.content == b"seg-5"
 
     run(go())

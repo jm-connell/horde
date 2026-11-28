@@ -66,6 +66,14 @@ AUDIO_EXTENSIONS: set[str] = {".m4a", ".mp3", ".opus", ".ogg", ".aac", ".flac", 
 HOST: str = os.environ.get("HOST", "0.0.0.0")  # noqa: S104 - container server; bind-all is the documented default
 PORT: int = int(os.environ.get("PORT", "8080"))
 
+# "desktop" when the desktop app started the server (it sets HORDE_RUNTIME), else
+# "server". Reported in /api/health and turns on the desktop status file.
+HORDE_RUNTIME: str = (
+    "desktop"
+    if os.environ.get("HORDE_RUNTIME", "").strip().lower() == "desktop"
+    else "server"
+)
+
 # Max simultaneous download workers (FIFO queue).
 MAX_DOWNLOAD_CONCURRENCY: int = int(os.environ.get("MAX_DOWNLOAD_CONCURRENCY", "2"))
 
@@ -160,9 +168,10 @@ LIVE_POLL_SEC: int = max(0, int(os.environ.get("HORDE_LIVE_POLL_SEC", "300")))
 LIVE_POLL_SPACING_SEC: float = max(
     0.0, float(os.environ.get("HORDE_LIVE_POLL_SPACING_SEC", "2"))
 )
-# How far back the player can scrub in a live stream (when YouTube keeps it).
+# How far back the player can scrub in a live stream (when YouTube keeps it):
+# a day covers a whole broadcast of any event.
 LIVE_DVR_WINDOW_SEC: float = 3600 * max(
-    0.0, float(os.environ.get("HORDE_LIVE_DVR_HOURS", "4"))
+    0.0, float(os.environ.get("HORDE_LIVE_DVR_HOURS", "24"))
 )
 
 # YouTube bot checks — bgutil POT sidecar (default in Docker) or cookie fallback.
@@ -172,6 +181,11 @@ YTDLP_COOKIE_FILE: Path | None = _optional_env_path("YTDLP_COOKIE_FILE")
 YTDLP_COOKIES_FROM_BROWSER: str = os.environ.get(
     "YTDLP_COOKIES_FROM_BROWSER", ""
 ).strip()
+# A JavaScript runtime for yt-dlp, in its --js-runtimes syntax (``deno`` or
+# ``deno:/path/to/deno``). Only the lookup of a live stream's 1440p and 2160p
+# formats and the retry of made-for-kids videos use it; every other extraction
+# stays JS-less. Set in the Docker image.
+YTDLP_JS_RUNTIME: str = os.environ.get("YTDLP_JS_RUNTIME", "").strip()
 
 # Legacy Ollama URL: the AI provider URL is a setting now (Settings → AI). Used
 # when that is empty, and to convert settings from before connection_version 2.

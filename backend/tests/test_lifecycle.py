@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import sys
 import threading
 import time
 
@@ -43,6 +44,7 @@ EXPECTED_WORKERS = {
     "comments",
     "stream-ai",
     "discovery",
+    "discovery-rank",
     "job-metadata",
     "trash-purge",
     "channel-retention",
@@ -283,6 +285,11 @@ def _script(tmp_path, body: str):
     return str(path)
 
 
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="POSIX process groups and signals: the fake ffmpeg is a /bin/sh script "
+    "and on Windows terminate_process is TerminateProcess (no grace, no grandchildren)",
+)
 def test_cancelling_ffmpeg_ends_its_whole_process_group(tmp_path):
     marker = tmp_path / "grandchild.pid"
     # The script forks a grandchild, like an ffmpeg helper would.
@@ -320,6 +327,11 @@ def _pid_alive(pid: int) -> bool:
         return False
 
 
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="POSIX process groups and signals: the fake ffmpeg is a /bin/sh script "
+    "and on Windows terminate_process is TerminateProcess (no grace, no grandchildren)",
+)
 def test_a_child_that_ignores_sigterm_is_killed_after_the_grace_period():
     proc = subprocess.Popen(
         ["sh", "-c", "trap '' TERM; sleep 60"], start_new_session=True
@@ -331,10 +343,11 @@ def test_a_child_that_ignores_sigterm_is_killed_after_the_grace_period():
     assert time.monotonic() - started >= 0.4
 
 
-def test_shutdown_refuses_new_ffmpeg_children(tmp_path):
+def test_shutdown_refuses_new_ffmpeg_children():
     ffmpeg_progress.children.shutdown()
     with pytest.raises(ffmpeg_progress.FfmpegCancelled):
-        ffmpeg_progress.run_ffmpeg([_script(tmp_path, "sleep 60")])
+        # Any real executable: it is refused (and killed) right after it starts.
+        ffmpeg_progress.run_ffmpeg([sys.executable])
 
 
 def test_stop_all_never_outlasts_its_total_budget():
@@ -392,6 +405,11 @@ def test_shutdown_requeues_pending_postprocess_and_keeps_its_staging(init_db):
     assert finished.exists()
 
 
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="POSIX process groups and signals: the fake ffmpeg is a /bin/sh script "
+    "and on Windows terminate_process is TerminateProcess (no grace, no grandchildren)",
+)
 def test_stopping_the_sprite_pool_kills_its_running_ffmpeg(
     add_video, init_db, monkeypatch
 ):

@@ -15,6 +15,12 @@ LIB = REPO / "scripts" / "update_lib.sh"
 UPDATE_SH = REPO / "update.sh"
 SQLITE_TOOL = REPO / "scripts" / "sqlite_tool.py"
 
+pytestmark = pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="scripts/update_lib.sh is sourced only by update.sh on the Linux Docker "
+    "host",
+)
+
 
 def _run(script: str, *, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     bash = f"set -euo pipefail\nsource '{LIB}'\n{script}\n"

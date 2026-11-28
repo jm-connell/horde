@@ -3,14 +3,20 @@ import { api } from "../api";
 import type { StreamPreviewMeta } from "../types";
 import { queryKeys } from "./keys";
 
-/** How long the pointer (or keyboard focus) rests on a card before it warms. */
-export const WARM_DWELL_MS = 120;
+/**
+ * How long the pointer (or keyboard focus) rests on a card before it warms:
+ * long enough that the cards it only crosses on the way are left alone, since
+ * a warm-up holds the server's one-at-a-time YouTube lookups.
+ */
+export const WARM_DWELL_MS = 400;
 /** A video warmed this recently is not warmed again (the server's lookup cache). */
 export const WARM_REPEAT_MS = 180_000;
 
 export interface WarmDeps {
+  /** ``background``: nobody is waiting on it yet (a rest, not a press). */
   fetchMeta(
-    url: string
+    url: string,
+    background: boolean
   ): Promise<Pick<StreamPreviewMeta, "is_live" | "library_video_id">>;
   fetchManifest(url: string): Promise<void>;
   now(): number;
@@ -22,7 +28,9 @@ export interface WarmDeps {
  *
  * One warm-up runs at a time; while it runs, only the newest request waits and
  * older ones are dropped. A started warm-up is never cancelled: the server
- * would keep working on it anyway. Failures are ignored (the click loads as
+ * would keep working on it anyway. A rest asks for a background lookup, which
+ * the server runs after the videos people are opening; a press asks at full
+ * priority, since the click follows. Failures are ignored (the click loads as
  * usual) and wait out the same window: a video that cannot play (a premiere,
  * a private or removed video) would otherwise cost a YouTube lookup per hover.
  * Only a cancelled warm-up may be retried at once.
@@ -33,7 +41,7 @@ export class StreamWarmer {
   /** Who started the dwell: only they may cancel it (see ``leave``). */
   private dweller: unknown = undefined;
   private running: string | null = null;
-  private pending: string | null = null;
+  private pending: { url: string; background: boolean } | null = null;
   private readonly recent = new Map<string, number>();
   private settled: Promise<void> = Promise.resolve();
 
@@ -50,7 +58,7 @@ export class StreamWarmer {
     this.dweller = owner;
     this.dwell = setTimeout(() => {
       this.dwell = null;
-      this.warm(url);
+      this.request(url, true);
     }, WARM_DWELL_MS);
   }
 
@@ -65,20 +73,9 @@ export class StreamWarmer {
     this.dwell = null;
   }
 
-  /** Warm ``url`` now (a mouse button went down on it). */
+  /** Warm ``url`` now, at full priority (a mouse button went down on it). */
   warm(url: string): void {
-    const now = this.deps.now();
-    for (const [key, at] of this.recent) {
-      if (now - at >= WARM_REPEAT_MS) this.recent.delete(key);
-    }
-    if (this.recent.has(url) || url === this.running || url === this.pending) {
-      return;
-    }
-    if (this.running != null) {
-      this.pending = url;
-      return;
-    }
-    this.settled = this.run(url);
+    this.request(url, false);
   }
 
   /** Settles once nothing is running or waiting. */
@@ -90,11 +87,29 @@ export class StreamWarmer {
     }
   }
 
-  private async run(url: string): Promise<void> {
+  private request(url: string, background: boolean): void {
+    const now = this.deps.now();
+    for (const [key, at] of this.recent) {
+      if (now - at >= WARM_REPEAT_MS) this.recent.delete(key);
+    }
+    if (this.recent.has(url) || url === this.running) return;
+    if (this.pending?.url === url) {
+      // A press on the card waiting its turn: it is about to be opened.
+      this.pending.background &&= background;
+      return;
+    }
+    if (this.running != null) {
+      this.pending = { url, background };
+      return;
+    }
+    this.settled = this.run(url, background);
+  }
+
+  private async run(url: string, background: boolean): Promise<void> {
     this.running = url;
     this.recent.set(url, this.deps.now());
     try {
-      const meta = await this.deps.fetchMeta(url);
+      const meta = await this.deps.fetchMeta(url, background);
       if (!meta.is_live && meta.library_video_id == null) {
         await this.deps.fetchManifest(url);
       }
@@ -105,8 +120,34 @@ export class StreamWarmer {
     this.running = null;
     const next = this.pending;
     this.pending = null;
-    if (next != null) await this.run(next);
+    if (next != null) await this.run(next.url, next.background);
   }
+}
+
+/**
+ * A background lookup stays out of the watch page's query: a click while it
+ * waits sends its own at full priority instead of joining this one. Its answer
+ * then fills that query, but only if nothing touched the query since the
+ * request went out (the page loading or leaving it, the player dropping it)
+ * and no page is showing it: new details hand the player the stream again.
+ */
+async function fetchMetaInBackground(client: QueryClient, url: string) {
+  const queryKey = queryKeys.preview.meta(url);
+  const cache = client.getQueryCache();
+  const before = cache.find({ queryKey, exact: true });
+  const updates = before?.state.dataUpdateCount;
+  const invalidated = before?.state.isInvalidated;
+  const meta = await api.getPreviewMeta(url, { background: true });
+  const query = cache.find({ queryKey, exact: true });
+  if (
+    query === before &&
+    query?.state.dataUpdateCount === updates &&
+    query?.state.isInvalidated === invalidated &&
+    !query?.getObserversCount()
+  ) {
+    client.setQueryData(queryKey, meta);
+  }
+  return meta;
 }
 
 const warmers = new WeakMap<QueryClient, StreamWarmer>();
@@ -116,12 +157,14 @@ export function streamWarmer(client: QueryClient): StreamWarmer {
   let warmer = warmers.get(client);
   if (!warmer) {
     warmer = new StreamWarmer({
-      fetchMeta: (url) =>
-        client.fetchQuery({
-          queryKey: queryKeys.preview.meta(url),
-          queryFn: ({ signal }) => api.getPreviewMeta(url, { signal }),
-          staleTime: WARM_REPEAT_MS,
-        }),
+      fetchMeta: (url, background) =>
+        background
+          ? fetchMetaInBackground(client, url)
+          : client.fetchQuery({
+              queryKey: queryKeys.preview.meta(url),
+              queryFn: ({ signal }) => api.getPreviewMeta(url, { signal }),
+              staleTime: WARM_REPEAT_MS,
+            }),
       fetchManifest: (url) => api.warmPreviewManifest(url),
       now: () => Date.now(),
     });

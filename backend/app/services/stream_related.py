@@ -12,6 +12,10 @@ videos, each marked with whether it is in the library:
 A live stream first lists the channel's other broadcasts that are live now, so
 a tournament's A and B streams sit side by side (``live_now_on_channel``).
 Otherwise the channel's next part of the same series leads (``next_part``).
+
+Some places then go to the viewer's Recommended picks that are about something
+else, more when the topic is crowded (``discovery/other_interests.py``), so a
+list is mostly, not only, the stream's topic.
 """
 
 from __future__ import annotations
@@ -23,11 +27,13 @@ from sqlmodel import Session, col, select
 
 from ..models import ChannelCatalogVideo, Video, as_utc, require_id
 from ..schemas import ChannelFeedEntry
-from . import app_settings, library, next_part, ytdlp_extract
+from . import app_settings, library, next_part, parental, ytdlp_extract
 from .ai import embeddings as ai_embeddings
 from .ai.provider import get_embed_provider
 from .channel_catalog import query as catalog_query
 from .channel_catalog import skipped_yt_ids
+from .discovery import other_interests
+from .discovery.candidates import Candidate, stream_entry
 
 logger = logging.getLogger(__name__)
 
@@ -125,18 +131,20 @@ class _Collector:
     def full(self) -> bool:
         return len(self.items) >= self.limit
 
-    def add(self, entry: ChannelFeedEntry) -> None:
+    def add(self, entry: ChannelFeedEntry) -> bool:
+        """Whether ``entry`` was taken (not a duplicate, and there was room)."""
         if self.full:
-            return
+            return False
         keys = set()
         if entry.id:
             keys.add(f"yt:{entry.id}")
         if entry.video_id is not None:
             keys.add(f"lib:{entry.video_id}")
         if not keys or keys & self._seen:
-            return
+            return False
         self._seen |= keys
         self.items.append(entry)
+        return True
 
 
 def live_now_on_channel(channel_url: str) -> list[ChannelFeedEntry]:
@@ -163,13 +171,15 @@ def related_for_stream(
     limit: int = 24,
     may_embed: bool = True,
     live_now: list[ChannelFeedEntry] | None = None,
+    viewer: other_interests.Viewer | None = None,
 ) -> list[ChannelFeedEntry]:
     """Up to ``limit`` related videos for the stream ``youtube_id``.
 
     ``meta`` is the stream's preview metadata (title, channel, channel_url,
     description). ``may_embed`` allows one embedding call when the stream has no
     stored embedding (the caller may use AI). ``live_now`` (the channel's live
-    broadcasts, for a live stream) goes first.
+    broadcasts, for a live stream) goes first. ``viewer`` gives some places to
+    that user's other interests.
     """
     out = _Collector(limit, youtube_id)
     lib_map = _LibraryIds(session)
@@ -250,4 +260,46 @@ def related_for_stream(
         )
         for row in rows:
             out.add(_catalog_entry(row, channel_name or channel or None, lib_map))
-    return out.items
+    if viewer is None:
+        return out.items
+    try:
+        others, share = _other_interests(session, viewer, vec, channel)
+    except Exception:
+        logger.warning("stream related: no other interests", exc_info=True)
+        return out.items
+    mixed = _Collector(limit, youtube_id)
+    # A restricted member's endpoint drops other channels' videos: drop them
+    # before mixing, so the lead and the spacing of the picks hold.
+    on_topic = [e for e in out.items if parental.entry_allowed(viewer.allowed, e)]
+    other_interests.weave(on_topic, others, mixed.add, share)
+    return mixed.items
+
+
+def _other_interests(
+    session: Session,
+    viewer: other_interests.Viewer,
+    vec: list[float] | None,
+    channel: str,
+) -> tuple[list[ChannelFeedEntry], float]:
+    """The viewer's Recommended picks about something else, as entries, and
+    the share of the list they get."""
+    found = other_interests.other_interest_picks(
+        session, viewer, vector=vec, channel=channel
+    )
+    picks: list[Candidate] = found.picks
+    videos = {
+        require_id(v): v
+        for v in session.exec(
+            select(Video).where(
+                col(Video.id).in_([c.video_id for c in picks if c.video_id]),
+                Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+            )
+        ).all()
+    }
+    entries: list[ChannelFeedEntry] = []
+    for c in picks:
+        if c.video_id is None:
+            entries.append(stream_entry(c))
+        elif c.video_id in videos:
+            entries.append(_library_entry(videos[c.video_id]))
+    return entries, found.share

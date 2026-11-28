@@ -24,7 +24,7 @@ The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready) and the `
 | `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper (which also re-checks held downloads every 30 s). |
 | `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. Stopping the pool cancels the running ffmpeg. Sprite ffmpeg (and the scanner's thumbnail grab) runs under `nice -n 15` where `nice` exists, so it yields CPU to playback and streaming on small servers. |
 | `scanner-watchdog`, `scanner-poller` | File watcher and the polling walk. |
-| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `ask`, `comments`, `stream-ai`, `discovery`, `job-metadata`, `trash-purge`, `channel-retention`, `notifications`, `media-sidecars`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
+| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `ask`, `comments`, `stream-ai`, `discovery`, `discovery-rank`, `job-metadata`, `trash-purge`, `channel-retention`, `notifications`, `media-sidecars`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
 
 Short-lived threads started by a request (bulk metadata sync, playlist sync, H.264 copies) are not registered; they are daemon threads and every database write they make is transactional.
 
@@ -140,6 +140,18 @@ Videos added in the last **48 hours** that never got a metadata sync and still h
 ### Recommended gatherer
 
 **Start:** `discovery.gather.create_worker(ctx.discovery)` after stream AI. After 90 seconds, and then whenever woken (a person's first visit or a refresh) or every 10 minutes, it runs for each person who opened Recommended in the last 3 days and is due (6 hours since their last run, or asked): up to 4 YouTube searches and 3 up next lists through the extract gate at background priority, at most 30 calls an hour in all, 20 seconds apart, pausing 30 minutes (doubling to 12 hours) after a bot check or rate limit. It then embeds what it found and prunes old hits. Off when `discovery_enabled` or `youtube_video_search` is off. See [ADR 0019](../adr/0019-recommended-plus.md).
+
+### Recommended ranking
+
+**Start:** `discovery.warm.create_worker()` after the gatherer (`discovery-rank`). Ranking a feed scores every candidate, a second or more on a large library, and a first page needs a ranking that is current. This worker makes it ahead of the request: 15 seconds after startup and then every 10 seconds it looks at the 8 people who opened Recommended most recently (in the last 3 days) and ranks today's feed, with its AI categories, for whoever has no current ranking in memory or one that lapses within 30 seconds (rankings are kept 15 minutes). A pass that ranks nothing is a few small queries per person.
+
+It holds back in three cases, and a request then ranks for itself as it always did:
+
+- **Something just changed.** Progress is reported every 5 seconds while a library video plays and every 30 while a stream does, and a bulk download adds a video every so often. Each puts the ranking out of date, so a feed is ranked again only after 45 seconds without a change: nothing is ranked while a video plays.
+- **It ranked for this person less than 3 minutes ago** (or failed to: one person's failure is logged and the pass goes on to the next).
+- **The person is paging.** A further page was read from the kept ranking in the last 2 minutes, and the next page's offset counts on it staying.
+
+So the request ranks when it comes first: right after a watch, on a new account's first visit, and for any other order (**Refresh**). A pass that fails as a whole is logged and the next one waits 5 minutes.
 
 ## Comments
 

@@ -10,7 +10,7 @@ async function stepSettled(page: Page) {
   await expect(page.locator("main h1")).toHaveCount(1);
 }
 
-test("setup wizard walks each step and lands on Download", async ({ page }) => {
+test("setup wizard walks each step and lands on Home", async ({ page }) => {
   await page.goto("/");
   // Nobody can sign in yet: the first step creates the administrator.
   await expect(
@@ -111,6 +111,29 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
     page.getByRole("button", { name: "Skip for now" })
   ).toBeVisible();
   await page.getByRole("button", { name: "Connect a provider" }).click();
+  await expect(page.getByText("Horde runs in Docker, so")).toBeVisible();
+  // On a desktop the same hint points at localhost instead.
+  await page.route("**/api/health", async (route) => {
+    const res = await route.fetch();
+    const body = await res.json();
+    await route.fulfill({
+      response: res,
+      json: { ...body, runtime: "desktop" },
+    });
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "Connect a provider" }).click();
+  await expect(page.getByText("A local Ollama is at")).toContainText(
+    "http://localhost:11434"
+  );
+  await expect(page.getByText("Horde runs in Docker, so")).toHaveCount(0);
+  // The bundled Ollama is a Compose service, so a desktop does not offer it.
+  await expect(
+    page.getByRole("button", { name: "Run Ollama for me" })
+  ).toHaveCount(0);
+  await page.unroute("**/api/health");
+  await page.reload();
+  await page.getByRole("button", { name: "Connect a provider" }).click();
   await page.getByLabel("API key or server URL").fill("AIza-e2e-placeholder");
   await expect(page.getByText("Google Gemini key")).toBeVisible();
   await page.getByRole("button", { name: "Run Ollama for me" }).click();
@@ -158,7 +181,13 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
       { message: "the chosen download quality reaches the server" }
     )
     .toContain('"default_download_preset":"1080p"');
-  await page.getByRole("button", { name: "Go to Downloads" }).click();
+  await page.getByRole("button", { name: "Get started" }).click();
+  // An empty library opens on Home, which says what to do first.
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole("heading", { name: "Get started" })
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Open Download" }).click();
   await expect(page).toHaveURL(/\/download$/);
   await expect(
     page.getByRole("heading", { name: "Download", level: 1 })

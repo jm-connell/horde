@@ -1,0 +1,42 @@
+{
+  "name": "horde-desktop",
+  "productName": "Horde",
+  "private": true,
+  "version": "0.0.0-dev",
+  "description": "Horde desktop app: a window, a tray and the Horde server",
+  "license": "PolyForm-Noncommercial-1.0.0",
+  "main": "dist/main.js",
+  "desktopName": "horde.desktop",
+  "author": "Horde contributors",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "npm run build && electron .",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "e2e": "npm run build && playwright test",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.11"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@playwright/test": "1.65.1",
+    "@types/node": "26.6.6",
+    "electron": "45.5.0",
+    "electron-builder": "26.18.0",
+    "eslint": "9.39.5",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.14.0",
+    "prettier": "3.10.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.74.0",
+    "vitest": "5.1.1"
+  }
+}

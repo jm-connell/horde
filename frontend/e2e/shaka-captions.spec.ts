@@ -1,30 +1,14 @@
 import { expect, test } from "./fixtures";
+import { H264_MEDIA } from "./stream-media";
 import type { Page } from "@playwright/test";
 
 /**
  * Real playback through Shaka: a stream preview plays with the DASH build and
  * a live broadcast with the HLS build. The overlay paints captions in the
  * normal player; Shaka's own (native) text track only shows while picture in
- * picture owns the pixels.
- *
- * Media: 6 s of 160x90 H.264 in three 2 s fMP4 segments, made with
- *   ffmpeg -f lavfi -i color=c=0x1a2540:s=160x90:r=5:d=6 -c:v libx264 \
- *     -profile:v baseline -pix_fmt yuv420p -g 10 -keyint_min 10 \
- *     -sc_threshold 0 -b:v 20k -f dash -seg_duration 2 -use_template 1 \
- *     -use_timeline 0 -init_seg_name init.mp4 \
- *     -media_seg_name 'seg-$Number$.m4s' manifest.mpd
+ * picture owns the pixels. A quality cut for dropped frames stays with
+ * the stream it happened on.
  */
-const MEDIA: Record<string, string> = {
-  "init.mp4":
-    "AAAAHGZ0eXBpc281AAACAGlzbzVpc282bXA0MQAAAx9tb292AAAAbG12aGQAAAAAAAAAAAAAAAAAAAPoAAAAAAABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAAACInRyYWsAAABcdGtoZAAAAAMAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAEAAAAAAoAAAAFoAAAAAACRlZHRzAAAAHGVsc3QAAAAAAAAAAQAAAAAAAAAAAAEAAAAAAZptZGlhAAAAIG1kaGQAAAAAAAAAAAAAAAAAACgAAAAAAFXEAAAAAAAtaGRscgAAAAAAAAAAdmlkZQAAAAAAAAAAAAAAAFZpZGVvSGFuZGxlcgAAAAFFbWluZgAAABR2bWhkAAAAAQAAAAAAAAAAAAAAJGRpbmYAAAAcZHJlZgAAAAAAAAABAAAADHVybCAAAAABAAABBXN0YmwAAAC5c3RzZAAAAAAAAAABAAAAqWF2YzEAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAoABaAEgAAABIAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY//8AAAAvYXZjQwFCwAr/4QAYZ0LACtkCjfkwEQAAAwABAAADAAoPEiZIAQAEaMuMsgAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAAE4gAABOIAAAABBzdHRzAAAAAAAAAAAAAAAQc3RzYwAAAAAAAAAAAAAAFHN0c3oAAAAAAAAAAAAAAAAAAAAQc3RjbwAAAAAAAAAAAAAAKG12ZXgAAAAgdHJleAAAAAAAAAABAAAAAQAAAAAAAAAAAAAAAAAAAGF1ZHRhAAAAWW1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAG1kaXJhcHBsAAAAAAAAAAAAAAAALGlsc3QAAAAkqXRvbwAAABxkYXRhAAAAAQAAAABMYXZmNjMuMS4xMDI=",
-  "seg-1.m4s":
-    "AAAAGHN0eXBtc2RoAAAAAG1zZGhtc2l4AAAANHNpZHgBAAAAAAAAAQAAKAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAA7kAAFAAgAAAAAAAAJBtb29mAAAAEG1maGQAAAAAAAAAAQAAAHh0cmFmAAAAHHRmaGQAAgA4AAAAAQAACAAAAALGAQEAAAAAABR0ZmR0AQAAAAAAAAAAAAAAAAAAQHRydW4AAAIFAAAACgAAAJgCAAAAAAACxgAAAAoAAAALAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAyltZGF0AAACfAYF//943EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE2NSByMzIyMiBiMzU2MDVhIC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAyNSAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTAgcmVmPTMgZGVibG9jaz0xOjA6MCBhbmFseXNlPTB4MToweDExMSBtZT1oZXggc3VibWU9NyBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0xIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MSA4eDhkY3Q9MCBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0tMiB0aHJlYWRzPTMgbG9va2FoZWFkX3RocmVhZHM9MSBzbGljZWRfdGhyZWFkcz0wIG5yPTAgZGVjaW1hdGU9MSBpbnRlcmxhY2VkPTAgYmx1cmF5X2NvbXBhdD0wIGNvbnN0cmFpbmVkX2ludHJhPTAgYmZyYW1lcz0wIHdlaWdodHA9MCBrZXlpbnQ9MTAga2V5aW50X21pbj02IHNjZW5lY3V0PTAgaW50cmFfcmVmcmVzaD0wIHJjX2xvb2thaGVhZD0xMCByYz1hYnIgbWJ0cmVlPTEgYml0cmF0ZT0yMCByYXRldG9sPTEuMCBxY29tcD0wLjYwIHFwbWluPTAgcXBtYXg9NjkgcXBzdGVwPTQgaXBfcmF0aW89MS40MCBhcT0xOjEuMDAAgAAAAEJliIQN8RigACcDHAAEDiOAAIB8nJycnJycnJyddddddddddddddddddddddddddddddddddddddddddddddddddeAAAAAGQZo4HeD2AAAAB0GaVAf4PYAAAAAGQZpgFfB7AAAABkGagBnwewAAAAZBmqAa8HsAAAAGQZrAGvB7AAAABkGa4BrwewAAAAZBmwAa8HsAAAAGQZsgGvB7",
-  "seg-2.m4s":
-    "AAAAGHN0eXBtc2RoAAAAAG1zZGhtc2l4AAAANHNpZHgBAAAAAAAAAQAAKAAAAAAAAABQAAAAAAAAAAAAAAAAAQAAAToAAFAAgAAAAAAAAJBtb29mAAAAEG1maGQAAAAAAAAAAgAAAHh0cmFmAAAAHHRmaGQAAgA4AAAAAQAACAAAAABGAQEAAAAAABR0ZmR0AQAAAAAAAAAAAFAAAAAAQHRydW4AAAIFAAAACgAAAJgCAAAAAAAARgAAAAsAAAALAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAKptZGF0AAAAQmWIggGvEYoAA/vxwABEejgACEPJycnJycnJycnXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXgAAAAdBmjgNeD2AAAAAB0GaVANeD2AAAAAGQZpgGvB7AAAABkGagBrwewAAAAZBmqAa8HsAAAAGQZrAGvB7AAAABkGa4BrwewAAAAZBmwAa8HsAAAAGQZsgGvB7",
-  "seg-3.m4s":
-    "AAAAGHN0eXBtc2RoAAAAAG1zZGhtc2l4AAAANHNpZHgBAAAAAAAAAQAAKAAAAAAAAACgAAAAAAAAAAAAAAAAAQAAAToAAFAAgAAAAAAAAJBtb29mAAAAEG1maGQAAAAAAAAAAwAAAHh0cmFmAAAAHHRmaGQAAgA4AAAAAQAACAAAAABGAQEAAAAAABR0ZmR0AQAAAAAAAAAAAKAAAAAAQHRydW4AAAIFAAAACgAAAJgCAAAAAAAARgAAAAsAAAALAAAACgAAAAoAAAAKAAAACgAAAAoAAAAKAAAACgAAAKptZGF0AAAAQmWIhAa8RigAD+/HAAER6OAAIQ8nJycnJycnJyddddddddddddddddddddddddddddddddddddddddddddddddddeAAAAAdBmjgNeD2AAAAAB0GaVANeD2AAAAAGQZpgGvB7AAAABkGagBrwewAAAAZBmqAa8HsAAAAGQZrAGvB7AAAABkGa4BrwewAAAAZBmwAa8HsAAAAGQZsgGvB7",
-};
-
 const MPD = `<?xml version="1.0" encoding="utf-8"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static"
   profiles="urn:mpeg:dash:profile:isoff-live:2011"
@@ -88,7 +72,7 @@ async function mockStream(page: Page, live: boolean) {
   // Segment URLs resolve against the manifest: /api/preview/… or /api/live/abc123/….
   await page.route(/\/(init\.mp4|seg-\d\.m4s)$/, (route) => {
     const name = new URL(route.request().url()).pathname.split("/").pop() ?? "";
-    const body = MEDIA[name];
+    const body = H264_MEDIA[name];
     if (!body) return route.fulfill({ status: 404 });
     return route.fulfill({
       contentType: "video/mp4",
@@ -303,4 +287,131 @@ test("a stream that keeps failing says so, without a compatibility-mode detour",
   await expect(page.getByText(/Compatibility-mode preview failed/)).toHaveCount(
     0
   );
+});
+
+/**
+ * The same media declared as 1080p and 360p, so Shaka offers a two-step
+ * ladder (it plays the 160x90 segments whatever the declared size).
+ */
+const LADDER_MPD = `<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static"
+  profiles="urn:mpeg:dash:profile:isoff-live:2011"
+  mediaPresentationDuration="PT6.0S" minBufferTime="PT2.0S">
+  <Period id="0" start="PT0.0S">
+    <AdaptationSet id="0" contentType="video" segmentAlignment="true"
+      mimeType="video/mp4" codecs="avc1.42c00a">
+      <SegmentTemplate timescale="1000000" duration="2000000"
+        initialization="init.mp4" media="seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="hd" bandwidth="40000" width="1920" height="1080"/>
+      <Representation id="sd" bandwidth="20000" width="640" height="360"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+test("a quality cut for dropped frames stays with its stream", async ({
+  page,
+}) => {
+  test.slow();
+  // The first stream's decoder drops half its frames while the window has
+  // focus (a game on the other monitor still rendering); the next is fine.
+  await page.addInitScript(() => {
+    if (!location.search.includes("abc123")) return;
+    const start = Date.now();
+    HTMLVideoElement.prototype.getVideoPlaybackQuality = () => {
+      const total = Math.round(((Date.now() - start) / 1000) * 30);
+      return {
+        totalVideoFrames: total,
+        droppedVideoFrames: Math.round(total / 2),
+        corruptedVideoFrames: 0,
+        creationTime: performance.now(),
+      } as VideoPlaybackQuality;
+    };
+    Document.prototype.hasFocus = () => true;
+  });
+  await mockStream(page, false);
+  await page.route(/\/api\/preview\/manifest\?/, (route) =>
+    route.fulfill({ contentType: "application/dash+xml", body: LADDER_MPD })
+  );
+
+  await page.goto(`/watch?url=${encodeURIComponent(STREAM_URL)}`);
+  await expect(
+    page.getByRole("button", { name: "Auto · 1080p" })
+  ).toBeVisible();
+  await expect(
+    page.getByText("Reduced quality for smooth playback")
+  ).toBeVisible({ timeout: 30_000 });
+
+  // The next stream offers its whole ladder again, starting on Auto.
+  const next = "https://video.example.test/watch?v=def456";
+  await page.goto(`/watch?url=${encodeURIComponent(next)}`);
+  await expect(
+    page.getByRole("button", { name: "Auto · 1080p" })
+  ).toBeVisible();
+});
+
+/**
+ * A video whose 4K comes only in AV1 (served from av1/, though the bytes are
+ * the same H.264 media) over a 1080p and 360p H.264 ladder.
+ */
+const MIXED_MPD = `<?xml version="1.0" encoding="utf-8"?>
+<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static"
+  profiles="urn:mpeg:dash:profile:isoff-live:2011"
+  mediaPresentationDuration="PT6.0S" minBufferTime="PT2.0S">
+  <Period id="0" start="PT0.0S">
+    <AdaptationSet id="0" contentType="video" segmentAlignment="true"
+      mimeType="video/mp4">
+      <BaseURL>av1/</BaseURL>
+      <SegmentTemplate timescale="1000000" duration="2000000"
+        initialization="init.mp4" media="seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="uhd" codecs="av01.0.12M.08" bandwidth="60000"
+        width="3840" height="2160"/>
+    </AdaptationSet>
+    <AdaptationSet id="1" contentType="video" segmentAlignment="true"
+      mimeType="video/mp4" codecs="avc1.42c00a">
+      <SegmentTemplate timescale="1000000" duration="2000000"
+        initialization="init.mp4" media="seg-$Number$.m4s" startNumber="1"/>
+      <Representation id="hd" bandwidth="40000" width="1920" height="1080"/>
+      <Representation id="sd" bandwidth="20000" width="640" height="360"/>
+    </AdaptationSet>
+  </Period>
+</MPD>`;
+
+test("Auto skips AV1 decoded in software, and the menu still offers its 4K", async ({
+  page,
+}) => {
+  // This browser decodes AV1, but only in software (not power efficient).
+  await page.addInitScript(() => {
+    const mc = navigator.mediaCapabilities;
+    const real = mc.decodingInfo.bind(mc);
+    mc.decodingInfo = async (config) => {
+      const info = await real(config);
+      return config.video?.contentType.includes("av01")
+        ? { ...info, supported: true, powerEfficient: false }
+        : info;
+    };
+  });
+  const av1: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/av1/")) av1.push(r.url());
+  });
+  let manifests = 0;
+  await mockStream(page, false);
+  await page.route(/\/api\/preview\/manifest\?/, (route) => {
+    manifests += 1;
+    return route.fulfill({
+      contentType: "application/dash+xml",
+      body: MIXED_MPD,
+    });
+  });
+
+  await page.goto(`/watch?url=${encodeURIComponent(STREAM_URL)}`);
+  const quality = page.getByRole("button", { name: "Auto · 1080p" });
+  await expect(quality).toBeVisible();
+  expect(av1).toEqual([]);
+
+  // Picking it loads this video again with its AV1 ladder.
+  await quality.click();
+  await page.getByRole("menuitemradio", { name: "4K" }).click();
+  await expect.poll(() => manifests).toBe(2);
+  await expect.poll(() => av1.length).toBeGreaterThan(0);
 });

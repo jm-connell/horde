@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 import {
+  codecFamily,
   trackQuality,
+  type CodecFamily,
   writeBandwidthEstimate,
-  writeDowngrade,
 } from "../utils/decodeCapability";
 
 export const POLL_MS = 2000;
@@ -15,9 +16,35 @@ const QUALITY_STEPS = [2160, 1440, 1080, 720, 480];
 export type HealthDowngrade = {
   /** Nominal YouTube quality ceiling (1080, 720, …). */
   maxHeight: number;
-  blacklistAv1: boolean;
+  /** The codec that was dropping frames; null for H.264, which has no other to fall back to. */
+  skipCodec: CodecFamily | null;
   notice: string;
 };
+
+/**
+ * The step-down in force on the current stream. It ends with that stream: frames
+ * dropped once (a game still rendering on the other monitor) must not cap the
+ * next one.
+ */
+export type StreamDowngrade = {
+  maxHeight: number;
+  /** Codec families this stream no longer loads. */
+  skipCodecs: CodecFamily[];
+};
+
+/**
+ * The codec a step-down skips: the active track's, except H.264 (nothing to
+ * fall back to) and live (its ladder is one load of mixed codecs, restricted
+ * in place, never reloaded).
+ */
+export function codecToSkip(
+  videoCodec: string | null | undefined,
+  live: boolean
+): CodecFamily | null {
+  if (live) return null;
+  const family = codecFamily(videoCodec);
+  return family === "avc1" ? null : family;
+}
 
 export type FrameSample = {
   now: number;
@@ -33,7 +60,7 @@ export type FrameSample = {
  * `check` answers true once per bad stretch of `SUSTAINED_MS`. Samples taken
  * while another window has focus do not count: a fullscreen game on the
  * other monitor holding the GPU says nothing about what this device can
- * play, and the cut it would cause is remembered for later streams.
+ * play.
  */
 export class FrameDropWatch {
   private prev: { dropped: number; decoded: number } | null = null;
@@ -117,9 +144,7 @@ export function usePlaybackHealth({
         const currentQuality = active ? trackQuality(active) : 2160;
         const nextQuality =
           QUALITY_STEPS.find((q) => q < currentQuality) ?? 480;
-        const isAv1 = (active?.videoCodec ?? "")
-          .toLowerCase()
-          .startsWith("av01");
+        const skipCodec = codecToSkip(active?.videoCodec, player.isLive());
 
         console.info("[preview-health] downgrade", {
           droppedFrames: dropped,
@@ -131,16 +156,12 @@ export function usePlaybackHealth({
           nextQuality,
           activeWidth: active?.width,
           activeHeight: active?.height,
-          isAv1,
+          skipCodec,
         });
 
-        writeDowngrade({
-          maxHeight: nextQuality,
-          blacklistAv1: isAv1,
-        });
         onDowngradeRef.current({
           maxHeight: nextQuality,
-          blacklistAv1: isAv1,
+          skipCodec,
           notice: "Reduced quality for smooth playback",
         });
       }

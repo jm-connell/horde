@@ -7293,6 +7293,15 @@
             "title": "Review Pending Count",
             "type": "integer"
           },
+          "runtime": {
+            "default": "server",
+            "enum": [
+              "server",
+              "desktop"
+            ],
+            "title": "Runtime",
+            "type": "string"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -23384,6 +23393,81 @@
         ]
       }
     },
+    "/api/live/{video_id}/seg/{key}/{sq}.webm": {
+      "get": {
+        "description": "A segment of a 1440p or 2160p variant (VP9 in WebM, which HLS cannot name).\n\nThe player asks for the type with HEAD once; that answers without fetching\nthe segment.",
+        "operationId": "live_webm_segment_api_live__video_id__seg__key___sq__webm_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{11}$",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,40}$",
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sq",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Sq",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "video/webm": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "WebM (VP9) media segment"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Live Webm Segment",
+        "tags": [
+          "live"
+        ]
+      }
+    },
     "/api/live/{video_id}/v/{key}.m3u8": {
       "get": {
         "operationId": "live_media_playlist_api_live__video_id__v__key__m3u8_get",
@@ -25228,6 +25312,7 @@
     },
     "/api/preview/meta": {
       "get": {
+        "description": "A stream's details for the watch page.\n\n``background=true`` marks a lookup nobody is waiting on yet (a hover\nwarm-up): it queues behind the videos people are opening.",
         "operationId": "preview_meta_api_preview_meta_get",
         "parameters": [
           {
@@ -25237,6 +25322,16 @@
             "schema": {
               "title": "Url",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "background",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Background",
+              "type": "boolean"
             }
           }
         ],

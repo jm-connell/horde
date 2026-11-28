@@ -25,7 +25,7 @@ from ..schemas import (
     MediaTokenRead,
     VideoRead,
 )
-from ..services import library, media_sidecars, uploads
+from ..services import desktop_status, library, media_sidecars, uploads
 from ..services.auth import media_token as media_token_svc
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ConcurrencyLimit, thumbnail_grab_limit
@@ -292,7 +292,12 @@ def _resolve_rendition(video: Video, rendition: str | None) -> Path | None:
     return path
 
 
-@router.get("/videos/{video_id}/stream", response_class=RAW, responses=VIDEO_STREAM)
+@router.get(
+    "/videos/{video_id}/stream",
+    response_class=RAW,
+    responses=VIDEO_STREAM,
+    dependencies=[Depends(desktop_status.track_media)],
+)
 def stream_video(
     video_id: int,
     request: Request,
@@ -388,7 +393,10 @@ def media_token(
     "/videos/{video_id}/file",
     response_class=RAW,
     responses=FILE_DOWNLOAD,
-    dependencies=[Depends(require_permission("offline_download"))],
+    dependencies=[
+        Depends(require_permission("offline_download")),
+        Depends(desktop_status.track_media),
+    ],
 )
 def download_video_file(
     video_id: int,

@@ -51,6 +51,7 @@ nav:
   - Home: index.md
   - Features: features.md
   - Getting started:
+      - Install the desktop app: getting-started/install-desktop.md
       - Install with Docker: getting-started/install-docker.md
       - TrueNAS / Dockge: getting-started/truenas-dockge.md
       - Other platforms (Windows, macOS, Pi, Unraid, Synology, Portainer, Proxmox): getting-started/other-platforms.md
@@ -150,6 +151,12 @@ nav:
       - 0035 Ask indexes subscriptions up to a limit: adr/0035-ask-indexes-subscriptions-up-to-a-limit.md
       - 0036 Chat replay read around the position: adr/0036-chat-replay-read-around-the-position.md
       - 0037 Live chat follows the viewer: adr/0037-live-chat-follows-the-viewer.md
+      - 0038 Live 1440p and 2160p need Deno: adr/0038-live-1440p-and-2160p-need-deno.md
+      - 0039 Deno only as a fallback: adr/0039-deno-only-as-a-fallback.md
+      - 0040 Streams choose a codec by hardware decoding: adr/0040-streams-choose-a-codec-by-hardware-decoding.md
+      - 0041 Related lists keep other interests: adr/0041-related-lists-keep-other-interests.md
+      - 0042 Desktop apps: adr/0042-desktop-apps.md
+      - 0043 Related lists adapt to the topic: adr/0043-related-lists-adapt-to-the-topic.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

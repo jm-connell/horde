@@ -87,6 +87,8 @@ def test_episode_nfo_has_the_fields_a_media_server_reads(init_db, add_video):
         tags=["Cats", "cats", "dogs", " "],
         duration_sec=605.0,
         channel_url="https://www.youtube.com/channel/UCabc123",
+        # The title has characters Windows forbids in file names.
+        file_path="Alpha/2024/Why A and B [nfovideo001].mp4",
     )
     assert _sync(init_db, video.id) is True
 

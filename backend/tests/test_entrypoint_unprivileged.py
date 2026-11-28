@@ -8,15 +8,24 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 ENTRYPOINT = Path(__file__).resolve().parents[2] / "docker" / "entrypoint.sh"
 
-pytestmark = pytest.mark.skipif(
-    os.geteuid() == 0, reason="needs a non-root user, like `docker run --user`"
-)
+pytestmark = [
+    pytest.mark.skipif(
+        sys.platform != "linux",
+        reason="docker/entrypoint.sh runs only inside the Linux image",
+    ),
+    # Short-circuits off Linux, where os.geteuid does not exist (Windows).
+    pytest.mark.skipif(
+        sys.platform == "linux" and os.geteuid() == 0,
+        reason="needs a non-root user, like `docker run --user`",
+    ),
+]
 
 
 def _run(tmp_path: Path, **env: str) -> subprocess.CompletedProcess[str]:

@@ -43,6 +43,12 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0035](0035-ask-indexes-subscriptions-up-to-a-limit.md) | Ask indexes every subscription, up to a limit; only Ask is called indexed (the catalog is listed, the library embedded) | Accepted |
 | [0036](0036-chat-replay-read-around-the-position.md) | Chat replay is read from YouTube around the playback position and never saved | Accepted |
 | [0037](0037-live-chat-follows-the-viewer.md) | Live chat is polled once per broadcast into a buffer and follows the viewer's position | Accepted |
+| [0038](0038-live-1440p-and-2160p-need-deno.md) | Live 1440p and 2160p come from a separate extraction that runs Deno | Accepted |
+| [0039](0039-deno-only-as-a-fallback.md) | Deno runs only as a fallback for videos the JS-less clients cannot open, not for all of yt-dlp | Accepted |
+| [0040](0040-streams-choose-a-codec-by-hardware-decoding.md) | A stream plays AV1, then VP9, then H.264 by what the device decodes in hardware | Accepted |
+| [0041](0041-related-lists-keep-other-interests.md) | A related list keeps one place in four for the viewer's other interests | Superseded by [0043](0043-related-lists-adapt-to-the-topic.md) |
+| [0042](0042-desktop-apps.md) | Desktop apps: an Electron shell around the same server, with a real bundled Python | Accepted |
+| [0043](0043-related-lists-adapt-to-the-topic.md) | A related list mixes in other interests by how crowded the topic is, as far as the viewer's algorithm says | Accepted |
 
 ## Writing a new record
 

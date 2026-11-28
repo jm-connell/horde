@@ -33,6 +33,17 @@ Horde has **no access to Docker** and the container does not mount the Docker so
 - The cron job runs as root on the host, so the files it runs (`scripts/update_watch.sh`, `update.sh`) must stay owned and writable only by trusted users.
 - Remove the cron job and the button disappears within 5 minutes. See [ADR 0011](../adr/0011-in-app-updates.md).
 
+## Desktop app { #desktop-app }
+
+The [desktop app](../getting-started/install-desktop.md) runs the same server on a personal computer, so a few things differ ([ADR 0042](../adr/0042-desktop-apps.md)).
+
+- **Loopback by default.** The server listens on `127.0.0.1:8686`, so nothing else on the network can reach it. **Share on my home network** in the tray menu moves it to all addresses. It is off by default, and Horde refuses to turn it on until an administrator account exists, so nobody can reach the first-visit account creation from the network. Everyone still signs in.
+- **The window has no Node access.** It shows Horde's pages with context isolation and the sandbox on and no preload script. Navigation stays on Horde's own address; any other link opens in your default browser, and only `http` and `https` links do. Permission requests are refused except what the player needs.
+- **The shell and the server talk privately.** The server's standard input is a pipe held by the shell (closing it stops the server), and a status file in the data folder says what is running. There is no extra HTTP route for this.
+- **Updates** come over HTTPS from the project's GitHub Releases and are checked against the SHA-512 in the release's update file. The apps are unsigned for now, so that is the whole chain: there is no publisher check. Each release file is also attested (`gh attestation verify <file> --repo jm-connell/horde`) and listed in `SHA256SUMS`. The Mac app does not install updates itself.
+- **Bundled programs** (Python, ffmpeg, ffprobe, deno) are pinned by SHA-256 in `desktop/vendor.lock.json` and fetched only against that hash. The Python packages are the hash-checked `backend/requirements.lock`.
+- **Unsigned apps** show a warning on first open. See [Install the desktop app](../getting-started/install-desktop.md#open-it-for-the-first-time).
+
 ## Allowed hosts { #allowed-hosts }
 
 Horde answers requests whose `Host` header is one of:

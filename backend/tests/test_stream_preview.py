@@ -174,3 +174,139 @@ def test_browsing_does_not_evict_a_paused_stream(builds):
 
     media = stream_preview.lookup_preview_media("paused", "299")
     assert media["direct_url"] == "https://cdn.example/paused.mp4"
+
+
+def _progressive(**extra):
+    return {
+        "url": "https://cdn.example/kids.mp4",
+        "vcodec": "avc1",
+        "acodec": "mp4a",
+        "height": 360,
+        "ext": "mp4",
+        "tbr": 500,
+        **extra,
+    }
+
+
+@pytest.fixture
+def sleeps(monkeypatch):
+    slept: list[float] = []
+    monkeypatch.setattr(stream_preview.time, "sleep", slept.append)
+    stream_preview._preview_stream_cache.clear()
+    yield slept
+    stream_preview._preview_stream_cache.clear()
+
+
+def test_a_progressive_url_says_when_it_starts_working(monkeypatch, sleeps):
+    # YouTube's JS client (made-for-kids videos) hands out URLs that answer 403
+    # until the pre-roll ads are over; yt-dlp says when (available_at). The
+    # resolver passes that on instead of sleeping inside the preview semaphore.
+    soon = time.time() + 3
+    monkeypatch.setattr(
+        stream_preview,
+        "_extract_preview_info",
+        lambda url, *, force=False: {"formats": [_progressive(available_at=soon)]},
+    )
+    entry = stream_preview.resolve_preview_stream("https://youtu.be/kids-wait-test")
+    assert sleeps == []
+    assert 2.5 < stream_preview.seconds_until_available(entry) <= 3
+
+
+def test_waits_for_a_fresh_url_are_bounded():
+    now = time.time()
+    assert stream_preview.seconds_until_available({"available_at": now + 500}) == 60
+    assert stream_preview.seconds_until_available({"available_at": now - 1}) == 0
+    assert stream_preview.seconds_until_available({}) == 0
+
+
+def test_the_stream_proxy_waits_before_its_first_fetch(client, monkeypatch):
+    from fastapi.responses import Response
+
+    resolved = {
+        "direct_url": "https://cdn.example/v.mp4",
+        "http_headers": {},
+        "content_type": "video/mp4",
+        "available_at": time.time() + 3,
+    }
+    asked: list[dict] = []
+    order: list[str] = []
+
+    def until(item):
+        asked.append(item)
+        order.append("wait")
+        return 0.01
+
+    async def proxy(request, entry, **_kw):
+        order.append("fetch")
+        return Response(b"ok", media_type="video/mp4")
+
+    monkeypatch.setattr(
+        stream_preview, "resolve_preview_stream", lambda url, *, force=False: resolved
+    )
+    monkeypatch.setattr(stream_preview, "seconds_until_available", until)
+    monkeypatch.setattr("app.api.preview._proxy_upstream", proxy)
+    resp = client.get(
+        "/api/preview/stream",
+        params={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+    )
+    assert resp.status_code == 200
+    assert asked == [resolved] and order == ["wait", "fetch"]
+
+
+def test_adaptive_ranges_are_read_once_the_url_works(monkeypatch, sleeps):
+    order: list[str] = []
+    monkeypatch.setattr(stream_preview.time, "sleep", lambda s: order.append("wait"))
+
+    def probe(direct, headers):
+        order.append("probe")
+        sidx = {
+            "timescale": 1000,
+            "earliest_presentation_time": 0,
+            "duration_sec": 10.0,
+            "boundaries": [0.0, 10.0],
+        }
+        return "0-100", "101-200", sidx
+
+    monkeypatch.setattr(stream_preview, "_probe_mp4_ranges", probe)
+    fmt = {
+        "url": "https://cdn.example/v.mp4",
+        "format_id": "399",
+        "vcodec": "av01.0.08M.08",
+        "acodec": "none",
+        "available_at": time.time() + 4,
+    }
+    stream_preview._build_representation(fmt, {}, kind="video")
+    assert order == ["wait", "probe"]
+
+
+def test_meta_background_lookups_wait_behind_interactive_ones(client, monkeypatch):
+    """A hover warm-up nobody is waiting on must not hold up a video being opened."""
+    from app.services import ytdlp_common
+
+    url = "https://www.youtube.com/watch?v=warmupprio1"
+    seen: list[int] = []
+
+    def gated(target, opts, *, priority, **_kw):
+        seen.append(priority)
+        return {
+            "id": "warmupprio1",
+            "title": "A warmed video",
+            "duration": 60.0,
+            "webpage_url": target,
+            "formats": [
+                {
+                    "format_id": "18",
+                    "url": "https://rr1.googlevideo.com/v",
+                    "height": 360,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(stream_preview, "extract_info_gated", gated)
+    assert client.get("/api/preview/meta", params={"url": url}).status_code == 200
+    res = client.get("/api/preview/meta", params={"url": url, "background": "true"})
+    assert res.status_code == 200, res.text
+    assert seen == [
+        ytdlp_common.EXTRACT_PRIORITY_INTERACTIVE,
+        ytdlp_common.EXTRACT_PRIORITY_DOWNLOAD,
+    ]

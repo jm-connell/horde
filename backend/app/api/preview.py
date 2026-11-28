@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -26,9 +27,17 @@ from ..openapi_responses import (
 )
 from ..parental_guard import NOT_ALLOWED, stream_guard
 from ..schemas import NextPartRead, StreamPreviewMeta, StreamRelatedPage
-from ..services import library, next_part, parental, stream_preview, stream_related
+from ..services import (
+    desktop_status,
+    library,
+    next_part,
+    parental,
+    stream_preview,
+    stream_related,
+)
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import history as stream_history
+from ..services.discovery.other_interests import Viewer
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
 from ..services.url_safety import (
@@ -42,6 +51,8 @@ from ..services.url_safety import (
 from ..services.ytdlp_common import (
     ERROR_KIND_NETWORK,
     ERROR_KIND_UNKNOWN,
+    EXTRACT_PRIORITY_DOWNLOAD,
+    EXTRACT_PRIORITY_INTERACTIVE,
     MembersOnlyError,
     classify_ytdlp_error,
     http_detail_for_error,
@@ -496,13 +507,23 @@ def preview_extraction_error(exc: Exception, cleaned: str) -> StarletteHTTPExcep
 )
 def preview_meta(
     url: str = Query(...),
+    background: bool = False,
     session: Session = Depends(get_session),
     gate: ExtractionGate = Depends(extraction_gate),
     user: AuthUser = Depends(current_user),
 ):
+    """A stream's details for the watch page.
+
+    ``background=true`` marks a lookup nobody is waiting on yet (a hover
+    warm-up): it queues behind the videos people are opening.
+    """
     cleaned = _require_video_url(url)
+    # Not EXTRACT_PRIORITY_BACKGROUND: that waits behind catalog indexing.
+    priority = EXTRACT_PRIORITY_DOWNLOAD if background else EXTRACT_PRIORITY_INTERACTIVE
     try:
-        meta = gate.run(stream_preview.extract_stream_preview_meta, cleaned)
+        meta = gate.run(
+            stream_preview.extract_stream_preview_meta, cleaned, priority=priority
+        )
     except HTTPException:
         raise  # 429 / 504 from the gate
     except Exception as exc:
@@ -679,7 +700,13 @@ async def preview_related(
         else []
     )
     items = await run_in_threadpool(
-        _related, youtube_id, meta, limit, user.can("use_ai"), live_now
+        _related,
+        youtube_id,
+        meta,
+        limit,
+        user.can("use_ai"),
+        live_now,
+        Viewer(user.id, current().discovery, user.allowed),
     )
     if user.allowed is not None:
         # This member sees only allowed channels' videos.
@@ -707,7 +734,9 @@ def preview_next_part(
     return NextPartRead(entry=found.to_entry(), reason=found.reason)
 
 
-def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now):
+def _related(
+    youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now, viewer: Viewer
+):
     with Session(get_engine()) as session:
         return stream_related.related_for_stream(
             session,
@@ -716,6 +745,7 @@ def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now)
             limit=limit,
             may_embed=may_embed,
             live_now=live_now,
+            viewer=viewer,
         )
 
 
@@ -786,7 +816,12 @@ def preview_manifest(request: Request, url: str = Query(...)):
     )
 
 
-@router.get("/media", response_class=RAW, responses=VIDEO_STREAM)
+@router.get(
+    "/media",
+    response_class=RAW,
+    responses=VIDEO_STREAM,
+    dependencies=[Depends(desktop_status.track_media)],
+)
 async def preview_media(
     request: Request,
     token: str = Query(...),
@@ -867,4 +902,7 @@ async def preview_stream(request: Request, url: str = Query(...)):
             status_code=400, detail=f"Could not open preview stream: {exc}"
         ) from exc
 
+    delay = stream_preview.seconds_until_available(resolved)
+    if delay > 0:
+        await asyncio.sleep(delay)
     return await _proxy_upstream(request, resolved, stream_url=cleaned)

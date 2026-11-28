@@ -103,7 +103,7 @@ Subscribe to channels and their new uploads arrive on their own. Keep everything
 
 <div class="horde-feature" markdown>
 ### Stream first
-Watch a YouTube video or a live broadcast without downloading it, then keep it if it was worth it. Live streams rewind up to four hours. [Watching](guides/watching.md)
+Watch a YouTube video or a live broadcast without downloading it, then keep it if it was worth it. Live streams rewind to the start of the broadcast (up to 24 hours). [Watching](guides/watching.md)
 </div>
 
 <div class="horde-feature" markdown>
@@ -168,6 +168,7 @@ docker compose up -d
 Open `http://<server-ip>:8686`, create the administrator account, and the setup wizard does the rest. Compose downloads the published image for x86 or ARM; nothing is built on your machine.
 
 <div class="horde-platforms" markdown>
+[Desktop app (Windows, macOS, Linux)](getting-started/install-desktop.md)
 [Step by step with Docker](getting-started/install-docker.md)
 [TrueNAS / Dockge](getting-started/truenas-dockge.md)
 [Windows](getting-started/other-platforms.md#windows)

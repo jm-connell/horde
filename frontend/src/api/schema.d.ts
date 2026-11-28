@@ -2387,6 +2387,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/live/{video_id}/seg/{key}/{sq}.webm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Webm Segment
+         * @description A segment of a 1440p or 2160p variant (VP9 in WebM, which HLS cannot name).
+         *
+         *     The player asks for the type with HEAD once; that answers without fetching
+         *     the segment.
+         */
+        get: operations["live_webm_segment_api_live__video_id__seg__key___sq__webm_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/live/{video_id}/v/{key}.m3u8": {
         parameters: {
             query?: never;
@@ -2929,7 +2952,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Preview Meta */
+        /**
+         * Preview Meta
+         * @description A stream's details for the watch page.
+         *
+         *     ``background=true`` marks a lookup nobody is waiting on yet (a hover
+         *     warm-up): it queues behind the videos people are opening.
+         */
         get: operations["preview_meta_api_preview_meta_get"];
         put?: never;
         post?: never;
@@ -7119,6 +7148,12 @@ export interface components {
             pot_provider?: components["schemas"]["PotProviderStatus"] | null;
             /** Review Pending Count */
             review_pending_count: number;
+            /**
+             * Runtime
+             * @default server
+             * @enum {string}
+             */
+            runtime: "server" | "desktop";
             /** Status */
             status: string;
             /** Storage Warning */
@@ -15965,6 +16000,48 @@ export interface operations {
             };
         };
     };
+    live_webm_segment_api_live__video_id__seg__key___sq__webm_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+                key: string;
+                sq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description WebM (VP9) media segment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/webm": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     live_media_playlist_api_live__video_id__v__key__m3u8_get: {
         parameters: {
             query?: never;
@@ -17363,6 +17440,7 @@ export interface operations {
         parameters: {
             query: {
                 url: string;
+                background?: boolean;
             };
             header?: never;
             path?: never;

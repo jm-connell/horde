@@ -1,5 +1,5 @@
 import type { Page, Route } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { expect, openNav, test } from "./fixtures";
 import { expectNoSeriousViolations } from "./axe";
 
 /**
@@ -114,6 +114,34 @@ async function openCedar(page: Page, opts: ChatOpts = {}, query = "") {
   return { id, reads };
 }
 
+/** Open in theater (once: later reloads keep whatever the test chose). */
+async function theater(page: Page) {
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("horde-e2e-theater")) return;
+    sessionStorage.setItem("horde-e2e-theater", "1");
+    localStorage.setItem(
+      "horde.settings",
+      JSON.stringify({ playbackMode: "theater" })
+    );
+  });
+}
+
+/** The player's own room beside the picture (theater, fit window). */
+function playerAside(page: Page) {
+  return page.locator("[data-horde='player-aside']");
+}
+
+/** The arrow on the picture that opens a hidden chat beside it. */
+function opener(page: Page) {
+  return page.locator("[data-horde='player-aside-opener']");
+}
+
+/** Bring the player's controls up. */
+async function overVideo(page: Page) {
+  const box = (await page.locator("video").first().boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 function chatRegion(page: Page) {
   return page.getByRole("region", { name: "Live chat" });
 }
@@ -214,24 +242,217 @@ test("scrolling up pauses autoscroll until Jump to latest", async ({
   await expect(jump).toHaveCount(0);
 });
 
-test("theater: chat beside the description", async ({ page }) => {
-  await page.addInitScript(() => {
-    if (sessionStorage.getItem("horde-e2e-theater")) return;
-    sessionStorage.setItem("horde-e2e-theater", "1");
-    localStorage.setItem(
-      "horde.settings",
-      JSON.stringify({ playbackMode: "theater" })
-    );
-  });
-  await openCedar(page);
-  const chat = chatRegion(page);
+test("theater: chat beside the picture, as tall as the player", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page, { spacing: 100 });
+  await pauseAt(page, 8);
+  const chat = playerAside(page).getByRole("region", { name: "Live chat" });
   await expect(chat).toBeVisible();
-  await expect(page.locator("aside")).toHaveCount(0);
-  const comments = page.getByRole("region", { name: /Comments/ });
-  const chatBox = (await chat.boundingBox())!;
-  const commentsBox = (await comments.boundingBox())!;
-  // Side by side: chat to the right of the column the comments are in.
-  expect(chatBox.x).toBeGreaterThan(commentsBox.x + commentsBox.width - 1);
+  await expect(chatRegion(page)).toHaveCount(1);
+  // A long chat scrolls inside the panel instead of growing the player.
+  await expect
+    .poll(() =>
+      chatLog(page).evaluate((el) => el.scrollHeight > el.clientHeight)
+    )
+    .toBe(true);
+  const video = (await page.locator("video").first().boundingBox())!;
+  const box = (await chat.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(video.x + video.width - 1);
+  expect(box.y).toBeGreaterThanOrEqual(video.y - 1);
+  expect(box.y + box.height).toBeLessThanOrEqual(video.y + video.height + 1);
+  expect(Math.abs(box.height - video.height)).toBeLessThan(2);
+  expect(box.x + box.width).toBeLessThanOrEqual(1440);
+});
+
+test("fit window: chat beside the picture", async ({ page }) => {
+  await openCedar(page);
+  await expect(chatRegion(page)).toBeVisible();
+  await page.keyboard.press("f");
+  const chat = playerAside(page).getByRole("region", { name: "Live chat" });
+  await expect(chat).toBeVisible();
+  await expect(chatRegion(page)).toHaveCount(1);
+  // The whole height of the window, once the player has grown to fill it.
+  await expect
+    .poll(async () => (await chat.boundingBox())!.height)
+    .toBeGreaterThan(890);
+  const video = (await page.locator("video").first().boundingBox())!;
+  const box = (await chat.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(video.x + video.width - 1);
+  expect(box.x + box.width).toBeLessThanOrEqual(1440);
+  await page.keyboard.press("Escape");
+  await expect(playerAside(page)).toHaveCount(0);
+  await expect(chatRegion(page)).toBeVisible();
+});
+
+test("theater: a window narrowed under 1024px moves chat under the video", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page);
+  await expect(
+    playerAside(page).getByRole("region", { name: "Live chat" })
+  ).toBeVisible();
+  await page.setViewportSize({ width: 900, height: 900 });
+  await expect(playerAside(page)).toHaveCount(0);
+  await expect(chatRegion(page)).toHaveCount(1);
+  await expect(chatRegion(page)).toBeVisible();
+});
+
+test("theater: desktop fullscreen is video only, and chat returns after it", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page);
+  const chat = playerAside(page).getByRole("region", { name: "Live chat" });
+  await expect(chat).toBeVisible();
+  const box = (await page.locator("video").first().boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.getByRole("button", { name: "Fullscreen", exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => document.fullscreenElement !== null))
+    .toBe(true);
+  await expect(playerAside(page)).toHaveCount(0);
+  await page.evaluate(() => document.exitFullscreen());
+  await expect(chat).toBeVisible();
+});
+
+test("theater to fit window and back keeps following the newest message", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page, { spacing: 100 });
+  await pauseAt(page, 15);
+  const chat = playerAside(page).getByRole("region", { name: "Live chat" });
+  const jump = page.getByRole("button", { name: "Jump to latest" });
+  await expect.poll(() => lastMessage(page)).toContain("message at 15.0s");
+  await expect
+    .poll(() => scrollState(page).then((s) => s.fromBottom))
+    .toBeLessThan(30);
+
+  // Fit window moves the player (and the chat in it) to cover the page.
+  await page.keyboard.press("f");
+  await expect
+    .poll(async () => (await chat.boundingBox())!.height)
+    .toBeGreaterThan(890);
+  await page.waitForTimeout(500);
+  expect((await scrollState(page)).fromBottom).toBeLessThan(30);
+  await expect(jump).toHaveCount(0);
+
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(async () => (await chat.boundingBox())!.height)
+    .toBeLessThan(800);
+  await page.waitForTimeout(500);
+  expect((await scrollState(page)).fromBottom).toBeLessThan(30);
+  await expect(jump).toHaveCount(0);
+});
+
+test("theater to fit window keeps the place of someone reading back", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page, { spacing: 100 });
+  await pauseAt(page, 15);
+  const chat = playerAside(page).getByRole("region", { name: "Live chat" });
+  const jump = page.getByRole("button", { name: "Jump to latest" });
+  await expect.poll(() => lastMessage(page)).toContain("message at 15.0s");
+  const firstInView = () =>
+    chatLog(page).evaluate((el) => {
+      const row = Array.from(el.children).find(
+        (c) => (c as HTMLElement).offsetTop >= el.scrollTop
+      ) as HTMLElement;
+      return row.dataset.id;
+    });
+  await chatLog(page).evaluate((el) => {
+    el.scrollTop = el.scrollHeight / 2;
+  });
+  await expect(jump).toBeVisible();
+  const reading = await firstInView();
+
+  await page.keyboard.press("f");
+  await expect
+    .poll(async () => (await chat.boundingBox())!.height)
+    .toBeGreaterThan(890);
+  await page.waitForTimeout(500);
+  await expect(jump).toBeVisible();
+  expect(await firstInView()).toBe(reading);
+});
+
+test("theater: Hide gives the picture the width back and the arrow reopens chat", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page);
+  const chat = playerAside(page).getByRole("region", { name: "Live chat" });
+  await expect(chat).toBeVisible();
+  await expect(opener(page)).toHaveCount(0);
+  const video = page.locator("video").first();
+  const before = (await video.boundingBox())!.width;
+  await chat.getByRole("button", { name: "Hide" }).click();
+  await expect(chatRegion(page)).toHaveCount(0);
+  await expect
+    .poll(async () => (await video.boundingBox())!.width)
+    .toBeGreaterThan(before);
+  await overVideo(page);
+  await expect(opener(page)).toHaveAccessibleName("Show live chat");
+  // A small arrow in the picture's top right corner.
+  const picture = (await video.boundingBox())!;
+  const arrow = (await opener(page).boundingBox())!;
+  expect(arrow.x).toBeGreaterThan(picture.x + picture.width - 80);
+  expect(arrow.y).toBeLessThan(picture.y + 80);
+  await opener(page).click();
+  await expect(chat).toBeVisible();
+  await expect(opener(page)).toHaveCount(0);
+});
+
+test("fit window: the arrow opens a hidden chat", async ({ page }) => {
+  await openCedar(page);
+  await chatRegion(page).getByRole("button", { name: "Hide" }).click();
+  // Standard view has the bar in the chat's place, not the arrow.
+  await expect(
+    page.getByRole("button", { name: "Show live chat" })
+  ).toBeVisible();
+  await expect(opener(page)).toHaveCount(0);
+  await page.keyboard.press("f");
+  await overVideo(page);
+  await opener(page).click();
+  await expect(
+    playerAside(page).getByRole("region", { name: "Live chat" })
+  ).toBeVisible();
+});
+
+test("theater: a video with no chat has no arrow and the whole width", async ({
+  page,
+}) => {
+  await theater(page);
+  await openCedar(page, {
+    answer: (route) =>
+      route.fulfill({ json: { status: "none", items: [], next_cursor: null } }),
+  });
+  const video = page.locator("video").first();
+  await expect(video).toBeVisible();
+  await page.waitForTimeout(1000);
+  await overVideo(page);
+  await expect(opener(page)).toHaveCount(0);
+  await expect(playerAside(page)).toBeHidden();
+  expect((await video.boundingBox())!.width).toBe(1440);
+});
+
+test("the mini player has no chat arrow", async ({ page }) => {
+  await theater(page);
+  await openCedar(page);
+  await playerAside(page).getByRole("button", { name: "Hide" }).click();
+  await overVideo(page);
+  await expect(opener(page)).toBeVisible();
+  await page
+    .locator("video")
+    .first()
+    .evaluate((v: HTMLVideoElement) => v.play());
+  await openNav(page, "Home");
+  await expect(page.locator(".player-mini")).toBeVisible();
+  await expect(opener(page)).toHaveCount(0);
 });
 
 for (const size of [
@@ -467,7 +688,7 @@ test.describe("touch screen fullscreen", () => {
     await expect
       .poll(() => page.evaluate(() => document.fullscreenElement !== null))
       .toBe(true);
-    const aside = page.locator("[data-horde='player-fullscreen-aside']");
+    const aside = playerAside(page);
     await expect(
       aside.getByRole("region", { name: "Live chat" })
     ).toBeVisible();
@@ -485,9 +706,7 @@ test("desktop fullscreen stays video only", async ({ page }) => {
   await expect
     .poll(() => page.evaluate(() => document.fullscreenElement !== null))
     .toBe(true);
-  await expect(
-    page.locator("[data-horde='player-fullscreen-aside']")
-  ).toHaveCount(0);
+  await expect(playerAside(page)).toHaveCount(0);
   await page.evaluate(() => document.exitFullscreen());
 });
 
@@ -522,14 +741,7 @@ test("theater on a tablet-sized window puts chat above the comments", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 900, height: 900 });
-  await page.addInitScript(() => {
-    if (sessionStorage.getItem("horde-e2e-theater")) return;
-    sessionStorage.setItem("horde-e2e-theater", "1");
-    localStorage.setItem(
-      "horde.settings",
-      JSON.stringify({ playbackMode: "theater" })
-    );
-  });
+  await theater(page);
   await openCedar(page);
   const chat = chatRegion(page);
   await expect(chat).toBeVisible();

@@ -68,7 +68,7 @@ Stream preview uses adaptive **DASH** (Shaka) when available. Quality choices:
 
 | Choice | Meaning |
 |--------|---------|
-| **Auto** | ABR within capability |
+| **Auto** | ABR within what this device decodes smoothly (below) |
 | **2160** | Cap at 4K |
 | **1440** | Cap at 1440p |
 | **1080** | Cap at 1080p |
@@ -79,7 +79,19 @@ Library files typically play as progressive local media; if DASH fails on a stre
 
 On a live broadcast a new quality takes over a few seconds after you pick it, where the already buffered part ends.
 
-When the browser keeps dropping frames for several seconds, Horde lowers the quality ceiling one step ("Reduced quality for smooth playback") and keeps that ceiling for later streams for a day; picking a quality other than **Auto** in the menu clears it. This only happens while Horde's window has focus: frames dropped while you are in another window, such as a fullscreen game on the other monitor, say nothing about what your device can play. Shaka's own bandwidth-based quality changes on **Auto** still apply.
+YouTube offers H.264 only up to 1080p; 1440p and 4K come as AV1 or VP9 (every video above 1080p has VP9, only some have AV1), and both are heavy to decode without a hardware decoder. So on **Auto**, a video that isn't downloaded plays:
+
+1. AV1, where your browser reports hardware AV1 decoding and the video has AV1;
+2. otherwise VP9, where your browser reports hardware VP9 decoding and the video has VP9 above 1080p;
+3. otherwise H.264, up to 1080p.
+
+Auto goes only as high as the codec that loaded decodes in hardware. A live broadcast goes above 1080p only where VP9 decodes in hardware.
+
+Every quality your device can decode at all stays in the quality menu, so 1440p and 4K are there even when Auto stays at 1080p. Picking one loads that video again in the codec that has it (VP9 where it decodes that quality in hardware, otherwise AV1 if your browser supports AV1, otherwise VP9) for as long as you watch it, and picking **Auto** goes back. A quality whose codecs your browser says it cannot decode at all (VP9 and AV1 on an older iPhone, say) is not listed.
+
+Chrome on Linux has no hardware video decoding by default, so there Auto stays on H.264 at 1080p; the higher qualities are in the menu, and playing them is up to your processor.
+
+When the browser keeps dropping frames for several seconds, Horde lowers the quality ceiling one step ("Reduced quality for smooth playback") for the rest of that video, and if the frames were dropping in AV1 or VP9 it skips that codec for the rest of that video and plays another codec your device decodes in hardware if the video has one, otherwise H.264 (a quality you picked by hand falls back straight to H.264); a live broadcast lowers its quality in place without reloading; the next video starts on its full ladder again, and picking a quality other than **Auto** in the menu lifts it. This only happens while Horde's window has focus: frames dropped while you are in another window, such as a fullscreen game on the other monitor, say nothing about what your device can play. Shaka's own bandwidth-based quality changes on **Auto** still apply.
 
 A stream that freezes restarts itself. When it should be playing but the clock has stood still (5 seconds with video buffered, 20 seconds while it waits for video and none arrives), the player reloads the stream at the same position, staying in fullscreen; after two reloads that do not get it moving it switches to the progressive URL. This covers Safari on iPad and iPhone leaving a stream stuck after the sound moves between devices (AirPods switching to a phone and back).
 

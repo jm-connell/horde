@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -101,7 +102,8 @@ def test_secret_key_is_created_once_with_private_mode(tmp_path):
     path = tmp_path / "secret_key"
     key = media_token.load_or_create_secret(path)
     assert len(key) == 32
-    assert oct(path.stat().st_mode & 0o777) == "0o600"
+    if os.name == "posix":  # Windows has no mode bits; the data folder's ACL applies
+        assert oct(path.stat().st_mode & 0o777) == "0o600"
     assert media_token.load_or_create_secret(path) == key
 
 

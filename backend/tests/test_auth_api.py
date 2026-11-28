@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -433,7 +434,9 @@ def test_a_token_stops_working_when_its_user_is_disabled(anon_client, media, ini
 
 def test_secret_key_file_is_private(client, media, init_db):
     key = init_db["data"] / "secret_key"
-    assert key.exists() and oct(key.stat().st_mode & 0o777) == "0o600"
+    assert key.exists()
+    if os.name == "posix":  # Windows has no mode bits; the data folder's ACL applies
+        assert oct(key.stat().st_mode & 0o777) == "0o600"
     assert key.read_bytes() not in media.token.encode()
 
 

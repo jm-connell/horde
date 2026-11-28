@@ -11,11 +11,19 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
+
+pytestmark = pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="update.sh and scripts/update_watch.sh run only on the Linux Docker host "
+    "(the watcher needs flock, setpriv and GNU realpath); desktop apps update "
+    "themselves",
+)
 
 FAKE_DOCKER = r"""#!/usr/bin/python3 -SE
 import json, os, sys

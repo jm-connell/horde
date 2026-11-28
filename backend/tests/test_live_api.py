@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 import pytest
+from fastapi import HTTPException
 
 from app.services import follows
 from app.services.live.directory import STALE_LIVE_SEC
@@ -25,6 +26,11 @@ MANIFEST = (
 SEG = (
     "https://rr1---sn-x.googlevideo.com/videoplayback/id/x.1/itag/95"
     "/source/yt_live_broadcast/expire/9999999999/sq/{n}/file/seg.ts"
+)
+#: A live adaptive (VP9) format: no playlist, segments are this plus ``&sq=<n>``.
+TALL = (
+    "https://rr3---sn-x.googlevideo.com/videoplayback?expire=9999999999"
+    "&itag=315&source=yt_live_broadcast&sig=AB%3D%3D"
 )
 PLAYLIST_HEAD = 102
 PLAYLIST_FIRST = 100
@@ -339,6 +345,9 @@ class Upstream:
             return httpx.Response(
                 200, content=_playlist_text().encode(), request=request
             )
+        if url.startswith(TALL + "&sq="):
+            sq = int(url.rsplit("=", 1)[1])
+            return httpx.Response(200, content=f"WEBM{sq}".encode(), request=request)
         sq = int(url.split("/sq/")[1].split("/")[0])
         if sq > PLAYLIST_HEAD or (sq < PLAYLIST_FIRST and sq not in self.extra_ok_sqs):
             return httpx.Response(404, request=request)
@@ -488,6 +497,79 @@ def test_segment_unknown_variant_is_404(client, upstream, extracted):
     assert resp.json()["code"] == "not_found"
 
 
+TALL_FORMAT = {
+    "format_id": "315",
+    "protocol": "https",
+    "ext": "webm",
+    "url": TALL,
+    "vcodec": "vp9",
+    "acodec": "none",
+    "width": 3840,
+    "height": 2160,
+    "fps": 60,
+    "tbr": 18016,
+}
+
+
+@pytest.fixture
+def tall(monkeypatch, extracted):
+    """A JS runtime is configured; the extra lookup finds a 2160p VP9 format."""
+    extracted["info"] = _split_info()
+    state: dict[str, Any] = {"formats": [TALL_FORMAT], "calls": []}
+
+    def fake(url: str, *, force: bool = False) -> list[dict[str, Any]]:
+        state["calls"].append((url, force))
+        return state["formats"]
+
+    monkeypatch.setattr("app.services.live.extract.YTDLP_JS_RUNTIME", "deno")
+    monkeypatch.setattr("app.services.live.extract.extract_tall_formats", fake)
+    return state
+
+
+def test_tall_vp9_variant_is_listed_and_served_as_webm(client, upstream, tall):
+    master = client.get(f"/api/live/{VID}/master.m3u8").text
+    assert "v/315.m3u8" in master and 'CODECS="vp09.00.51.08,mp4a.40.2"' in master
+    assert tall["calls"] == [(f"https://www.youtube.com/watch?v={VID}", False)]
+    playlist = client.get(f"/api/live/{VID}/v/315.m3u8").text
+    assert "../seg/315/101.webm" in _media_lines(playlist)
+    resp = client.get(f"/api/live/{VID}/seg/315/101.webm")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "video/webm"
+    assert resp.content == b"WEBM101"
+    assert TALL + "&sq=101" in upstream.requests
+
+
+def test_tall_segment_head_answers_the_type_without_fetching(client, upstream, tall):
+    # Shaka asks HEAD for a segment type its URL does not name (HLS has no
+    # WebM); that must not pull a 9 MB segment from YouTube.
+    client.get(f"/api/live/{VID}/master.m3u8")
+    before = list(upstream.requests)
+    resp = client.head(f"/api/live/{VID}/seg/315/101.webm")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "video/webm"
+    assert upstream.requests == before
+    assert client.head(f"/api/live/{VID}/seg/nope/101.webm").status_code == 404
+
+
+def test_a_failing_tall_lookup_still_plays_the_hls_ladder(
+    client, upstream, tall, monkeypatch
+):
+    def busy(url: str, *, force: bool = False) -> list[dict[str, Any]]:
+        raise HTTPException(429, "busy")  # e.g. the yt-dlp slot wait ran out
+
+    monkeypatch.setattr("app.services.live.extract.extract_tall_formats", busy)
+    resp = client.get(f"/api/live/{VID}/master.m3u8")
+    assert resp.status_code == 200
+    assert "v/232.m3u8" in resp.text and "v/315.m3u8" not in resp.text
+
+
+def test_no_tall_lookup_without_a_js_runtime(client, upstream, tall, monkeypatch):
+    monkeypatch.setattr("app.services.live.extract.YTDLP_JS_RUNTIME", "")
+    master = client.get(f"/api/live/{VID}/master.m3u8").text
+    assert "v/315.m3u8" not in master and "v/232.m3u8" in master
+    assert tall["calls"] == []
+
+
 def test_not_live_master_is_409(client, upstream, extracted):
     extracted["info"] = _info(live=False)
     resp = client.get(f"/api/live/{VID}/master.m3u8")
@@ -610,7 +692,8 @@ def test_preview_meta_reports_is_live(client, monkeypatch, live):
         "subtitles": [],
     }
     monkeypatch.setattr(
-        "app.services.stream_preview.extract_stream_preview_meta", lambda url: meta
+        "app.services.stream_preview.extract_stream_preview_meta",
+        lambda url, **_kw: meta,
     )
     resp = client.get(
         "/api/preview/meta", params={"url": f"https://www.youtube.com/watch?v={VID}"}
@@ -623,7 +706,7 @@ def test_preview_meta_reports_is_live(client, monkeypatch, live):
 def test_preview_meta_is_live_defaults_to_false(client, monkeypatch):
     monkeypatch.setattr(
         "app.services.stream_preview.extract_stream_preview_meta",
-        lambda url: {"id": VID, "title": "x"},
+        lambda url, **_kw: {"id": VID, "title": "x"},
     )
     resp = client.get(
         "/api/preview/meta", params={"url": f"https://www.youtube.com/watch?v={VID}"}

@@ -4,7 +4,8 @@
 
 ## Platform
 
-web
+web, also packaged as a desktop app (Windows, macOS, Linux): an Electron
+window and tray around the same server and the same pages
 
 ## Users
 
@@ -16,6 +17,11 @@ account the admin creates, with their own watch history, AI chats and
 appearance, and only the permissions the admin grants. Everyone reaches Horde
 over the home network or a VPN, on desktops, TVs (through Chromecast), tablets
 and phones (often as an installed PWA).
+
+A third user runs Horde on their own computer through the desktop app, and has
+never used Docker or a terminal. They install it like any program, may be the
+only person who uses it, and are likely to meet the first-open warnings of an
+unsigned app. Their words must not assume a server, a NAS or a shell.
 
 ## Product Purpose
 
@@ -38,6 +44,11 @@ tags, semantic search) through any OpenAI-compatible provider the user chooses.
 
 - One Docker container on a home server, plus a small helper container for
   YouTube; optional bundled Ollama. Updates follow tagged releases.
+- Or the desktop app on a personal computer: the same server on this computer
+  only (it listens on the network only when the user turns that on), a tray
+  icon, no Docker. Windows and Linux update themselves; the Mac app is a
+  preview. The web pages are the same, and wording that is only true for Docker
+  (cron jobs, `host.docker.internal`, the Compose helper) changes on a desktop.
 - Used in short sessions: browse or search, watch, queue a few videos, paste a
   link to download. Long viewing happens in the player, often in theater mode,
   the mini player or on a TV.

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import Collapse from "../../../components/Collapse";
 import HelpTip from "../../../components/HelpTip";
+import { useRuntime } from "../../../queries/health";
 import { useAiModels } from "../../../queries/status";
 import type { AiSettings } from "../../../types";
 import {
@@ -25,6 +26,7 @@ import ModelField from "./ModelField";
 /** One OpenAI-compatible connection for chat (and embeddings unless split). */
 export default function ConnectionPane() {
   const { q, match } = useSettingsPage();
+  const desktop = useRuntime() === "desktop";
   const {
     appSettings,
     aiDraft,
@@ -124,9 +126,18 @@ export default function ConnectionPane() {
             }}
           />
           <p className="text-xs text-muted">
-            Horde runs in Docker, so <code>localhost</code> there is the Horde
-            container itself. For a server on the Docker host use{" "}
-            <code>host.docker.internal</code>; for another PC use its LAN
+            {desktop ? (
+              <>
+                A local Ollama is at <code>http://localhost:11434</code>. For
+                another PC use its LAN
+              </>
+            ) : (
+              <>
+                Horde runs in Docker, so <code>localhost</code> there is the
+                Horde container itself. For a server on the Docker host use{" "}
+                <code>host.docker.internal</code>; for another PC use its LAN
+              </>
+            )}{" "}
             address (e.g. <code>http://192.168.1.50:11434</code>). A bare{" "}
             <code>host:port</code> gets <code>http://</code> and{" "}
             <code>/v1</code> added (no port: Ollama’s 11434). See{" "}

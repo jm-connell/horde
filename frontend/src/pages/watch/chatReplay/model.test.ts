@@ -181,7 +181,7 @@ describe("chatPlacement", () => {
       chatPlacement({
         isMobile: true,
         landscape: true,
-        theater: false,
+        besidePlayer: false,
         wide: false,
       })
     ).toBe("sideways");
@@ -189,7 +189,16 @@ describe("chatPlacement", () => {
       chatPlacement({
         isMobile: true,
         landscape: false,
-        theater: false,
+        besidePlayer: false,
+        wide: false,
+      })
+    ).toBe("inline");
+    // A phone never gets it, whatever the player mode says.
+    expect(
+      chatPlacement({
+        isMobile: true,
+        landscape: false,
+        besidePlayer: true,
         wide: false,
       })
     ).toBe("inline");
@@ -197,15 +206,15 @@ describe("chatPlacement", () => {
       chatPlacement({
         isMobile: false,
         landscape: false,
-        theater: true,
+        besidePlayer: true,
         wide: true,
       })
-    ).toBe("beside-info");
+    ).toBe("beside-player");
     expect(
       chatPlacement({
         isMobile: false,
         landscape: false,
-        theater: false,
+        besidePlayer: false,
         wide: true,
       })
     ).toBe("sidebar");
@@ -213,7 +222,7 @@ describe("chatPlacement", () => {
       chatPlacement({
         isMobile: false,
         landscape: false,
-        theater: false,
+        besidePlayer: false,
         wide: false,
       })
     ).toBe("inline");

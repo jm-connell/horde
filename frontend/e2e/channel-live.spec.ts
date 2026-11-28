@@ -64,6 +64,7 @@ async function stubYoutubeChannel(page: Page) {
           title: liveNow.title,
           thumbnail_url: `https://i.ytimg.com/vi/${liveNow.id}/hqdefault_live.jpg`,
           watch_url: liveNow.url,
+          viewers: 1234,
         },
       },
     });
@@ -83,6 +84,7 @@ test("a live channel leads with its broadcast and lists its streams", async ({
   await expect(cards.first()).toContainText(liveNow.title);
   await expect(cards.first()).toContainText("LIVE");
   await expect(cards.first()).toContainText("Live now");
+  await expect(cards.first()).toContainText("1.2K watching");
   await expect(
     cards.first().getByRole("button", { name: "Download" })
   ).toHaveCount(0);
@@ -93,6 +95,7 @@ test("a live channel leads with its broadcast and lists its streams", async ({
     page.getByRole("button", { name: "Live", exact: true })
   ).toHaveAttribute("aria-pressed", "true");
   await expect(cards.first()).toContainText(liveNow.title);
+  await expect(cards.first()).toContainText("1.2K watching");
   await expect(feedCard(page, upload.title)).toHaveCount(0);
   const past = feedCard(page, pastStream.title);
   await expect(past).toContainText("3:05:00");

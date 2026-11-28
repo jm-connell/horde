@@ -44,6 +44,7 @@ from ..services import (
 from ..services import next_part as next_part_svc
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog import skips
+from ..services.discovery.other_interests import Viewer
 from ..services.downloads import jobs as download_jobs
 from ..services.library_usage import library_usage
 from ..services.pagination import (
@@ -448,13 +449,19 @@ def related_videos(
     limit: int = Query(8, ge=1, le=24),
     offset: int = Query(0, ge=0),
     session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     rows = library.related_videos(
-        session, video_id, limit=limit, offset=offset, user_id=user.id
+        session,
+        video_id,
+        limit=limit,
+        offset=offset,
+        user_id=user.id,
+        viewer=Viewer(user.id, ctx.discovery, user.allowed),
     )
     rows = [r for r in rows if parental.video_allowed(user.allowed, r)]
     return _to_read_many(rows, session, viewer=user, compact=True)

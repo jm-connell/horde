@@ -1,17 +1,21 @@
 import { useCallback } from "react";
 import { useConfirm } from "../../../context/ConfirmContext";
 import { describeError } from "../../../apiErrors";
+import { useRuntime } from "../../../queries/health";
 import { useUpdateControl } from "../../../queries/update";
 import { useSettingsPage } from "../context";
 import {
   describeUpdate,
   UPDATE_CONFIRM_AVAILABLE,
+  UPDATE_CONFIRM_AVAILABLE_DESKTOP,
   UPDATE_CONFIRM_RUN,
+  UPDATE_CONFIRM_RUN_DESKTOP,
 } from "./updateView";
 
 /** The "Update now" button: server state, view model, and confirmed actions. */
 export function useUpdateRun() {
   const confirm = useConfirm();
+  const desktop = useRuntime() === "desktop";
   const { showError, showToast } = useSettingsPage();
   const { control, unreachable, updatedHere, request, cancel } =
     useUpdateControl();
@@ -19,9 +23,11 @@ export function useUpdateRun() {
 
   const start = useCallback(
     async (updateAvailable: boolean) => {
-      const ok = await confirm(
-        updateAvailable ? UPDATE_CONFIRM_AVAILABLE : UPDATE_CONFIRM_RUN
-      );
+      const available = desktop
+        ? UPDATE_CONFIRM_AVAILABLE_DESKTOP
+        : UPDATE_CONFIRM_AVAILABLE;
+      const run = desktop ? UPDATE_CONFIRM_RUN_DESKTOP : UPDATE_CONFIRM_RUN;
+      const ok = await confirm(updateAvailable ? available : run);
       if (!ok) return;
       try {
         await request();
@@ -29,7 +35,7 @@ export function useUpdateRun() {
         showError(`Could not start the update: ${describeError(err)}`);
       }
     },
-    [confirm, request, showError]
+    [confirm, desktop, request, showError]
   );
 
   const cancelRequest = useCallback(async () => {

@@ -24,7 +24,9 @@ Right after you create the admin account (step 1 of 8 in the wizard's counter), 
 4. **Look**: a color palette.
 5. **AI (optional)**: **Skip for now** (then **Skip**), **Connect a provider** (paste an API key from a cloud provider such as OpenRouter, OpenAI, Gemini or Groq, or the address of an AI server you run), or **Run Ollama for me** (the bundled Ollama container, started with one command on the server). See [AI setup](../ops/ai-setup.md).
 6. **YouTube history (optional)**: import your YouTube watch history, subscriptions and playlists from a Google Takeout export, for your account ([how](../guides/youtube-history.md)). Others can import their own later in Settings → Library.
-7. **You’re set**: opens **Downloads** when the library is empty, or the library when it already has videos.
+7. **You’re set**: opens **Home**, which shows **Get started** while the library is empty.
+
+The [desktop app](install-desktop.md) leaves out step 3 when its own window can play AV1 (it nearly always can) and keeps **AV1 only**. If you share Horde with an older iPhone or a TV, change it in Settings → Library **Playback compatibility**.
 
 Installs that were already set up before the wizard existed are not sent through it. Reloading the page keeps you on the step you were on.
 
