@@ -244,3 +244,12 @@ export function desktopExec(file: string, args: string[] = []): string {
   const line = [file, ...args].map(quote).join(" ");
   return line.replace(/\\/g, "\\\\");
 }
+
+/** Whether a `#rrggbb` page color is dark, so the window frame around it
+ * gets light text and buttons. Anything unreadable counts as dark. */
+export function isDarkColor(color: string): boolean {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color);
+  if (!m) return true;
+  const [r, g, b] = m.slice(1).map((h) => parseInt(h, 16));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
+}
