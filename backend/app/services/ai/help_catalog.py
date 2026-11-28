@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 from ... import context as app_context
 from ...schemas import HelpCatalog, HelpCatalogPage, HelpCatalogSetting
@@ -119,11 +121,18 @@ def _value_text(value: str | float) -> str:
     return str(value)
 
 
-def current_values(settings: list[HelpCatalogSetting]) -> dict[str, str]:
-    """The current value of each server-wide or AI setting the chat may change.
+#: What the model is told about a personal setting the user never changed: the
+#: server stores only changed ones, the defaults live in the browser.
+UNCHANGED = "the default (never changed)"
 
-    Personal settings are left out: the server knows only the ones a user
-    changed, not the defaults their browser shows.
+
+def current_values(
+    settings: list[HelpCatalogSetting], ui: dict[str, Any]
+) -> dict[str, str]:
+    """The current value of each setting the chat may change.
+
+    ``ui`` is the user's effective ``ui`` blob (``user_settings.effective_ui``),
+    which holds personal settings under their snake_case key.
     """
     from .. import app_settings
 
@@ -131,10 +140,19 @@ def current_values(settings: list[HelpCatalogSetting]) -> dict[str, str]:
     loaded: dict[str, dict] = {}
     out: dict[str, str] = {}
     for s in settings:
-        if s.chat != "change" or not s.key or s.scope not in stores:
+        if s.chat != "change" or not s.key:
             continue
-        data = loaded.setdefault(s.scope, stores[s.scope]())
-        value = data.get(s.key)
+        if s.scope == "personal":
+            snake = re.sub(r"[A-Z]", lambda m: f"_{m.group().lower()}", s.key)
+            value = ui.get(snake)
+            if value is None:
+                out[s.id] = UNCHANGED
+                continue
+        elif s.scope in stores:
+            data = loaded.setdefault(s.scope, stores[s.scope]())
+            value = data.get(s.key)
+        else:
+            continue
         if isinstance(value, bool):
             out[s.id] = "true" if value else "false"
         elif isinstance(value, (str, int, float)):

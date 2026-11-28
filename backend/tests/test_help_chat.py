@@ -590,4 +590,22 @@ def test_server_settings_show_their_current_value(client, help_env):
     assert "- ai-video-chat: AI video chat (Ai) [change: true|false; now: true]" in (
         system
     )
-    assert "now:" not in system.split("- theme:")[-1].split("\n")[0]
+
+
+def test_personal_settings_show_their_current_value(
+    client, help_env, admin_user, session
+):
+    # Live, "is sponsorblock on" was answered with "I didn't look at your
+    # settings, ask me to check": the value was never sent.
+    from app.services import user_settings
+
+    client.post("/api/ai/help/chat", json={"message": "is sponsorblock on"})
+    system = help_env[0]["system"]
+    line = system.split("- sponsorblock:")[-1].split("\n")[0]
+    assert "now: the default (never changed)" in line
+    assert "never say you did not look" in system
+
+    user_settings.save_ui(session, admin_user.id, {"sponsor_block_enabled": False})
+    client.post("/api/ai/help/chat", json={"message": "is sponsorblock on"})
+    line = help_env[1]["system"].split("- sponsorblock:")[-1].split("\n")[0]
+    assert "[change: true|false; now: false]" in line
